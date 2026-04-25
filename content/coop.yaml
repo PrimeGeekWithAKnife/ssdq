@@ -1,0 +1,51 @@
+# Co-op tunables — spec §5 + §7.4. Parent can edit without code changes.
+
+coop:
+  # Lives & continues
+  starting_lives: 3              # per player; options menu can override
+  continues_per_session: 3       # shared
+
+  # Respawn behaviour
+  respawn_delay: 2.0             # seconds between death and respawn
+  respawn_invulnerability: 2.0   # i-frames after respawn
+  respawn_clearing_radius: 160   # pixels — shockwave clears bullets
+
+  # Damage rules
+  friendly_fire: false           # off by default; options menu toggle
+  ship_on_ship_collision: false  # off by default; options menu toggle
+
+  # Scoring
+  team_score_prominent: true     # combined score in big HUD letters
+  proximity_bonus_radius: 200    # pixels — both ships within ⇒ multiplier
+  proximity_bonus_multiplier: 1.5
+  proximity_bonus_edge_zone: 60  # both ships not within 60px of screen edge
+
+  # Pickups
+  pickup_pickup_mode: first      # first-to-grab, no sharing
+
+  # Pause
+  pause_either_player: true      # either pad's START toggles pause
+  pause_dim_alpha: 128           # 0..255 darkening when paused
+
+# Options menu — exposes these toggles per spec §2 DOD #7.
+options:
+  unlimited_lives:
+    default: false
+    label: "Unlimited lives"
+  unlimited_continues:
+    default: false
+    label: "Unlimited continues"
+  friendly_fire:
+    default: false
+    label: "Friendly fire"
+  ship_on_ship_collision:
+    default: false
+    label: "Ship-on-ship collision"
+  starting_lives:
+    default: 3
+    choices: [3, 5, 99]
+    label: "Lives per player"
+  continues:
+    default: 3
+    choices: [3, 5, 99]
+    label: "Continues"

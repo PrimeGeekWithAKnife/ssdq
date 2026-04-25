@@ -1,0 +1,99 @@
+# Formation paths — first-class data per spec §6.1.
+#
+# A formation is a deterministic function of t ∈ [0, 1]. Given the wave
+# start time and path duration, you know exactly where every enemy is
+# at every tick. This is the mastery constraint: same input → same wave.
+#
+# Coordinate system: top-left origin, +y down. Playfield is 1280×720.
+# Y-values may go negative (off-screen entry) or > 720 (off-screen exit).
+#
+# `type: catmull_rom` — smooth spline through control points.
+# `duration` — seconds to traverse the path at speed_along_path = 1.
+#              Actual time = duration / speed_multiplier where
+#              speed_multiplier = enemy.speed_along_path / 100.
+#
+# `mirror(name)` is handled at parse time — mirrors x around centre line
+# x=640 and reverses the curve handedness for symmetric-pair waves.
+
+formations:
+  # Stage 1 — gentle introduction
+  arc_left_to_right:
+    type: catmull_rom
+    duration: 6.0
+    control_points:
+      - [-100, 80]
+      - [ 200, 60]
+      - [ 600, 140]
+      - [1000, 60]
+      - [1380, 80]
+
+  # Slower vertical descent, used for the very first wave so the kid can
+  # see what's happening.
+  slow_descent_centre:
+    type: catmull_rom
+    duration: 7.0
+    control_points:
+      - [640, -80]
+      - [640, 100]
+      - [640, 280]
+      - [640, 460]
+      - [640, 800]
+
+  # Stage 2 — pattern complication
+  figure_eight_centre:
+    type: catmull_rom
+    duration: 9.0
+    control_points:
+      - [ 640, -80]
+      - [ 320, 140]
+      - [ 960, 320]
+      - [ 320, 320]
+      - [ 960, 140]
+      - [ 640, 800]
+
+  loop_left:
+    type: catmull_rom
+    duration: 7.5
+    control_points:
+      - [-100, 200]
+      - [ 360, 240]
+      - [ 520, 120]
+      - [ 360, 360]
+      - [ 220, 480]
+      - [-100, 540]
+
+  # Stage 3 — density up
+  dive_then_strafe:
+    type: catmull_rom
+    duration: 5.5
+    control_points:
+      - [ 200, -80]
+      - [ 220, 200]
+      - [ 240, 380]
+      - [ 600, 400]
+      - [1000, 400]
+      - [1380, 400]
+
+  # Boss formations. Boss enters from off-screen top, settles into a
+  # repeating loop. Phase 1 is a slow side-to-side; phase 2 tightens up.
+  boss_phase_1:
+    type: catmull_rom
+    duration: 8.0
+    loop: true                 # loops while phase active
+    control_points:
+      - [ 200, 160]
+      - [ 640, 100]
+      - [1080, 160]
+      - [ 640, 220]
+      - [ 200, 160]
+
+  boss_phase_2:
+    type: catmull_rom
+    duration: 5.0
+    loop: true
+    control_points:
+      - [ 320, 200]
+      - [ 960, 120]
+      - [ 960, 280]
+      - [ 320, 280]
+      - [ 320, 200]

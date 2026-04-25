@@ -1,0 +1,80 @@
+# Player ship definitions. Per spec §7.1.
+# Coordinates: top-left origin, +y down. Playfield is 1280×720.
+
+ships:
+  vanguard:
+    sprite: ships/player_blue.png
+    sprite_hit_flash: ships/player_blue_flash.png
+    max_speed: 320          # pixels/sec
+    accel: 1600             # pixels/sec²
+    hitbox_radius: 8        # ~40% of visual sprite
+    starting_lives: 3
+    starting_bombs: 2
+    respawn_invulnerability: 2.0   # seconds
+    respawn_clearing_radius: 160   # pixels — cleared on respawn shockwave
+    weapons:
+      primary: pulse_lvl1
+      bomb: shockwave
+
+  # P2 ship: same stats, different sprite. (Single ship type for the slice
+  # per §12; different colour is just visual.)
+  vanguard_red:
+    sprite: ships/player_red.png
+    sprite_hit_flash: ships/player_red_flash.png
+    max_speed: 320
+    accel: 1600
+    hitbox_radius: 8
+    starting_lives: 3
+    starting_bombs: 2
+    respawn_invulnerability: 2.0
+    respawn_clearing_radius: 160
+    weapons:
+      primary: pulse_lvl1
+      bomb: shockwave
+
+# Weapon definitions. The slice has one weapon tree (pulse) with 3 levels:
+# lvl1 base, lvl2 wider spread, lvl3 widest spread + back shot.
+weapons:
+  pulse_lvl1:
+    type: bullet
+    sprite: projectiles/pulse_blue.png
+    damage: 1
+    speed: 720
+    fire_rate: 8.0          # shots/sec
+    pattern: [{ angle_deg: 0, offset_x: 0, offset_y: -8 }]
+
+  pulse_lvl2:
+    type: bullet
+    sprite: projectiles/pulse_blue.png
+    damage: 1
+    speed: 720
+    fire_rate: 9.0
+    pattern:
+      - { angle_deg: -6, offset_x: -10, offset_y: -8 }
+      - { angle_deg:  6, offset_x:  10, offset_y: -8 }
+
+  pulse_lvl3:
+    type: bullet
+    sprite: projectiles/pulse_blue.png
+    damage: 1
+    speed: 720
+    fire_rate: 10.0
+    pattern:
+      - { angle_deg: -10, offset_x: -14, offset_y:  -8 }
+      - { angle_deg:   0, offset_x:   0, offset_y: -10 }
+      - { angle_deg:  10, offset_x:  14, offset_y:  -8 }
+      - { angle_deg: 180, offset_x:   0, offset_y:  10 }   # tail shot
+
+# Weapon-tree progression. Picking up a `pickup_powerup` advances by one
+# level; cap at the highest tier; lost on death (back to base).
+weapon_tree:
+  pulse: [pulse_lvl1, pulse_lvl2, pulse_lvl3]
+
+# Bomb definition. Spec §5 — 2 per life by default.
+bombs:
+  shockwave:
+    sprite: projectiles/shockwave.png
+    damage: 8                # one-shots most non-boss enemies
+    radius: 360              # pixels — covers most of the playfield
+    duration: 0.6            # seconds
+    clears_bullets: true     # also wipes enemy fire on activation

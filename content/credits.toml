@@ -1,0 +1,15 @@
+# Asset attribution — spec §9.3. Every file under content/assets/ MUST
+# have an entry below. tools/asset_audit.py walks the assets tree and
+# fails the build if any file is missing from this log.
+#
+# Format:
+#   [[entry]]
+#   path     = "content/assets/sprites/ships/player_blue.png"
+#   source   = "Kenney Space Shooter Redux (kenney.nl)"
+#   author   = "Kenney"
+#   licence  = "CC0"
+#   url      = "https://kenney.nl/assets/space-shooter-redux"
+#
+# Use UK English spellings ("licence", not "license") in this file.
+
+# (Stub — populated by Phase 2 step 9 "Acquire assets".)

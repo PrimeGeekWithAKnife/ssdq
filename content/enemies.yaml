@@ -1,0 +1,130 @@
+# Enemy definitions. Per spec §7.2.
+#
+# Note: `speed_along_path` (not generic velocity). Enemies follow a named
+# formation from content/formations.yaml; speed is how fast they traverse
+# the path, not a free vector. This enforces the mastery constraint at
+# the data layer (§6.3, §6.4).
+#
+# Weapons fire on fixed beats along path-time (`fire_beats`), not in
+# response to the player. An "aimed" shot is aimed at the player's
+# position *at the moment of fire*, then travels in a straight line —
+# the player's post-fire movement does not curve the bullet.
+
+enemies:
+  drone:
+    sprite: enemies/drone.png
+    hitbox_radius: 14
+    hp: 1
+    speed_along_path: 90
+    weapon: null
+    score: 100
+    drop_chance: 0.05
+    drop_pool: [pickup_health, pickup_powerup]
+
+  fighter:
+    sprite: enemies/fighter.png
+    hitbox_radius: 16
+    hp: 3
+    speed_along_path: 130
+    weapon: aimed_shot
+    fire_beats: [1.0, 2.2]      # path-time seconds at which to fire
+    score: 250
+    drop_chance: 0.10
+    drop_pool: [pickup_powerup, pickup_speed]
+
+  gunship:
+    sprite: enemies/gunship.png
+    hitbox_radius: 22
+    hp: 12
+    speed_along_path: 60
+    weapon: aimed_shot
+    fire_beats: [1.4, 2.8, 4.2]
+    score: 800
+    drop_chance: 0.25
+    drop_pool: [pickup_powerup, pickup_bomb, pickup_speed]
+
+  bomber:
+    sprite: enemies/bomber.png
+    hitbox_radius: 28
+    hp: 8
+    speed_along_path: 50
+    weapon: spread_shot
+    fire_beats: [2.0, 4.0]
+    score: 600
+    drop_chance: 0.20
+    drop_pool: [pickup_bomb, pickup_powerup, pickup_health]
+
+# Boss definition. Phase inside the Level scene, not a separate scene
+# (per spec §4.4). Two phases per spec §2 DOD #4.
+bosses:
+  boss_01:
+    sprite: enemies/boss_01.png
+    hitbox_radius: 60
+    score: 10000
+    intro_telegraph_seconds: 2.0
+    phases:
+      # Phase 1: predictable arc + symmetric spreads. ~50% HP.
+      - hp: 60
+        formation: boss_phase_1
+        weapon: spread_shot
+        fire_beats: [0.5, 1.5, 2.5, 3.5, 4.5]   # loops while phase active
+
+      # Phase 2: faster, fires tri-aimed shots. Final 50% HP.
+      - hp: 60
+        formation: boss_phase_2
+        weapon: aimed_triple
+        fire_beats: [0.4, 1.2, 2.0, 2.8, 3.6]
+
+# Enemy weapon definitions. Bullets are deterministic — see top-of-file note.
+enemy_weapons:
+  aimed_shot:
+    sprite: projectiles/enemy_orb.png
+    damage: 1                 # 1-hit-kill players (i-frames after respawn)
+    speed: 280
+    pattern: aimed             # at-time-of-fire snapshot
+    bullets_per_beat: 1
+
+  spread_shot:
+    sprite: projectiles/enemy_orb.png
+    damage: 1
+    speed: 240
+    pattern: fan
+    bullets_per_beat: 5
+    fan_arc_deg: 60            # spread across 60°, centred straight down
+
+  aimed_triple:
+    sprite: projectiles/enemy_orb.png
+    damage: 1
+    speed: 320
+    pattern: aimed_fan
+    bullets_per_beat: 3
+    fan_arc_deg: 16            # tight 3-bullet spread aimed at player
+
+# Pickups. Spec §2 DOD #5: weapon-up, speed-up, extra-bomb, extra-life.
+# `pickup_health` IS the extra-life pickup (no separate hp system).
+pickups:
+  pickup_powerup:
+    sprite: pickups/powerup.png
+    hitbox_radius: 14
+    fall_speed: 80
+    effect: weapon_upgrade
+
+  pickup_speed:
+    sprite: pickups/speed.png
+    hitbox_radius: 14
+    fall_speed: 80
+    effect: speed_up
+    speed_multiplier: 1.25
+    duration: 12.0             # seconds
+
+  pickup_bomb:
+    sprite: pickups/bomb.png
+    hitbox_radius: 14
+    fall_speed: 80
+    effect: extra_bomb
+
+  pickup_health:
+    sprite: pickups/health.png
+    hitbox_radius: 14
+    fall_speed: 80
+    effect: extra_life          # the 1-up
