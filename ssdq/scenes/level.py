@@ -625,27 +625,29 @@ class LevelScene(Scene):
             for ev in events:
                 self._spawn_enemy_bullets(world, weapon_def, ev.aim.fire_pos, target)
 
-        # Phase transition on hp threshold
+        # Phase transition: each phase has its own HP pool. When the
+        # current pool hits 0, either advance to the next phase (reset HP
+        # to that phase's pool) or — if no phases remain — kill the boss.
         hp = world.must_get(boss_state.entity, Health).hp
         boss_state.phase_hp_remaining = hp
         if hp <= 0:
-            world.despawn(boss_state.entity)
-            # Award score + flag completion
-            self._session.scores.award(P1, boss_state.boss.score, multiplier=1.0)
-            self._boss = None
-            self._level_completed = True
-            self.app.audio.play_sfx("explosion")
-        elif (
-            boss_state.phase_index + 1 < len(boss_state.boss.phases)
-            and hp <= boss_state.boss.phases[boss_state.phase_index + 1].hp
-        ):
-            self._transition_boss_phase(world, boss_state)
+            if boss_state.phase_index + 1 < len(boss_state.boss.phases):
+                self._transition_boss_phase(world, boss_state)
+            else:
+                world.despawn(boss_state.entity)
+                self._session.scores.award(P1, boss_state.boss.score, multiplier=1.0)
+                self._boss = None
+                self._level_completed = True
+                self.app.audio.play_sfx("explosion")
 
     def _transition_boss_phase(self, world: World, boss_state: BossState) -> None:
         boss_state.phase_index += 1
         new_phase: BossPhaseDef = boss_state.boss.phases[boss_state.phase_index]
         boss_state.shooter = EnemyShooter(beats=new_phase.fire_beats)
         boss_state.path_t0 = self._sim_time
+        boss_state.phase_hp_remaining = new_phase.hp
+        # Refill the boss's Health pool so phase 2 has its full allocation.
+        world.replace(boss_state.entity, Health(hp=new_phase.hp))
 
     def _spawn_enemy_bullets(
         self,
@@ -805,20 +807,33 @@ class LevelScene(Scene):
             return
         new_hp = hlth.hp - damage.amount
         world.replace(enemy_eid, Health(hp=new_hp))
+        # Capture credit before despawning the bullet.
+        owned = world.get(bullet_eid, PlayerOwned)
+        killer_slot = owned.slot if owned is not None else None
         world.despawn(bullet_eid)
         if new_hp <= 0:
             pos = world.must_get(enemy_eid, Position).pos
-            self._on_enemy_killed(world, enemy_eid, pos)
+            self._on_enemy_killed(world, enemy_eid, pos, killer_slot=killer_slot)
 
-    def _on_enemy_killed(self, world: World, enemy_eid: Entity, pos: Vec2) -> None:
+    def _on_enemy_killed(
+        self,
+        world: World,
+        enemy_eid: Entity,
+        pos: Vec2,
+        *,
+        killer_slot: PlayerSlot | None = None,
+    ) -> None:
         if not world.is_alive(enemy_eid):
             return
         # Boss completion is owned by _advance_boss; skip the generic path
         # so we don't double-award + double-process.
         if self._boss is not None and enemy_eid == self._boss.entity:
             return
-        # Score + drop. Award goes to nearest player (proxy for "killed by").
-        nearest_slot = self._nearest_alive_player_slot(pos)
+        # Score: route credit to the player whose bullet landed the kill.
+        # Fallback to nearest player for bomb/collision kills (no bullet).
+        nearest_slot = killer_slot if killer_slot is not None else self._nearest_alive_player_slot(
+            pos
+        )
         score_val = world.get(enemy_eid, ScoreValue)
         follower = world.get(enemy_eid, FormationFollower)
         if score_val is not None and nearest_slot is not None:
