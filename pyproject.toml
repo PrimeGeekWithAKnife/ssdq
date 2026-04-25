@@ -1,0 +1,74 @@
+[project]
+name = "ssdq"
+version = "0.1.0"
+description = "SSDQ — two-player local co-op vertical-scrolling shoot-'em-up"
+requires-python = ">=3.12"
+authors = [{ name = "Meridian Logic Ltd" }]
+license = { text = "Proprietary" }
+readme = "README.md"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ssdq*"]
+
+# ───────────── ruff ─────────────
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["ssdq", "tools", "tests"]
+
+[tool.ruff.lint]
+select = [
+  "E", "F", "W",      # pycodestyle + pyflakes
+  "I",                # isort
+  "B",                # bugbear
+  "UP",               # pyupgrade
+  "SIM",              # simplify
+  "RUF",              # ruff-specific
+  "TID",              # tidy imports
+]
+ignore = [
+  "E501",             # line length (formatter handles it)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011"]
+"tools/**" = []
+
+[tool.ruff.format]
+quote-style = "double"
+
+# ───────────── mypy ─────────────
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+explicit_package_bases = true
+namespace_packages = true
+files = ["ssdq", "tools"]
+
+[[tool.mypy.overrides]]
+module = ["pygame.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+
+# ───────────── pytest ─────────────
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-ra --strict-markers"
+testpaths = ["tests"]
+markers = [
+  "integration: integration tests (uses SDL dummy drivers)",
+  "replay: deterministic replay regression tests",
+  "screenshot: screenshot diff tests",
+]
