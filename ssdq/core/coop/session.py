@@ -58,6 +58,14 @@ class CoopSession:
         self.p1 = self.p1.tick(dt, config=self.config)
         self.p2 = self.p2.tick(dt, config=self.config)
 
+    def grant_extra_life(self, slot: PlayerSlot) -> None:
+        """Add one life to `slot`. Used by the powerup pickup pipeline so the
+        level scene doesn't need to reach for `_set_lifecycle`."""
+        from dataclasses import replace as _dc_replace
+
+        lc = self.lifecycle(slot)
+        self._set_lifecycle(slot, _dc_replace(lc, lives=lc.lives + 1))
+
     def consume_clearing_shockwaves(self) -> None:
         """Acknowledge any one-shot clearing-shockwave triggers — called
         by the level scene after it has spawned the shockwave entity."""
