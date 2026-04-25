@@ -12,4 +12,266 @@
 #
 # Use UK English spellings ("licence", not "license") in this file.
 
-# (Stub — populated by Phase 2 step 9 "Acquire assets".)
+# ---------------------------------------------------------------------------
+# Sprites — ships
+# ---------------------------------------------------------------------------
+
+[[entry]]
+path    = "content/assets/sprites/ships/player_blue.png"
+source  = "Kenney Space Shooter Redux"
+author  = "Kenney Vleugels"
+licence = "CC0"
+url     = "https://opengameart.org/content/space-shooter-redux"
+notes   = "playerShip1_blue.png from the redux pack."
+
+[[entry]]
+path    = "content/assets/sprites/ships/player_blue_flash.png"
+source  = "Derived from Kenney Space Shooter Redux"
+author  = "Kenney Vleugels (sprite); SSDQ build (white-tint variant)"
+licence = "CC0"
+url     = "https://opengameart.org/content/space-shooter-redux"
+notes   = "Hit-flash recolour of player_blue.png — alpha-masked pixels driven to white. Trivial derivative; remains CC0."
+
+[[entry]]
+path    = "content/assets/sprites/ships/player_red.png"
+source  = "Kenney Space Shooter Redux"
+author  = "Kenney Vleugels"
+licence = "CC0"
+url     = "https://opengameart.org/content/space-shooter-redux"
+notes   = "playerShip1_red.png from the redux pack."
+
+[[entry]]
+path    = "content/assets/sprites/ships/player_red_flash.png"
+source  = "Derived from Kenney Space Shooter Redux"
+author  = "Kenney Vleugels (sprite); SSDQ build (white-tint variant)"
+licence = "CC0"
+url     = "https://opengameart.org/content/space-shooter-redux"
+notes   = "Hit-flash recolour of player_red.png — alpha-masked pixels driven to white. Trivial derivative; remains CC0."
+
+# ---------------------------------------------------------------------------
+# Sprites — enemies
+# ---------------------------------------------------------------------------
+
+[[entry]]
+path    = "content/assets/sprites/enemies/drone.png"
+source  = "Kenney Space Shooter Redux"
+author  = "Kenney Vleugels"
+licence = "CC0"
+url     = "https://opengameart.org/content/space-shooter-redux"
+notes   = "enemyBlue1.png — smallest enemy silhouette, used for the drone tier."
+
+[[entry]]
+path    = "content/assets/sprites/enemies/fighter.png"
+source  = "Kenney Space Shooter Redux"
+author  = "Kenney Vleugels"
+licence = "CC0"
+url     = "https://opengameart.org/content/space-shooter-redux"
+notes   = "enemyRed3.png."
+
+[[entry]]
+path    = "content/assets/sprites/enemies/gunship.png"
+source  = "Kenney Space Shooter Redux"
+author  = "Kenney Vleugels"
+licence = "CC0"
+url     = "https://opengameart.org/content/space-shooter-redux"
+notes   = "enemyGreen4.png."
+
+[[entry]]
+path    = "content/assets/sprites/enemies/bomber.png"
+source  = "Kenney Space Shooter Redux"
+author  = "Kenney Vleugels"
+licence = "CC0"
+url     = "https://opengameart.org/content/space-shooter-redux"
+notes   = "enemyBlack5.png — the chunkiest enemy in the redux pack."
+
+[[entry]]
+path    = "content/assets/sprites/enemies/boss_01.png"
+source  = "Kenney Space Shooter Extension"
+author  = "Kenney Vleugels"
+licence = "CC0"
+url     = "https://kenney.nl/assets/space-shooter-extension"
+notes   = "PLACEHOLDER — spaceShips_007.png, the largest sprite in the extension pack. Per spec §11 the level-1 boss will be hand-drawn by the kid; this file is a stand-in until that art lands."
+
+# ---------------------------------------------------------------------------
+# Sprites — projectiles
+# ---------------------------------------------------------------------------
+
+[[entry]]
+path    = "content/assets/sprites/projectiles/pulse_blue.png"
+source  = "Kenney Space Shooter Redux"
+author  = "Kenney Vleugels"
+licence = "CC0"
+url     = "https://opengameart.org/content/space-shooter-redux"
+notes   = "laserBlue01.png."
+
+[[entry]]
+path    = "content/assets/sprites/projectiles/enemy_orb.png"
+source  = "Kenney Space Shooter Redux"
+author  = "Kenney Vleugels"
+licence = "CC0"
+url     = "https://opengameart.org/content/space-shooter-redux"
+notes   = "laserRed08.png — used as the enemy bullet/orb."
+
+[[entry]]
+path    = "content/assets/sprites/projectiles/shockwave.png"
+source  = "Kenney Space Shooter Redux"
+author  = "Kenney Vleugels"
+licence = "CC0"
+url     = "https://opengameart.org/content/space-shooter-redux"
+notes   = "fire19.png — last frame of the fire effect; placeholder for the bomb shockwave."
+
+# ---------------------------------------------------------------------------
+# Sprites — pickups
+# ---------------------------------------------------------------------------
+
+[[entry]]
+path    = "content/assets/sprites/pickups/powerup.png"
+source  = "Kenney Space Shooter Redux"
+author  = "Kenney Vleugels"
+licence = "CC0"
+url     = "https://opengameart.org/content/space-shooter-redux"
+notes   = "powerupBlue_bolt.png — weapon-upgrade pickup."
+
+[[entry]]
+path    = "content/assets/sprites/pickups/speed.png"
+source  = "Kenney Space Shooter Redux"
+author  = "Kenney Vleugels"
+licence = "CC0"
+url     = "https://opengameart.org/content/space-shooter-redux"
+notes   = "powerupYellow_star.png — speed-boost pickup."
+
+[[entry]]
+path    = "content/assets/sprites/pickups/bomb.png"
+source  = "Kenney Space Shooter Redux"
+author  = "Kenney Vleugels"
+licence = "CC0"
+url     = "https://opengameart.org/content/space-shooter-redux"
+notes   = "bolt_gold.png — extra-bomb pickup."
+
+[[entry]]
+path    = "content/assets/sprites/pickups/health.png"
+source  = "Kenney Space Shooter Redux"
+author  = "Kenney Vleugels"
+licence = "CC0"
+url     = "https://opengameart.org/content/space-shooter-redux"
+notes   = "pill_red.png — extra-life pickup."
+
+# ---------------------------------------------------------------------------
+# Sprites — particles
+# ---------------------------------------------------------------------------
+
+[[entry]]
+path    = "content/assets/sprites/particles/star.png"
+source  = "Kenney Space Shooter Redux"
+author  = "Kenney Vleugels"
+licence = "CC0"
+url     = "https://opengameart.org/content/space-shooter-redux"
+notes   = "Effects/star1.png — used for both starfield twinkle and explosion shrapnel."
+
+# ---------------------------------------------------------------------------
+# Sprites — UI
+# ---------------------------------------------------------------------------
+
+[[entry]]
+path    = "content/assets/sprites/ui/life_blue.png"
+source  = "Kenney Space Shooter Redux"
+author  = "Kenney Vleugels"
+licence = "CC0"
+url     = "https://opengameart.org/content/space-shooter-redux"
+notes   = "playerLife1_blue.png — HUD life icon for P1."
+
+[[entry]]
+path    = "content/assets/sprites/ui/life_red.png"
+source  = "Kenney Space Shooter Redux"
+author  = "Kenney Vleugels"
+licence = "CC0"
+url     = "https://opengameart.org/content/space-shooter-redux"
+notes   = "playerLife1_red.png — HUD life icon for P2."
+
+[[entry]]
+path    = "content/assets/sprites/ui/numeral_x.png"
+source  = "Kenney Space Shooter Redux"
+author  = "Kenney Vleugels"
+licence = "CC0"
+url     = "https://opengameart.org/content/space-shooter-redux"
+notes   = "numeralX.png — multiplier glyph for HUD (e.g. lives ×3)."
+
+# ---------------------------------------------------------------------------
+# Audio — SFX
+# ---------------------------------------------------------------------------
+
+[[entry]]
+path    = "content/assets/audio/sfx/laser.ogg"
+source  = "Kenney Space Shooter Redux (Bonus pack)"
+author  = "Kenney Vleugels"
+licence = "CC0"
+url     = "https://opengameart.org/content/space-shooter-redux"
+notes   = "sfx_laser1.ogg from the bundled bonus folder."
+
+[[entry]]
+path    = "content/assets/audio/sfx/hit.ogg"
+source  = "Kenney Space Shooter Redux (Bonus pack)"
+author  = "Kenney Vleugels"
+licence = "CC0"
+url     = "https://opengameart.org/content/space-shooter-redux"
+notes   = "sfx_zap.ogg — short feedback for enemy hit."
+
+[[entry]]
+path    = "content/assets/audio/sfx/explosion.ogg"
+source  = "Kenney Space Shooter Redux (Bonus pack)"
+author  = "Kenney Vleugels"
+licence = "CC0"
+url     = "https://opengameart.org/content/space-shooter-redux"
+notes   = "sfx_lose.ogg — repurposed as ship/enemy destruction."
+
+[[entry]]
+path    = "content/assets/audio/sfx/pickup.ogg"
+source  = "Kenney Space Shooter Redux (Bonus pack)"
+author  = "Kenney Vleugels"
+licence = "CC0"
+url     = "https://opengameart.org/content/space-shooter-redux"
+notes   = "sfx_twoTone.ogg — bing-bong pickup chime."
+
+[[entry]]
+path    = "content/assets/audio/sfx/pause.ogg"
+source  = "Kenney Space Shooter Redux (Bonus pack)"
+author  = "Kenney Vleugels"
+licence = "CC0"
+url     = "https://opengameart.org/content/space-shooter-redux"
+notes   = "sfx_shieldUp.ogg — soft chime for pause overlay."
+
+[[entry]]
+path    = "content/assets/audio/sfx/bomb.ogg"
+source  = "Kenney Space Shooter Redux (Bonus pack)"
+author  = "Kenney Vleugels"
+licence = "CC0"
+url     = "https://opengameart.org/content/space-shooter-redux"
+notes   = "sfx_shieldDown.ogg — used for bomb detonation."
+
+[[entry]]
+path    = "content/assets/audio/sfx/powerup.ogg"
+source  = "Kenney Space Shooter Redux (Bonus pack)"
+author  = "Kenney Vleugels"
+licence = "CC0"
+url     = "https://opengameart.org/content/space-shooter-redux"
+notes   = "sfx_laser2.ogg — used as the weapon-tier upgrade chirp."
+
+# ---------------------------------------------------------------------------
+# Audio — music
+# ---------------------------------------------------------------------------
+
+[[entry]]
+path    = "content/assets/audio/music/level_01.ogg"
+source  = "5 Action Chiptunes by Juhani Junkala"
+author  = "Juhani Junkala (SubspaceAudio)"
+licence = "CC0"
+url     = "https://opengameart.org/content/5-chiptunes-action"
+notes   = "Level 1 track, transcoded from WAV → OGG Vorbis q3 (~128 kbps). 74 s seamlessly looping."
+
+[[entry]]
+path    = "content/assets/audio/music/boss_01.ogg"
+source  = "5 Action Chiptunes by Juhani Junkala"
+author  = "Juhani Junkala (SubspaceAudio)"
+licence = "CC0"
+url     = "https://opengameart.org/content/5-chiptunes-action"
+notes   = "Level 3 track (more intense), transcoded from WAV → OGG Vorbis q3. 82 s seamlessly looping. Used for the boss phase placeholder."
