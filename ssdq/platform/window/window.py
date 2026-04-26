@@ -54,7 +54,16 @@ class Window:
         if not pygame.get_init():
             pygame.init()
         # Display module may be initialised by pygame.init(), but be defensive.
-        if not pygame.display.get_init():
+        # If our preferred driver (e.g. kmsdrm on Pi) isn't available — typical
+        # when launched over SSH while a desktop session holds the framebuffer
+        # — clear the override and let SDL pick a default (X11/wayland).
+        try:
+            if not pygame.display.get_init():
+                pygame.display.init()
+        except pygame.error:
+            preferred = os.environ.pop("SDL_VIDEODRIVER", None)
+            if preferred is None:
+                raise
             pygame.display.init()
 
         pygame.display.set_caption("SSDQ")

@@ -111,8 +111,13 @@ class AudioBus:
             channel.stop()
         channel.play(sound)
         # Track which sequence number owns this channel so we can pick the
-        # oldest one for pre-emption next time.
-        self._channel_seq[_channel_index(channel)] = next(self._play_seq)
+        # oldest one for pre-emption next time. _channel_index returns -1
+        # when SDL's Channel objects don't compare equal across calls
+        # (observed on aarch64 / SDL 2.30) — skip recording in that case;
+        # we'll just rely on `find_channel` returning a free one next tick.
+        idx = _channel_index(channel)
+        if idx >= 0:
+            self._channel_seq[idx] = next(self._play_seq)
 
     def play_music(self, name: str, loop: bool = True) -> None:
         """Stream a registered music track. ``loop=True`` loops indefinitely."""
