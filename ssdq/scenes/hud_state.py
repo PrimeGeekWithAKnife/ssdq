@@ -17,6 +17,8 @@ class HudPlayerStats:
     bombs: int
     weapon_level: int
     score: int
+    shield_charges: int = 0
+    missile_charges: int = 0
 
 
 @dataclass(frozen=True, slots=True)

@@ -7,13 +7,15 @@ Bindings (per builder brief):
 ==========  =================================================
 Player      Keys
 ==========  =================================================
-P1          WASD move, Space fire, LShift bomb, Enter pause /
-            confirm, Esc cancel
+P1          WASD move, Space fire, LShift bomb, E shield,
+            Q missile, Enter pause / confirm, Esc cancel
 P2          Arrow keys move, RShift fire, RCtrl bomb, Tab pause
 ==========  =================================================
 
 Both players share one keyboard, so genuine simultaneous co-op on this
 provider is awkward — but the slice only needs it as a smoke-test path.
+P2 doesn't get keyboard equippable bindings because the kid's playtest
+machine is gamepad-only; the smoke-test pathway runs on P1 alone.
 """
 
 from __future__ import annotations
@@ -26,16 +28,25 @@ from ssdq.core.types import PlayerInput, PlayerSlot, Vec2
 class _KeyState:
     """Per-player edge-detection bookkeeping (mirrors gamepad)."""
 
-    __slots__ = ("prev_bomb", "prev_cancel", "prev_confirm", "prev_pause")
+    __slots__ = (
+        "prev_bomb",
+        "prev_cancel",
+        "prev_confirm",
+        "prev_missile",
+        "prev_pause",
+        "prev_shield",
+    )
 
     def __init__(self) -> None:
         self.prev_bomb: bool = False
         self.prev_pause: bool = False
         self.prev_confirm: bool = False
         self.prev_cancel: bool = False
+        self.prev_shield: bool = False
+        self.prev_missile: bool = False
 
 
-# P1 binding: WASD + Space + LShift + Enter + Esc.
+# P1 binding: WASD + Space + LShift + Q + E + Enter + Esc.
 _P1_UP = pygame.K_w
 _P1_DOWN = pygame.K_s
 _P1_LEFT = pygame.K_a
@@ -45,6 +56,8 @@ _P1_BOMB = pygame.K_LSHIFT
 _P1_PAUSE = pygame.K_RETURN
 _P1_CONFIRM = pygame.K_RETURN
 _P1_CANCEL = pygame.K_ESCAPE
+_P1_SHIELD = pygame.K_e
+_P1_MISSILE = pygame.K_q
 
 # P2 binding: arrows + RShift + RCtrl + Tab.
 _P2_UP = pygame.K_UP
@@ -58,6 +71,9 @@ _P2_PAUSE = pygame.K_TAB
 # needs P1 in menus, so we just reuse Tab for confirm and there's no cancel.
 _P2_CONFIRM = pygame.K_TAB
 _P2_CANCEL: int | None = None
+# P2 has no keyboard equippable bindings (see module docstring).
+_P2_SHIELD: int | None = None
+_P2_MISSILE: int | None = None
 
 
 class KeyboardProvider:
@@ -93,6 +109,8 @@ class KeyboardProvider:
                 pause=_P1_PAUSE,
                 confirm=_P1_CONFIRM,
                 cancel=_P1_CANCEL,
+                shield=_P1_SHIELD,
+                missile=_P1_MISSILE,
             ),
             self._read(
                 keys,
@@ -106,6 +124,8 @@ class KeyboardProvider:
                 pause=_P2_PAUSE,
                 confirm=_P2_CONFIRM,
                 cancel=_P2_CANCEL,
+                shield=_P2_SHIELD,
+                missile=_P2_MISSILE,
             ),
         )
 
@@ -131,6 +151,8 @@ class KeyboardProvider:
         pause: int,
         confirm: int,
         cancel: int | None,
+        shield: int | None,
+        missile: int | None,
     ) -> PlayerInput:
         # Move axis: opposing keys cancel out, and the resulting vector is
         # normalised so diagonals match cardinal magnitudes (1.0).
@@ -142,16 +164,22 @@ class KeyboardProvider:
         held_pause = bool(keys[pause])
         held_confirm = bool(keys[confirm])
         held_cancel = bool(keys[cancel]) if cancel is not None else False
+        held_shield = bool(keys[shield]) if shield is not None else False
+        held_missile = bool(keys[missile]) if missile is not None else False
 
         bomb_edge = held_bomb and not state.prev_bomb
         pause_edge = held_pause and not state.prev_pause
         confirm_edge = held_confirm and not state.prev_confirm
         cancel_edge = held_cancel and not state.prev_cancel
+        shield_edge = held_shield and not state.prev_shield
+        missile_edge = held_missile and not state.prev_missile
 
         state.prev_bomb = held_bomb
         state.prev_pause = held_pause
         state.prev_confirm = held_confirm
         state.prev_cancel = held_cancel
+        state.prev_shield = held_shield
+        state.prev_missile = held_missile
 
         return PlayerInput(
             move=move,
@@ -160,4 +188,6 @@ class KeyboardProvider:
             pause=pause_edge,
             confirm=confirm_edge,
             cancel=cancel_edge,
+            shield=shield_edge,
+            missile=missile_edge,
         )

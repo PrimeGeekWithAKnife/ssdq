@@ -88,7 +88,7 @@ class Hud:
     def _draw_controls_hint(self, surface: pygame.Surface) -> None:
         """Tiny bottom-centre reminder of the controls — kid playtest
         showed bombs weren't obvious."""
-        text = "FIRE: A   BOMB: B   PAUSE: START"
+        text = "FIRE: A   BOMB: X/Y   SHIELD: LB   MISSILE: RB   PAUSE: START"
         rendered = self._score_font.render(text, True, _HINT_COLOUR)
         rect = rendered.get_rect(midbottom=(surface.get_width() // 2, surface.get_height() - 6))
         surface.blit(rendered, rect)
@@ -115,12 +115,20 @@ class Hud:
             (label, colour),
             (f"Lives: {stats.lives}", _TEXT_COLOUR),
             (f"Bombs: {stats.bombs}", _TEXT_COLOUR),
+            # Equippable inventories — kid playtest 2026-04-27: dedicated
+            # icons + counts so the player knows when they can fire one.
+            (f"[S] Shield x{stats.shield_charges}", (140, 255, 240)),
+            (f"[M] Missile x{stats.missile_charges}", (255, 180, 100)),
             (f"Weapon Lv {stats.weapon_level}", _TEXT_COLOUR),
             (f"{stats.score:08d}", _TEXT_COLOUR),
         ]
         y = _PADDING
+        # Layout: panel font for the label + stat lines, smaller score
+        # font for the trailing 8-digit score number. The score line is
+        # always the last entry (index == len(lines) - 1).
+        last_idx = len(lines) - 1
         for i, (text, col) in enumerate(lines):
-            font = self._panel_font if i < 4 else self._score_font
+            font = self._score_font if i == last_idx else self._panel_font
             rendered = font.render(text, True, col)
             if anchor_left:
                 rect = rendered.get_rect(topleft=(x, y))
@@ -134,13 +142,30 @@ class Hud:
 
 
 class _PlayerStats:
-    __slots__ = ("bombs", "lives", "score", "weapon_level")
+    __slots__ = (
+        "bombs",
+        "lives",
+        "missile_charges",
+        "score",
+        "shield_charges",
+        "weapon_level",
+    )
 
-    def __init__(self, lives: int, bombs: int, weapon_level: int, score: int) -> None:
+    def __init__(
+        self,
+        lives: int,
+        bombs: int,
+        weapon_level: int,
+        score: int,
+        shield_charges: int = 0,
+        missile_charges: int = 0,
+    ) -> None:
         self.lives = lives
         self.bombs = bombs
         self.weapon_level = weapon_level
         self.score = score
+        self.shield_charges = shield_charges
+        self.missile_charges = missile_charges
 
 
 def _try_coop_state(world: World) -> Any | None:
@@ -173,4 +198,6 @@ def _player_stats(state: Any, slot_attr: str) -> _PlayerStats:
         bombs=_attr_int(p, "bombs"),
         weapon_level=_attr_int(p, "weapon_level") or 1,
         score=_attr_int(p, "score"),
+        shield_charges=_attr_int(p, "shield_charges"),
+        missile_charges=_attr_int(p, "missile_charges"),
     )

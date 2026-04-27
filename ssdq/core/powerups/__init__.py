@@ -16,6 +16,7 @@ bomb, extra life. All four ship in the slice; this module owns them.
 
 from ssdq.core.powerups.drops import roll_drop
 from ssdq.core.powerups.state import (
+    SHIELD_CONSUME_DURATION,
     PickupResult,
     PlayerPowerupState,
     Shield,
@@ -25,6 +26,7 @@ from ssdq.core.powerups.state import (
 )
 
 __all__ = [
+    "SHIELD_CONSUME_DURATION",
     "PickupResult",
     "PlayerPowerupState",
     "Shield",
