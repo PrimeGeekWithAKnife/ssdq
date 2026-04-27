@@ -46,22 +46,24 @@ weapons:
     fire_rate: 5.0          # shots/sec — was 8.0, gives upgrades headroom
     pattern: [{ angle_deg: 0, offset_x: 0, offset_y: -8 }]
 
+  # Level-2: thicker beam, faster fire, twin shots.
   pulse_lvl2:
     type: bullet
-    sprite: projectiles/pulse_blue.png
-    damage: 1
+    sprite: projectiles/pulse_mid.png
+    damage: 2                # also hits harder per round
     speed: 720
-    fire_rate: 9.0
+    fire_rate: 8.0
     pattern:
       - { angle_deg: -6, offset_x: -10, offset_y: -8 }
       - { angle_deg:  6, offset_x:  10, offset_y: -8 }
 
+  # Level-3: thick high-energy beam, fastest fire, triple-shot + tail.
   pulse_lvl3:
     type: bullet
-    sprite: projectiles/pulse_blue.png
-    damage: 1
-    speed: 720
-    fire_rate: 10.0
+    sprite: projectiles/pulse_strong.png
+    damage: 2
+    speed: 760
+    fire_rate: 11.0
     pattern:
       - { angle_deg: -10, offset_x: -14, offset_y:  -8 }
       - { angle_deg:   0, offset_x:   0, offset_y: -10 }

@@ -113,6 +113,22 @@ url     = ""
 notes   = "Generated 2026-04-27 to give the starter weapon a more modest look."
 
 [[entry]]
+path    = "content/assets/sprites/projectiles/pulse_mid.png"
+source  = "Original"
+author  = "Claude (procedurally drawn — 8x20 mid-tier beam for pulse_lvl2)"
+licence = "CC0"
+url     = ""
+notes   = "Generated 2026-04-27 — visible weapon-tier progression for the kid."
+
+[[entry]]
+path    = "content/assets/sprites/projectiles/pulse_strong.png"
+source  = "Original"
+author  = "Claude (procedurally drawn — 12x32 high-energy beam for pulse_lvl3)"
+licence = "CC0"
+url     = ""
+notes   = "Generated 2026-04-27 — top-tier weapon visual."
+
+[[entry]]
 path    = "content/assets/sprites/projectiles/enemy_orb.png"
 source  = "Kenney Space Shooter Redux"
 author  = "Kenney Vleugels"

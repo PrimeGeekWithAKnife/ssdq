@@ -16,6 +16,11 @@ enemies:
   # "invulnerable" because bullets visibly grazing the sprite would miss
   # the hitbox. Now ~70% of visual, which matches shmup convention
   # (enemies forgiving, players tight).
+  # Drop-pool note (kid playtest 2026-04-27): user requested initial
+  # power-up set restricted to WEAPON BOOST and SPEED. Bomb / Health
+  # are still defined and reachable on rare drops, but they're no
+  # longer in the common pools so the kid sees the meaningful upgrades
+  # first. Wingman / missile / shield power-ups are backlogged.
   drone:
     sprite: enemies/drone.png
     hitbox_radius: 22         # was 14 — drone sprite ~50px
@@ -23,8 +28,8 @@ enemies:
     speed_along_path: 90
     weapon: null
     score: 100
-    drop_chance: 0.05
-    drop_pool: [pickup_health, pickup_powerup]
+    drop_chance: 0.10         # bumped a touch
+    drop_pool: [pickup_powerup, pickup_speed]
 
   fighter:
     sprite: enemies/fighter.png
@@ -34,7 +39,7 @@ enemies:
     weapon: aimed_shot
     fire_beats: [1.0, 2.2]      # path-time seconds at which to fire
     score: 250
-    drop_chance: 0.10
+    drop_chance: 0.20
     drop_pool: [pickup_powerup, pickup_speed]
 
   gunship:
@@ -45,8 +50,8 @@ enemies:
     weapon: aimed_shot
     fire_beats: [1.4, 2.8, 4.2]
     score: 800
-    drop_chance: 0.25
-    drop_pool: [pickup_powerup, pickup_bomb, pickup_speed]
+    drop_chance: 0.45
+    drop_pool: [pickup_powerup, pickup_speed, pickup_bomb]
 
   bomber:
     sprite: enemies/bomber.png
@@ -56,8 +61,8 @@ enemies:
     weapon: spread_shot
     fire_beats: [2.0, 4.0]
     score: 600
-    drop_chance: 0.20
-    drop_pool: [pickup_bomb, pickup_powerup, pickup_health]
+    drop_chance: 0.40
+    drop_pool: [pickup_powerup, pickup_speed, pickup_health]
 
 # Boss definition. Phase inside the Level scene, not a separate scene
 # (per spec §4.4). Two phases per spec §2 DOD #4.
