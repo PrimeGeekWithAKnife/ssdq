@@ -389,8 +389,24 @@ class LevelScene(Scene):
         # HUD snapshot resource (renderer reads via duck-typed shape).
         world.insert_resource(self._build_hud_state())
 
-        # Music — start level track.
-        self._switch_music(level.music)
+        # Per-level narrative banner — overlays mid-screen for a few
+        # seconds while the kid reads the story beat. Input is NOT
+        # blocked (players can shoot through it); the wave scheduler
+        # has its own ramp-up so nothing punishing happens during the
+        # read. Skipped if the level lacks an entry (defensive).
+        intro_text = level_intro_text(self.level_index)
+        if intro_text:
+            banner_ticks = int(_LEVEL_INTRO_BANNER_SECONDS * 60)
+            world.spawn(
+                LevelIntroBanner(text=intro_text, total_ticks=banner_ticks),
+                TimeToLive(ticks=banner_ticks),
+            )
+
+        # Music — start the per-level track. Track names are registered
+        # by BootScene as ``level_NN`` / ``boss_NN`` (zero-padded). The
+        # YAML's ``level.music`` field is a content path, not a bus name,
+        # so we derive the registered name from the level index here.
+        self._switch_music(self._level_music_name())
 
         # Per-level intro banner — appears immediately, fades out over
         # _LEVEL_INTRO_BANNER_SECONDS. Players can shoot through it.
@@ -479,9 +495,14 @@ class LevelScene(Scene):
         # 12. Refresh HUD snapshot
         world.insert_resource(self._build_hud_state())
 
-        # 12. Boss music switch on boss spawn
-        if self._boss is not None and self._music_playing != "boss_01":
-            self._switch_music("boss_01")
+        # 12. Boss music switch on boss spawn — fade from level to boss
+        # track. The boss track name is per-level (boss_NN) so the
+        # encounter has its own intensity rather than always reusing
+        # boss_01's mood.
+        if self._boss is not None:
+            boss_name = self._boss_music_name()
+            if self._music_playing != boss_name:
+                self._switch_music(boss_name)
 
         # 13. Win/loss transitions
         if self._level_completed:
@@ -1466,6 +1487,21 @@ class LevelScene(Scene):
             return
         self.app.audio.crossfade_to(name, ms=600)
         self._music_playing = name
+
+    def _level_music_name(self) -> str:
+        """BootScene-registered track name for the current level.
+
+        Levels 1..5 get their own track. Anything outside that range
+        (defensive — content currently ships level 1 + 2) falls back to
+        level_01 so we always have *something* registered.
+        """
+        idx = self.level_index if 1 <= self.level_index <= 5 else 1
+        return f"level_{idx:02d}"
+
+    def _boss_music_name(self) -> str:
+        """BootScene-registered boss track name for the current level."""
+        idx = self.level_index if 1 <= self.level_index <= 5 else 1
+        return f"boss_{idx:02d}"
 
     # ───────── helpers: lookups ─────────
 
