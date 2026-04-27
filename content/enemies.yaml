@@ -121,6 +121,31 @@ enemies:
       pickup_speed,
     ]
 
+  # Resupply ship — added 2026-04-27 from kid playtest #8:
+  # "We need to see enemy resupply ships and if we hit those they drop
+  #  the power-ups as well as the occasional random power up drop."
+  #
+  # Visually distinct (96x72 olive-green hull with two yellow supply
+  # pods, rendered procedurally — see tools/gen_resupply_sprite.py).
+  # Mechanically a fat target: 4x regular fighter HP, no weapon, slow
+  # cruise across the top of the screen. 100% drop rate from the full
+  # power-up pool so the kid is rewarded with a meaningful pickup
+  # whenever they prioritise the kill.
+  #
+  # No `weapon` and no `fire_beats` — passive transport.
+  # Path stays in the upper third (resupply_cruise formation) so the
+  # ship rarely collides with the player; on the rare overlap, the
+  # standard collision rules apply (hitbox is small relative to hull).
+  resupply_ship:
+    sprite: enemies/resupply_ship.png
+    hitbox_radius: 36         # ~75% of visual half-width — forgiving target
+    hp: 12                    # 4x fighter (3hp), 1.5x gunship (8hp), well below boss (60hp)
+    speed_along_path: 50      # slow cruise — kid has time to spot and shoot
+    weapon: null
+    score: 1500               # bigger reward than gunship (800), still under boss
+    drop_chance: 1.0          # 100% drop — guaranteed power-up
+    drop_pool: [pickup_powerup, pickup_speed, pickup_bomb, pickup_health, pickup_shield]
+
 # Boss definition. Phase inside the Level scene, not a separate scene
 # (per spec §4.4). Two phases per spec §2 DOD #4.
 bosses:
