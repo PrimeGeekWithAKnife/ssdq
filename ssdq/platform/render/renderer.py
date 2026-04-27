@@ -37,6 +37,7 @@ from ssdq.core.components import (
     PickupHalo,
     Position,
     Sprite,
+    TimeToLive,
 )
 from ssdq.core.ecs import World
 from ssdq.platform.render.atlas import SpriteAtlas
@@ -130,6 +131,11 @@ class Renderer:
 
         # 5. boss telegraphs (optional)
         self._draw_boss_telegraphs(world, surface)
+
+        # 5.1 boss intro banner — large centred text above the playfield
+        # during the boss telegraph window. Reads narrative copy off any
+        # entity with a BossIntroBanner component.
+        self._draw_boss_intro_banner(world, surface)
 
         # extra: bomb shockwaves (optional)
         self._draw_bomb_actives(world, surface)
@@ -314,6 +320,46 @@ class Renderer:
             if pos is None or radius <= 0.0:
                 continue
             pygame.draw.circle(surface, colour, (int(pos[0]), int(pos[1])), int(radius), width=2)
+
+    def _draw_boss_intro_banner(self, world: World, surface: pygame.Surface) -> None:
+        """Big top-of-screen text banner during the boss intro telegraph.
+
+        Reads BossIntroBanner-tagged entities (duck-typed) and fades the
+        text out over the entity's TimeToLive so the banner gracefully
+        retreats just as the boss starts shooting.
+        """
+        comp_t = _optional_component_type("BossIntroBanner")
+        if comp_t is None:
+            return
+        if not pygame.font.get_init():
+            pygame.font.init()
+        title_font = pygame.font.SysFont(None, 56, bold=True)
+        sub_font = pygame.font.SysFont(None, 26)
+        w, _h = surface.get_size()
+        for eid, banner in world.query1(comp_t):
+            text = str(getattr(banner, "text", "") or "")
+            if not text:
+                continue
+            total = max(1, int(getattr(banner, "total_ticks", 60) or 60))
+            ttl = world.get(eid, TimeToLive)
+            remaining = ttl.ticks if ttl is not None else total
+            # Ease the alpha: hold at full for the first 70% then fade.
+            ratio = max(0.0, min(1.0, remaining / total))
+            alpha = 255 if ratio > 0.30 else int(255 * (ratio / 0.30))
+            # Drop shadow for legibility against the busy playfield.
+            shadow = title_font.render(text, True, (0, 0, 0))
+            label = title_font.render(text, True, (255, 230, 120))
+            shadow.set_alpha(alpha)
+            label.set_alpha(alpha)
+            cx = w // 2
+            cy = 150
+            surface.blit(shadow, shadow.get_rect(center=(cx + 2, cy + 2)))
+            surface.blit(label, label.get_rect(center=(cx, cy)))
+            # Subtitle line — smaller, dimmer, immediately under the banner.
+            sub = sub_font.render("WARNING — INCOMING", True, (255, 120, 120))
+            sub.set_alpha(alpha)
+            surface.blit(sub, sub.get_rect(center=(cx, cy + 44)))
+            return  # one banner is enough
 
     def _draw_bomb_actives(self, world: World, surface: pygame.Surface) -> None:
         comp_t = _optional_component_type("BombActive")
