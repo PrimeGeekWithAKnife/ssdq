@@ -87,6 +87,7 @@ class PickupEffect(Enum):
     SPEED_UP = "speed_up"
     EXTRA_BOMB = "extra_bomb"
     EXTRA_LIFE = "extra_life"
+    SHIELD = "shield"
 
 
 @dataclass(frozen=True, slots=True)

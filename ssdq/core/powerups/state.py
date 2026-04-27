@@ -44,6 +44,28 @@ _NO_BOOST = SpeedBoost(multiplier=1.0, seconds_remaining=0.0)
 
 
 @dataclass(frozen=True, slots=True)
+class Shield:
+    """Active shield (forcefield) timer. ``seconds_remaining`` zero ⇒ no shield.
+
+    While active, the player ship is invulnerable to all incoming damage
+    (the level scene short-circuits its hit-handler). Stacking is
+    handled by ``apply_pickup``: collecting a second shield while one is
+    already up RESETs the timer to the new pickup's duration rather than
+    summing — matches the user-feedback spec ("makes it invulnerable for
+    10 seconds").
+    """
+
+    seconds_remaining: float
+
+    @property
+    def active(self) -> bool:
+        return self.seconds_remaining > 0.0
+
+
+_NO_SHIELD = Shield(seconds_remaining=0.0)
+
+
+@dataclass(frozen=True, slots=True)
 class PlayerPowerupState:
     """All power-up state for one player. Held by the coop layer."""
 
@@ -51,6 +73,7 @@ class PlayerPowerupState:
     bombs: int
     lives: int
     speed_boost: SpeedBoost = _NO_BOOST
+    shield: Shield = _NO_SHIELD
 
     def with_weapon(self, weapon: WeaponState) -> PlayerPowerupState:
         return replace(self, weapon=weapon)
@@ -64,6 +87,9 @@ class PlayerPowerupState:
     def with_speed_boost(self, boost: SpeedBoost) -> PlayerPowerupState:
         return replace(self, speed_boost=boost)
 
+    def with_shield(self, shield: Shield) -> PlayerPowerupState:
+        return replace(self, shield=shield)
+
     def tick_speed_boost(self, dt: float) -> PlayerPowerupState:
         """Decay any active speed-boost timer by `dt`. No-op when inactive."""
         if not self.speed_boost.active:
@@ -75,15 +101,25 @@ class PlayerPowerupState:
             SpeedBoost(multiplier=self.speed_boost.multiplier, seconds_remaining=new_remaining)
         )
 
+    def tick_shield_decay(self, dt: float) -> PlayerPowerupState:
+        """Decay any active shield timer by `dt`. No-op when inactive."""
+        if not self.shield.active:
+            return self
+        new_remaining = self.shield.seconds_remaining - dt
+        if new_remaining <= 0.0:
+            return self.with_shield(_NO_SHIELD)
+        return self.with_shield(Shield(seconds_remaining=new_remaining))
+
     def reset_on_death(self, *, starting_bombs: int) -> PlayerPowerupState:
         """Per spec: weapon level drops back to base on death; bombs reset
-        to `starting_bombs` (from ShipDef); speed-boost cleared; lives is
-        decremented by the coop layer, not here."""
+        to `starting_bombs` (from ShipDef); speed-boost and shield cleared;
+        lives is decremented by the coop layer, not here."""
         return PlayerPowerupState(
             weapon=self.weapon.reset(),
             bombs=max(0, starting_bombs),
             lives=self.lives,
             speed_boost=_NO_BOOST,
+            shield=_NO_SHIELD,
         )
 
 
@@ -97,6 +133,7 @@ class PickupResult:
     extra_bomb: bool = False
     extra_life: bool = False
     speed_up: bool = False
+    shield_up: bool = False
 
 
 def apply_pickup(
@@ -125,4 +162,12 @@ def apply_pickup(
             seconds_remaining=pickup.duration,
         )
         return PickupResult(new_state=state.with_speed_boost(boost), speed_up=True)
+    if pickup.effect == PickupEffect.SHIELD:
+        # Stacking semantics: collecting a second shield while one is
+        # already active RESETS the remaining time to the new pickup's
+        # duration (not additive). Matches the user-feedback spec — the
+        # forcefield "engulfs the ship for 10 seconds", any subsequent
+        # pickup refreshes that 10-second window.
+        shield = Shield(seconds_remaining=pickup.duration)
+        return PickupResult(new_state=state.with_shield(shield), shield_up=True)
     raise ValueError(f"unknown pickup effect: {pickup.effect}")

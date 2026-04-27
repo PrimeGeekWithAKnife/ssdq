@@ -44,6 +44,7 @@ from ssdq.core.components import (
     PlayerOwned,
     Position,
     ScoreValue,
+    ShieldHalo,
     Sprite,
     TimeToLive,
     Velocity,
@@ -319,9 +320,11 @@ class LevelScene(Scene):
             if self._session.lifecycle(slot).state == LifecycleState.OUT:
                 self._session.try_consume_continue(slot)
 
-        # 2. Speed-boost decay
+        # 2. Speed-boost + shield decay; sync ShieldHalo on player ships
         for slot in (P1, P2):
             self._powerup_states[slot] = self._powerup_states[slot].tick_speed_boost(dt)
+            self._powerup_states[slot] = self._powerup_states[slot].tick_shield_decay(dt)
+        self._sync_shield_halos(world)
 
         # 3. Player input → movement, fire, bomb
         self._apply_player_input(world, P1, inputs[0])
@@ -933,6 +936,17 @@ class LevelScene(Scene):
         slot = owned.slot
         if not self._session.lifecycle(slot).can_be_hit:
             return
+        # Shield power-up: if active, absorb the hit. The forcefield
+        # eats the bullet/enemy contact so the player is invulnerable
+        # for the shield's duration. We still consume the offending
+        # enemy bullet (so it doesn't double-hit on the next tick) and
+        # play a soft pickup chirp so the player hears the shield work.
+        pstate = self._powerup_states[slot]
+        if pstate.shield.active:
+            if ftag_a.faction == Faction.ENEMY_BULLET or ftag_b.faction == Faction.ENEMY_BULLET:
+                world.despawn(other)
+            self.app.audio.play_sfx("hit", volume=0.3)
+            return
         # Visual: explosion at the player's position before despawn.
         player_pos = world.must_get(player_eid, Position).pos
         self._spawn_explosion(world, player_pos, scale=2)
@@ -1037,6 +1051,7 @@ class LevelScene(Scene):
             PickupEffect.SPEED_UP: (80, 220, 255),  # cyan
             PickupEffect.EXTRA_BOMB: (255, 120, 60),  # orange
             PickupEffect.EXTRA_LIFE: (255, 100, 160),  # pink
+            PickupEffect.SHIELD: (140, 255, 240),  # bright teal/cyan
         }.get(pdef.effect, (200, 200, 200))
         world.spawn(
             Position(pos),
@@ -1093,7 +1108,13 @@ class LevelScene(Scene):
                 TimeToLive(ticks=42),
             )
         world.despawn(pickup_eid)
-        if result.upgraded_weapon:
+        if result.shield_up:
+            # Attach a ShieldHalo to the player immediately so the
+            # forcefield engulfs the ship on the same tick the pickup
+            # is collected (otherwise it'd flicker on next tick).
+            self._sync_shield_halos(world)
+            self.app.audio.play_sfx("powerup")
+        elif result.upgraded_weapon:
             self.app.audio.play_sfx("powerup")
         else:
             self.app.audio.play_sfx("pickup")
@@ -1111,9 +1132,33 @@ class LevelScene(Scene):
             return ("+1 BOMB", (255, 140, 80))
         if getattr(result, "extra_life", False):
             return ("+1 LIFE", (255, 120, 180))
+        if getattr(result, "shield_up", False):
+            return ("SHIELD!", (80, 220, 255))
         return ("", (255, 255, 255))
 
     # ───────── helpers: respawn / culling / hud ─────────
+
+    def _sync_shield_halos(self, world: World) -> None:
+        """Add or remove a ShieldHalo on each player ship to match its
+        powerup state. Called every tick (cheap — at most 2 entities) so
+        the visual stays in lock-step with shield expiry / pickup.
+        """
+        bundle = self.app.content
+        for slot in (P1, P2):
+            eid = self._player_entities.get(slot)
+            if eid is None or not world.is_alive(eid):
+                continue
+            ship_name = "vanguard" if slot == P1 else "vanguard_red"
+            ship = bundle.ships[ship_name]
+            # Halo radius scales with ship hitbox so it visibly engulfs
+            # the sprite (ship sprites render at scale 0.66 ≈ 32px wide).
+            base_radius = max(28.0, ship.hitbox_radius + 14.0)
+            has_halo = world.has(eid, ShieldHalo)
+            shield_active = self._powerup_states[slot].shield.active
+            if shield_active and not has_halo:
+                world.add(eid, ShieldHalo(base_radius=base_radius))
+            elif not shield_active and has_halo:
+                world.remove(eid, ShieldHalo)
 
     def _handle_respawns(self, world: World) -> None:
         cfg = self.app.content.coop
