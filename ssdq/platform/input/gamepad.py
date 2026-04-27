@@ -144,8 +144,8 @@ class GamepadProvider:
                 self._slot_pads[idx] = None
                 self._disconnected = PlayerSlot(idx)
 
-        # Try to bind any pad pressing START to the next free slot.
-        self._assign_pads_pressing_start()
+        # Try to bind any pad with a button held down to the next free slot.
+        self._assign_pads_with_button_press()
 
         return (self._read_slot(0), self._read_slot(1))
 
@@ -189,22 +189,34 @@ class GamepadProvider:
             self._pads.pop(instance_id, None)
             self._states.pop(instance_id, None)
 
-    def _assign_pads_pressing_start(self) -> None:
-        # Skip if both slots are already bound.
+    def _assign_pads_with_button_press(self) -> None:
+        # Bind any unbound pad to the first free slot as soon as the player
+        # presses *any* button on it. Generic / Chinese HID pads shuffle the
+        # button indices unpredictably (kid playtest 2026-04-27: a Zikway pad
+        # had no working "Start" at index 7, so the game wouldn't start). We
+        # mirror the same "accept anything reasonable" approach used for
+        # bombs: whatever the kid mashes counts.
         if self._slot_pads[0] is not None and self._slot_pads[1] is not None:
             return
         for instance_id, pad in self._pads.items():
             if instance_id in self._slot_pads:
                 continue  # already bound to a slot
-            if not _safe_button(pad, BUTTON_START):
+            if not _any_button_pressed(pad):
                 continue
             # Bind to first free slot.
             for slot_idx in (0, 1):
                 if self._slot_pads[slot_idx] is None:
                     self._slot_pads[slot_idx] = instance_id
-                    # Mark START as previously-pressed so we don't fire a
-                    # spurious pause on the very next tick.
-                    self._states[instance_id].prev_pause = True
+                    # Mark every edge-tracked button as previously-pressed so
+                    # the act of binding doesn't also fire a spurious pause /
+                    # bomb / confirm / cancel on the very next tick.
+                    state = self._states[instance_id]
+                    state.prev_a = _safe_button(pad, BUTTON_A)
+                    state.prev_b = _safe_button(pad, BUTTON_B)
+                    state.prev_bomb = any(
+                        _safe_button(pad, btn) for btn in BOMB_BUTTONS
+                    )
+                    state.prev_pause = _safe_button(pad, BUTTON_START)
                     break
 
     def _read_slot(self, slot_idx: int) -> PlayerInput:
@@ -261,3 +273,11 @@ def _safe_button(pad: pygame.joystick.JoystickType, button: int) -> bool:
     if button >= pad.get_numbuttons():
         return False
     return bool(pad.get_button(button))
+
+
+def _any_button_pressed(pad: pygame.joystick.JoystickType) -> bool:
+    """True if any button on the pad is currently held."""
+    for i in range(pad.get_numbuttons()):
+        if pad.get_button(i):
+            return True
+    return False
