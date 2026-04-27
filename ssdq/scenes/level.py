@@ -91,6 +91,74 @@ _BOSS_INTRO_TELEGRAPH_RADIUS = 80.0
 # default telegraph so the banner reads cleanly even if the boss data
 # overrides intro_telegraph_seconds to something short.
 _BOSS_INTRO_BANNER_SECONDS = 3.0
+# Level-intro overlay shown the moment LevelScene.enter() lands. Long
+# enough for an adult-or-kid to read the full sentence at kid-distance
+# without gating gameplay (players can shoot through it).
+_LEVEL_INTRO_BANNER_SECONDS = 6.0
+
+
+# ───────── per-level narrative copy ─────────
+#
+# Verbatim user copy from kid-playtest feedback. Levels 3–5 are wired
+# even though their content bundles are deferred — when the levels land,
+# the narrative is already there.
+_LEVEL_INTROS: dict[int, str] = {
+    1: (
+        "Before you can save Earth you must destroy the aliens "
+        "preventing you from leaving the moon"
+    ),
+    2: (
+        "You have left the moon but enemies are closing in to "
+        "intercept you in space"
+    ),
+    3: (
+        "Earth's last orbital defence station is under attack, "
+        "without it all is lost. You must destroy the alien ships "
+        "so it can repair its main weapon systems!"
+    ),
+    4: (
+        "We have finally made it to Earth but aliens are attack "
+        "from all directions you must defend space above the "
+        "United Kingdom before the aliens attack the government "
+        "and the King!"
+    ),
+    5: (
+        "We have defeated all the aliens but they have called for "
+        "reinforcements and a massive alien fleet has just come out "
+        "of hyperspace near Earth. Let's hope they finished repairs "
+        "on that space station!!"
+    ),
+}
+
+_LEVEL_BOSS_INTROS: dict[int, str] = {
+    1: "MOON GUARDIAN approaches! Defend the lunar launch site!",
+    2: "DEEP SPACE INTERCEPTOR closing in! Hold the line!",
+    3: "ORBITAL SIEGE FLEET commander locks on - protect the station!",
+    4: "ALIEN WARLORD attacks the United Kingdom! Defend the King!",
+    5: (
+        "HYPERSPACE ARMADA flagship engaged - destroy it before "
+        "reinforcements land!"
+    ),
+}
+
+# Fallback used when an unknown level index is requested. Kept as a
+# generic string so the renderer never has to guard against a missing
+# banner — the show goes on even if content drifts.
+_DEFAULT_LEVEL_INTRO = "Mission start"
+_DEFAULT_BOSS_INTRO = "A LARGE ALIEN SHIP APPROACHES - IT FEELS ANGRY"
+
+
+def level_intro_text(level: int) -> str:
+    """Return the per-level intro banner copy. Falls back to a generic
+    line for unknown indices so callers never crash on missing data."""
+    return _LEVEL_INTROS.get(level, _DEFAULT_LEVEL_INTRO)
+
+
+def boss_intro_text(level: int) -> str:
+    """Return the per-level boss intro banner copy. Falls back to the
+    legacy generic line so the banner machinery still has something to
+    show on uncovered levels."""
+    return _LEVEL_BOSS_INTROS.get(level, _DEFAULT_BOSS_INTRO)
 
 
 # ───────── runtime components (Level-scene-internal) ─────────
@@ -174,6 +242,24 @@ class BossIntroBanner:
     over its TimeToLive. Spawned alongside the BossTelegraph circle so the
     player gets BOTH a visual ping and a narrative hook before the boss
     starts shooting (kid playtest feedback: boss appearance was too sudden).
+    """
+
+    text: str
+    total_ticks: int  # original lifetime, used by renderer to compute fade
+
+
+@dataclass(frozen=True, slots=True)
+class LevelIntroBanner:
+    """Big centred text overlay shown at the start of every level.
+
+    Spawned in :meth:`LevelScene.enter` so it appears on tick 0 — players
+    can shoot through it (no input gating). Word-wrapped by the renderer
+    to ~80% of the playfield width so the longer narrative lines on
+    Levels 3-5 fit on a 1280x720 fullscreen at kid-distance.
+
+    The renderer holds full alpha for most of the banner's life and
+    fades the last ~30% so the banner retreats just before gameplay
+    intensifies.
     """
 
     text: str
@@ -281,6 +367,17 @@ class LevelScene(Scene):
 
         # Music — start level track.
         self._switch_music(level.music)
+
+        # Per-level intro banner — appears immediately, fades out over
+        # _LEVEL_INTRO_BANNER_SECONDS. Players can shoot through it.
+        intro_ticks = int(_LEVEL_INTRO_BANNER_SECONDS * 60)
+        world.spawn(
+            LevelIntroBanner(
+                text=level_intro_text(self.level_index),
+                total_ticks=intro_ticks,
+            ),
+            TimeToLive(ticks=intro_ticks),
+        )
 
     def exit(self, world: World) -> None:
         self.app.audio.stop_music()
@@ -625,11 +722,12 @@ class LevelScene(Scene):
             TimeToLive(ticks=intro_ticks),
         )
         # Narrative banner — same TTL as the telegraph so they fade together.
-        # Fixed copy for the slice; later this could come from BossDef.
+        # Copy comes from the per-level lookup so each boss gets a story-
+        # bearing line instead of a generic one (kid playtest feedback).
         banner_ticks = int(_BOSS_INTRO_BANNER_SECONDS * 60)
         world.spawn(
             BossIntroBanner(
-                text="A LARGE ALIEN SHIP APPROACHES — IT FEELS ANGRY",
+                text=boss_intro_text(self.level_index),
                 total_ticks=banner_ticks,
             ),
             TimeToLive(ticks=banner_ticks),
