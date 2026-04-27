@@ -32,6 +32,7 @@ class _KeyState:
         "prev_bomb",
         "prev_cancel",
         "prev_confirm",
+        "prev_drone_cycle",
         "prev_missile",
         "prev_pause",
         "prev_shield",
@@ -44,6 +45,7 @@ class _KeyState:
         self.prev_cancel: bool = False
         self.prev_shield: bool = False
         self.prev_missile: bool = False
+        self.prev_drone_cycle: bool = False
 
 
 # P1 binding: WASD + Space + LShift + Q + E + Enter + Esc.
@@ -58,6 +60,9 @@ _P1_CONFIRM = pygame.K_RETURN
 _P1_CANCEL = pygame.K_ESCAPE
 _P1_SHIELD = pygame.K_e
 _P1_MISSILE = pygame.K_q
+# Drone-formation cycle (task #10). P1 only — keyboard is a fallback /
+# dev path and the drone feature is built around the gamepad anyway.
+_P1_DRONE_CYCLE: int | None = pygame.K_f
 
 # P2 binding: arrows + RShift + RCtrl + Tab.
 _P2_UP = pygame.K_UP
@@ -74,6 +79,7 @@ _P2_CANCEL: int | None = None
 # P2 has no keyboard equippable bindings (see module docstring).
 _P2_SHIELD: int | None = None
 _P2_MISSILE: int | None = None
+_P2_DRONE_CYCLE: int | None = None  # P2 unbound for the slice
 
 
 class KeyboardProvider:
@@ -111,6 +117,7 @@ class KeyboardProvider:
                 cancel=_P1_CANCEL,
                 shield=_P1_SHIELD,
                 missile=_P1_MISSILE,
+                drone_cycle=_P1_DRONE_CYCLE,
             ),
             self._read(
                 keys,
@@ -126,6 +133,7 @@ class KeyboardProvider:
                 cancel=_P2_CANCEL,
                 shield=_P2_SHIELD,
                 missile=_P2_MISSILE,
+                drone_cycle=_P2_DRONE_CYCLE,
             ),
         )
 
@@ -153,6 +161,7 @@ class KeyboardProvider:
         cancel: int | None,
         shield: int | None,
         missile: int | None,
+        drone_cycle: int | None = None,
     ) -> PlayerInput:
         # Move axis: opposing keys cancel out, and the resulting vector is
         # normalised so diagonals match cardinal magnitudes (1.0).
@@ -166,6 +175,7 @@ class KeyboardProvider:
         held_cancel = bool(keys[cancel]) if cancel is not None else False
         held_shield = bool(keys[shield]) if shield is not None else False
         held_missile = bool(keys[missile]) if missile is not None else False
+        held_drone_cycle = bool(keys[drone_cycle]) if drone_cycle is not None else False
 
         bomb_edge = held_bomb and not state.prev_bomb
         pause_edge = held_pause and not state.prev_pause
@@ -173,6 +183,7 @@ class KeyboardProvider:
         cancel_edge = held_cancel and not state.prev_cancel
         shield_edge = held_shield and not state.prev_shield
         missile_edge = held_missile and not state.prev_missile
+        drone_cycle_edge = held_drone_cycle and not state.prev_drone_cycle
 
         state.prev_bomb = held_bomb
         state.prev_pause = held_pause
@@ -180,6 +191,7 @@ class KeyboardProvider:
         state.prev_cancel = held_cancel
         state.prev_shield = held_shield
         state.prev_missile = held_missile
+        state.prev_drone_cycle = held_drone_cycle
 
         return PlayerInput(
             move=move,
@@ -190,4 +202,5 @@ class KeyboardProvider:
             cancel=cancel_edge,
             shield=shield_edge,
             missile=missile_edge,
+            drone_cycle=drone_cycle_edge,
         )

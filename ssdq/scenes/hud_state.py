@@ -26,6 +26,8 @@ class HudPlayerStats:
     # Inventory counters (read by Hud panel).
     shield_charges: int = 0
     missile_charges: int = 0
+    # Active drone count (0..2) — task #10. Surfaced so the HUD can
+    # render a small "Drones: N" line per player.
     drones: int = 0
 
 

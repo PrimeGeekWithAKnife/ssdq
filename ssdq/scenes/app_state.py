@@ -71,6 +71,11 @@ class AppState:
     # Scratch flags for Boot → Title → Level transitions to know what to do.
     asset_loaded_levels: set[int] = field(default_factory=set)
 
+    # Active drone-formation index per slot (Tight=0, Spread=1, Trailing=2,
+    # Vanguard=3). Persisted across LevelScene re-enters so the kid's chosen
+    # formation isn't lost between levels. Cycled via PlayerInput.drone_cycle.
+    drone_config: dict[PlayerSlot, int] = field(default_factory=_zero_per_slot)
+
     # ───────── equippable helpers ─────────
 
     def get_shield_charges(self, slot: PlayerSlot) -> int:

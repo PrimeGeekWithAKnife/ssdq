@@ -101,12 +101,15 @@ class _PadState:
 
     We only remember the previous-tick value for buttons that need
     edge-detection; the rest are sampled live each tick. `prev_bomb`
-    tracks the OR of all bomb-mapped buttons (X, Y).
+    tracks the OR of all bomb-mapped buttons (X, Y). `prev_shield` (LB),
+    `prev_missile` (RB), and `prev_back` (drone-cycle) drive the
+    equippable + drone edges.
     """
 
     __slots__ = (
         "prev_a",
         "prev_b",
+        "prev_back",
         "prev_bomb",
         "prev_missile",
         "prev_pause",
@@ -116,6 +119,7 @@ class _PadState:
     def __init__(self) -> None:
         self.prev_a: bool = False
         self.prev_b: bool = False
+        self.prev_back: bool = False
         self.prev_bomb: bool = False
         self.prev_pause: bool = False
         self.prev_shield: bool = False
@@ -238,11 +242,13 @@ class GamepadProvider:
                         _safe_button(pad, btn) for btn in BOMB_BUTTONS
                     )
                     state.prev_pause = _safe_button(pad, BUTTON_START)
-                    # Suppress shield / missile edges that would otherwise
-                    # fire on the very tick the slot is bound (the kid is
-                    # holding *every* button to wake the pad up).
+                    # Suppress shield / missile / drone-cycle edges that
+                    # would otherwise fire on the very tick the slot is
+                    # bound (the kid is holding *every* button to wake
+                    # the pad up).
                     state.prev_shield = _safe_button(pad, SHIELD_BUTTON)
                     state.prev_missile = _safe_button(pad, MISSILE_BUTTON)
+                    state.prev_back = _safe_button(pad, BUTTON_BACK)
                     break
 
     def _read_slot(self, slot_idx: int) -> PlayerInput:
@@ -265,6 +271,7 @@ class GamepadProvider:
         start = _safe_button(pad, BUTTON_START)
         shield_held = _safe_button(pad, SHIELD_BUTTON)
         missile_held = _safe_button(pad, MISSILE_BUTTON)
+        back = _safe_button(pad, BUTTON_BACK)
 
         # Edge-triggered: true only on 0 -> 1 transition.
         bomb = bomb_held and not state.prev_bomb
@@ -274,6 +281,8 @@ class GamepadProvider:
         cancel = b and not state.prev_b
         shield = shield_held and not state.prev_shield
         missile = missile_held and not state.prev_missile
+        # BACK cycles the player's drone formation (drone task #10).
+        drone_cycle = back and not state.prev_back
 
         # Update prev-tick state for next poll.
         state.prev_a = a
@@ -282,6 +291,7 @@ class GamepadProvider:
         state.prev_pause = start
         state.prev_shield = shield_held
         state.prev_missile = missile_held
+        state.prev_back = back
 
         return PlayerInput(
             move=move,
@@ -292,6 +302,7 @@ class GamepadProvider:
             cancel=cancel,
             shield=shield,
             missile=missile,
+            drone_cycle=drone_cycle,
         )
 
 

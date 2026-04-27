@@ -204,3 +204,24 @@ class ScoreValue:
     """Score awarded when this entity is destroyed by a player."""
 
     points: int
+
+
+# ───────── drones ─────────
+
+
+@dataclass(frozen=True, slots=True)
+class Drone:
+    """Companion drone tag.
+
+    A drone is a small ship that flies next to its owning player, copies
+    movement (with a configurable formation offset) and fires whenever
+    the player fires. It has independent HP — enemy bullets can kill the
+    drone without ejecting the player from any power-up state.
+
+    `slot_index` selects which of the up-to-2 drone slots this drone
+    occupies — used purely so the formation system knows which side of
+    the player to put it on (slot 0 → left flank, slot 1 → right flank).
+    """
+
+    slot: PlayerSlot
+    slot_index: int  # 0 or 1 (which of the player's up-to-2 drones this is)
