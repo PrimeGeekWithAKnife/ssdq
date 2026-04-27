@@ -31,6 +31,7 @@ class SpawnEvent:
     wave_index: int  # for debug/tracing
     spawn_index: int
     member_index: int  # 0..count-1 within the spawn
+    return_passes: int = 0  # extra formation passes if enemy survives
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,6 +54,7 @@ class _PendingMember:
     wave_index: int
     spawn_index: int
     member_index: int
+    return_passes: int
 
 
 class WaveScheduler:
@@ -104,6 +106,7 @@ class WaveScheduler:
                             wave_index=wi,
                             spawn_index=si,
                             member_index=mi,
+                            return_passes=spawn.return_passes,
                         )
                     )
         # Stable sort by absolute fire time, then origin coords for determinism.
@@ -131,6 +134,7 @@ class WaveScheduler:
                         wave_index=m.wave_index,
                         spawn_index=m.spawn_index,
                         member_index=m.member_index,
+                        return_passes=m.return_passes,
                     )
                 )
                 keep_from = i + 1
@@ -177,6 +181,7 @@ class WaveScheduler:
                 wave_index=m.wave_index,
                 spawn_index=m.spawn_index,
                 member_index=m.member_index,
+                return_passes=m.return_passes,
             )
 
     @property

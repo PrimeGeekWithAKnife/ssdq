@@ -8,6 +8,9 @@
 # `delay` offsets a sub-wave's start within its `at:` block.
 # `mirror(name)` reflects the formation about screen-centre x=640.
 #
+# `return_passes` (default 0) makes any survivor of a wave re-enter the
+# formation that many extra times — deterministic, no RNG (spec §6.3).
+#
 # Pacing note (kid playtest 2026-04-27, item #10):
 # Originally 11 waves across 3 stages → ~165s to boss. Re-pacing for the
 # 8-year-old: 21 waves across 4 stages → ~210s to boss. The curve eases
@@ -56,6 +59,10 @@ waves:
       - { enemy: drone, count: 4, formation: slow_descent_centre, spacing: 0.6 }
 
   # ───────── Stage 2 — pattern complication ─────────
+  # Survivors of these mid-level waves loop back for a second pass
+  # (`return_passes: 1`) — rewards the kid who clears them on the first
+  # pass and punishes the player who lets too many through.
+  #
   # NEW: first armed enemy (fighter) appears solo and slow so the kid
   # learns "those things shoot back" before being asked to dodge a swarm.
   - at: 36.0
@@ -66,7 +73,7 @@ waves:
   - at: 44.0
     stage: 2
     spawn:
-      - { enemy: drone, count: 8, formation: figure_eight_centre, spacing: 0.3 }
+      - { enemy: drone, count: 8, formation: figure_eight_centre, spacing: 0.3, return_passes: 1 }
 
   # NEW: light fighter+drone pair, well-delayed, to teach "watch both lanes".
   - at: 54.0
@@ -78,8 +85,8 @@ waves:
   - at: 64.0
     stage: 2
     spawn:
-      - { enemy: gunship, count: 3, formation: loop_left, spacing: 0.8 }
-      - { enemy: gunship, count: 3, formation: mirror(loop_left), spacing: 0.8, delay: 1.5 }
+      - { enemy: gunship, count: 3, formation: loop_left, spacing: 0.8, return_passes: 1 }
+      - { enemy: gunship, count: 3, formation: mirror(loop_left), spacing: 0.8, delay: 1.5, return_passes: 1 }
 
   # NEW: bomber preview — only 2, very wide spacing, so the spread_shot
   # is a "look at that pattern" moment, not a wall of bullets.
@@ -91,8 +98,8 @@ waves:
   - at: 84.0
     stage: 2
     spawn:
-      - { enemy: fighter, count: 6, formation: arc_left_to_right, spacing: 0.35 }
-      - { enemy: fighter, count: 6, formation: mirror(arc_left_to_right), spacing: 0.35, delay: 0.8 }
+      - { enemy: fighter, count: 6, formation: arc_left_to_right, spacing: 0.35, return_passes: 1 }
+      - { enemy: fighter, count: 6, formation: mirror(arc_left_to_right), spacing: 0.35, delay: 0.8, return_passes: 1 }
 
   # ───────── Stage 3 — density up ─────────
   # NEW: combo intro — a familiar drone pattern overlaid with fighters

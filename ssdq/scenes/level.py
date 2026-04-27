@@ -101,7 +101,13 @@ class PlayerShip:
 
 @dataclass(frozen=True, slots=True)
 class FormationFollower:
-    """Enemy following a named formation. `path_t0` is wall-clock spawn time."""
+    """Enemy following a named formation. `path_t0` is wall-clock spawn time.
+
+    `passes_remaining` counts extra return passes for survivors: when the
+    enemy reaches the end of the formation (t_norm ≥ 1.0) and still has
+    passes left, `path_t0` resets to current sim time and `passes_remaining`
+    decrements. Deterministic — no RNG (spec §6.3).
+    """
 
     formation_name: str
     mirrored: bool
@@ -113,6 +119,7 @@ class FormationFollower:
     score: int
     drop_chance: float
     drop_pool: tuple[str, ...]
+    passes_remaining: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -529,6 +536,7 @@ class LevelScene(Scene):
                 score=enemy.score,
                 drop_chance=enemy.drop_chance,
                 drop_pool=enemy.drop_pool,
+                passes_remaining=ev.return_passes,
             ),
             ScoreValue(points=enemy.score),
         )
@@ -585,6 +593,8 @@ class LevelScene(Scene):
         self._boss_dispatched = True
 
     def _advance_enemies(self, world: World) -> None:
+        from dataclasses import replace as _dc_replace
+
         bundle = self.app.content
         # Regular enemies on formations
         for eid, follower in list(world.query1(FormationFollower)):
@@ -600,8 +610,31 @@ class LevelScene(Scene):
             speed_mult = follower.speed / 100.0
             t_norm = (path_dt * speed_mult) / formation.duration
             if not formation.loop and t_norm >= 1.0:
-                # Off the end — despawn.
-                world.despawn(eid)
+                # End of pass: either despawn (no return passes left) or
+                # restart the formation from t=0 for a survivor return.
+                if follower.passes_remaining <= 0:
+                    world.despawn(eid)
+                    continue
+                # Reset path_t0 to current sim time and decrement counter.
+                # Replace the FormationFollower (it's a frozen dataclass —
+                # use dataclasses.replace, consistent with the rest of the
+                # codebase). Also reset the EnemyShooter beat index so the
+                # enemy can fire again on its return pass.
+                world.replace(
+                    eid,
+                    _dc_replace(
+                        follower,
+                        path_t0=self._sim_time,
+                        passes_remaining=follower.passes_remaining - 1,
+                    ),
+                )
+                shooter_ref = world.get(eid, EnemyShooterRef)
+                if shooter_ref is not None:
+                    shooter_ref.shooter.reset()
+                # Sample at t=0 immediately so the enemy snaps to the
+                # formation start (which should be off-screen by design).
+                sample = evaluate_path(formation, 0.0, mirrored=follower.mirrored)
+                world.replace(eid, Position(sample.pos))
                 continue
             sample = evaluate_path(formation, t_norm, mirrored=follower.mirrored)
             world.replace(eid, Position(sample.pos))
