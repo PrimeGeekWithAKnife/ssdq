@@ -105,6 +105,14 @@ url     = "https://opengameart.org/content/space-shooter-redux"
 notes   = "laserBlue01.png."
 
 [[entry]]
+path    = "content/assets/sprites/projectiles/pulse_basic.png"
+source  = "Original"
+author  = "Claude (procedurally drawn — small 5x14 pellet for level-1 weapon)"
+licence = "CC0"
+url     = ""
+notes   = "Generated 2026-04-27 to give the starter weapon a more modest look."
+
+[[entry]]
 path    = "content/assets/sprites/projectiles/enemy_orb.png"
 source  = "Kenney Space Shooter Redux"
 author  = "Kenney Vleugels"

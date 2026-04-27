@@ -35,12 +35,15 @@ ships:
 # Weapon definitions. The slice has one weapon tree (pulse) with 3 levels:
 # lvl1 base, lvl2 wider spread, lvl3 widest spread + back shot.
 weapons:
+  # Level-1 starter weapon — deliberately modest. Small pellet, slower
+  # fire rate (kid playtest 2026-04-27: original lvl1 looked like an
+  # upgraded weapon already).
   pulse_lvl1:
     type: bullet
-    sprite: projectiles/pulse_blue.png
+    sprite: projectiles/pulse_basic.png
     damage: 1
-    speed: 720
-    fire_rate: 8.0          # shots/sec
+    speed: 600
+    fire_rate: 5.0          # shots/sec — was 8.0, gives upgrades headroom
     pattern: [{ angle_deg: 0, offset_x: 0, offset_y: -8 }]
 
   pulse_lvl2:

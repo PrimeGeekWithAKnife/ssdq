@@ -50,7 +50,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--frames", type=int, default=0, help="cap simulation ticks (0 = unlimited)"
     )
-    parser.add_argument("--fullscreen", action="store_true")
+    parser.add_argument(
+        "--fullscreen",
+        dest="fullscreen",
+        action="store_true",
+        default=True,
+        help="run fullscreen (default — kid playtest target)",
+    )
+    parser.add_argument(
+        "--windowed",
+        dest="fullscreen",
+        action="store_false",
+        help="force a window instead of fullscreen (handy when developing)",
+    )
     parser.add_argument("--no-vsync", action="store_true")
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--height", type=int, default=720)

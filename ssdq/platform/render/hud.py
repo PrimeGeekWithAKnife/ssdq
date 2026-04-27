@@ -35,6 +35,7 @@ _TEXT_COLOUR = (240, 240, 240)
 _TEAM_COLOUR = (255, 240, 120)
 _P1_COLOUR = (120, 180, 255)
 _P2_COLOUR = (255, 140, 140)
+_HINT_COLOUR = (180, 180, 200)
 
 
 class Hud:
@@ -82,6 +83,15 @@ class Hud:
             x=surface.get_width() - _PADDING,
             anchor_left=False,
         )
+        self._draw_controls_hint(surface)
+
+    def _draw_controls_hint(self, surface: pygame.Surface) -> None:
+        """Tiny bottom-centre reminder of the controls — kid playtest
+        showed bombs weren't obvious."""
+        text = "FIRE: A   BOMB: B   PAUSE: START"
+        rendered = self._score_font.render(text, True, _HINT_COLOUR)
+        rect = rendered.get_rect(midbottom=(surface.get_width() // 2, surface.get_height() - 6))
+        surface.blit(rendered, rect)
 
     # ---------------- internals ----------------
 

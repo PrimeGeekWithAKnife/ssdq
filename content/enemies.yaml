@@ -11,9 +11,14 @@
 # the player's post-fire movement does not curve the bullet.
 
 enemies:
+  # NOTE on hitbox_radius: bumped from kid playtest 2026-04-27 — previously
+  # set to ~30-50% of visual sprite size, which made enemies feel
+  # "invulnerable" because bullets visibly grazing the sprite would miss
+  # the hitbox. Now ~70% of visual, which matches shmup convention
+  # (enemies forgiving, players tight).
   drone:
     sprite: enemies/drone.png
-    hitbox_radius: 14
+    hitbox_radius: 22         # was 14 — drone sprite ~50px
     hp: 1
     speed_along_path: 90
     weapon: null
@@ -23,7 +28,7 @@ enemies:
 
   fighter:
     sprite: enemies/fighter.png
-    hitbox_radius: 16
+    hitbox_radius: 26         # was 16
     hp: 3
     speed_along_path: 130
     weapon: aimed_shot
@@ -34,7 +39,7 @@ enemies:
 
   gunship:
     sprite: enemies/gunship.png
-    hitbox_radius: 22
+    hitbox_radius: 32         # was 22
     hp: 12
     speed_along_path: 60
     weapon: aimed_shot
@@ -45,7 +50,7 @@ enemies:
 
   bomber:
     sprite: enemies/bomber.png
-    hitbox_radius: 28
+    hitbox_radius: 38         # was 28
     hp: 8
     speed_along_path: 50
     weapon: spread_shot
