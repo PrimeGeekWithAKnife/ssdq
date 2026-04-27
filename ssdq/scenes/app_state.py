@@ -35,5 +35,25 @@ class AppState:
     # without another docking sequence doesn't repeatedly grant bonuses.
     bomb_bonus_pending: int = 0
 
+    # Shield charges queued by the resupply scene (DockingScene). Until
+    # the equippable-shield power-up (#4) lands and the level scene
+    # tracks ``shield_charges`` per slot, this counter is staged but
+    # not yet consumed by LevelScene.enter — wire it up in #4. Reset
+    # to 0 on consumption (one-shot, same pattern as bomb_bonus_pending).
+    # TODO(#4): consume in LevelScene.enter once equippable shields land.
+    shield_charge_pending: int = 0
+
+    # Weapon tier carried across LEVEL boundaries. Kid playtest 2026-04-27:
+    # "Your weapon level is retained between level transitions." The level
+    # scene captures each player's current weapon level on `exit()` and the
+    # next LevelScene seeds the player's PlayerPowerupState with it on
+    # `enter()` (clamped to the tree's max). Empty dict ⇒ start at base
+    # tier (level 0). Per-life death reset INSIDE a level still happens —
+    # this only persists across the LevelScene → LevelCompleteScene →
+    # DockingScene → next LevelScene seam. Keyed by player slot index
+    # (0 = P1, 1 = P2) so the dict is JSON/replay-friendly without
+    # leaking the PlayerSlot class.
+    last_weapon_tiers: dict[int, int] = field(default_factory=dict)
+
     # Scratch flags for Boot → Title → Level transitions to know what to do.
     asset_loaded_levels: set[int] = field(default_factory=set)

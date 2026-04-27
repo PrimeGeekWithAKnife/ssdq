@@ -43,9 +43,16 @@ _SKIP_AFTER_SECONDS = 1.0
 _DOCK_Y_FRAC = 0.42  # fraction of screen height
 # Bombs to grant each player on completion.
 _BOMB_BONUS = 2
+# Shield charges to grant each player on completion. Currently staged
+# into ``AppState.shield_charge_pending`` ahead of the equippable-shield
+# power-up landing in #4 — see app_state.py for the consumption TODO.
+_SHIELD_BONUS = 1
 
 _BG_COLOUR = (4, 6, 20)
 _BANNER_COLOUR = (255, 220, 120)
+_TIER_COLOUR = (180, 255, 200)
+_TIER_ON_COLOUR = (140, 230, 255)
+_TIER_OFF_COLOUR = (60, 70, 90)
 _DOCKING_COLOUR = (180, 220, 255)
 _HINT_COLOUR = (160, 160, 180)
 _PLAYER_BLUE = (110, 170, 255)
@@ -149,24 +156,68 @@ class DockingScene(Scene):
             supply_y = dock_y
         _draw_supply_ship(surface, w // 2, supply_y, self._supply_sprite)
 
+        # Top-of-screen RESUPPLY header — always visible so the kid
+        # sees clearly that this is a resupply beat (kid playtest:
+        # "There was no resupply in between levels that I noticed").
+        header = self._title_font.render("RESUPPLY", True, _BANNER_COLOUR)
+        surface.blit(header, header.get_rect(center=(w // 2, 36)))
+
         # "DOCKING..." status while the supply ship is en route.
         if self._elapsed <= approach_seconds:
             status = self._status_font.render("DOCKING...", True, _DOCKING_COLOUR)
-            surface.blit(status, status.get_rect(center=(w // 2, 60)))
+            surface.blit(status, status.get_rect(center=(w // 2, 88)))
         else:
-            # Bonus banner — fade in over the first 0.4s after dock.
+            # Resupply readout — fade in over the first 0.4s after dock.
+            # Three lines: bombs, shield, weapon tier carried over.
             banner_t = min(1.0, (self._elapsed - approach_seconds) / 0.4)
             alpha_v = int(255 * banner_t)
-            banner = self._banner_font.render(
-                "+2 BOMBS — SUPPLIES RECEIVED", True, _BANNER_COLOUR
+            tier = self._displayed_tier()
+            max_tier = self._max_tier()
+            lines = (
+                (f"+{_BOMB_BONUS} BOMBS", _BANNER_COLOUR),
+                (f"+{_SHIELD_BONUS} SHIELD CHARGE", _DOCKING_COLOUR),
+                (f"WEAPON TIER {tier}", _TIER_COLOUR),
             )
-            banner.set_alpha(alpha_v)
-            surface.blit(banner, banner.get_rect(center=(w // 2, h // 2 + 30)))
+            line_y = h // 2 + 10
+            for text, colour in lines:
+                surf = self._banner_font.render(text, True, colour)
+                surf.set_alpha(alpha_v)
+                surface.blit(surf, surf.get_rect(center=(w // 2, line_y)))
+                line_y += surf.get_height() + 6
+            # Tier ladder — visual indicator below the readout. Filled
+            # pips up to ``tier`` (1-indexed), dim pips for the rest.
+            self._draw_tier_ladder(surface, w // 2, line_y + 18, tier, max_tier, alpha_v)
 
         # Skip hint once it's available.
         if self._elapsed >= _SKIP_AFTER_SECONDS:
             hint = self._status_font.render("Press FIRE to skip", True, _HINT_COLOUR)
             surface.blit(hint, hint.get_rect(center=(w // 2, h - 30)))
+
+    def _draw_tier_ladder(
+        self,
+        surface: pygame.Surface,
+        cx: int,
+        cy: int,
+        tier: int,
+        max_tier: int,
+        alpha_v: int,
+    ) -> None:
+        """Render a horizontal pip ladder showing weapon tier.
+
+        ``tier`` is 1-indexed and clamped to ``max_tier``. Filled pips
+        are drawn in _TIER_ON_COLOUR; remaining pips are dimmed so the
+        kid can see how much room there is to grow.
+        """
+        tier = max(1, min(tier, max_tier))
+        pip_w = 22
+        gap = 8
+        total_w = max_tier * pip_w + (max_tier - 1) * gap
+        x0 = cx - total_w // 2
+        for i in range(max_tier):
+            colour = _TIER_ON_COLOUR if i < tier else _TIER_OFF_COLOUR
+            pip = pygame.Surface((pip_w, 14), pygame.SRCALPHA)
+            pip.fill((*colour, alpha_v))
+            surface.blit(pip, (x0 + i * (pip_w + gap), cy))
 
     def exit(self, world: World) -> None:
         return None
@@ -174,16 +225,53 @@ class DockingScene(Scene):
     # ---------------- internals ----------------
 
     def _stage_bonus(self) -> None:
-        """Queue the bomb bonus for the next LevelScene to apply.
+        """Queue the resupply-set bonuses for the next LevelScene.
 
         We accumulate (rather than overwrite) so back-to-back dockings
         across multiple levels stack correctly. ``LevelScene.enter``
-        consumes and zeroes the field one-shot.
+        consumes ``bomb_bonus_pending`` one-shot. The shield-charge
+        counter is staged in anticipation of #4 (equippable shield);
+        until that lands the field is set but not yet consumed —
+        AppState's ``shield_charge_pending`` carries a TODO marker.
+        Weapon tier is NOT (re)granted here — that's persisted via
+        ``LevelScene.exit`` and seeded back in ``LevelScene.enter``;
+        we just *display* it on screen so the kid sees that it carried
+        across.
         """
         if self._bonus_applied:
             return
         self._app.bomb_bonus_pending += _BOMB_BONUS
+        self._app.shield_charge_pending += _SHIELD_BONUS
         self._bonus_applied = True
+
+    def _displayed_tier(self) -> int:
+        """Tier to print on the resupply readout.
+
+        Show the higher of the two persisted slots — the kid was
+        often the better player on one stick and we want the readout
+        to celebrate the campaign's furthest progression rather than
+        the lower of the two. Falls back to 1 (base tier, displayed
+        as "TIER 1") when no prior tier exists.
+        """
+        tiers = self._app.last_weapon_tiers
+        if not tiers:
+            return 1
+        # Persisted tiers are 0-indexed (level 0..max); display 1-indexed.
+        return max(tiers.values()) + 1
+
+    def _max_tier(self) -> int:
+        """Cap of the displayed tier ladder (1-indexed).
+
+        Pulled from the content bundle's primary weapon tree so the
+        ladder accurately reflects how much further the player can
+        still grow rather than hard-coding 5.
+        """
+        ship = self._app.content.ships.get("vanguard")
+        if ship is None:
+            return 1
+        tree_name = ship.primary_weapon.split("_lvl")[0]
+        levels = self._app.content.weapon_trees.get(tree_name, ())
+        return max(1, len(levels))
 
     def _next_scene(self) -> SceneTransition:
         # If there's a next level in the bundle (LevelCompleteScene
