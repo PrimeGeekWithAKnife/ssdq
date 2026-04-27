@@ -40,7 +40,11 @@ from ssdq.core.components import (
 )
 from ssdq.core.ecs import World
 from ssdq.platform.render.atlas import SpriteAtlas
-from ssdq.platform.render.background import ParallaxStarfield
+from ssdq.platform.render.background import (
+    DEFAULT_BACKGROUND_NAME,
+    Backdrop,
+    make_background,
+)
 from ssdq.platform.render.hud import Hud
 from ssdq.platform.render.pause_overlay import PauseOverlay
 
@@ -58,7 +62,15 @@ class _DrawItem:
 class Renderer:
     """Draw orchestration. Construct once per session, call :meth:`draw` per frame."""
 
-    __slots__ = ("_atlas", "_background", "_hud", "_pause_overlay", "_size", "_tick_counter")
+    __slots__ = (
+        "_atlas",
+        "_background",
+        "_background_name",
+        "_hud",
+        "_pause_overlay",
+        "_size",
+        "_tick_counter",
+    )
 
     def __init__(
         self,
@@ -67,7 +79,8 @@ class Renderer:
     ) -> None:
         self._atlas = atlas
         self._size = size
-        self._background = ParallaxStarfield(*size)
+        self._background_name = DEFAULT_BACKGROUND_NAME
+        self._background: Backdrop = make_background(self._background_name, *size)
         self._hud = Hud()
         self._pause_overlay = PauseOverlay()
         self._tick_counter = 0
@@ -79,6 +92,24 @@ class Renderer:
     @property
     def size(self) -> tuple[int, int]:
         return self._size
+
+    @property
+    def background_name(self) -> str:
+        """Currently-installed backdrop's registry name."""
+        return self._background_name
+
+    def set_background_by_name(self, name: str) -> None:
+        """Swap the active backdrop. Called by the Level scene on enter().
+
+        No-op if ``name`` matches the current backdrop — avoids re-running
+        the deterministic crater/star setup every level load.
+        Unknown names fall back to the default (handled inside
+        :func:`make_background`).
+        """
+        if name == self._background_name:
+            return
+        self._background_name = name
+        self._background = make_background(name, *self._size)
 
     # ---------------- main entry ----------------
 
