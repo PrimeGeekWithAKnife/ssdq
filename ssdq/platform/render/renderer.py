@@ -26,7 +26,14 @@ from typing import Any
 
 import pygame
 
-from ssdq.core.components import Faction, FactionTag, Position, Sprite
+from ssdq.core.components import (
+    AnimatedSprite,
+    Faction,
+    FactionTag,
+    HitFlash,
+    Position,
+    Sprite,
+)
 from ssdq.core.ecs import World
 from ssdq.platform.render.atlas import SpriteAtlas
 from ssdq.platform.render.background import ParallaxStarfield
@@ -102,6 +109,9 @@ class Renderer:
         for item in self._gather_sprite_items(world):
             self._blit_item(surface, item)
 
+        # 4.5 hit-flash overlay (multi-HP enemies that just took damage)
+        self._draw_hit_flashes(world, surface)
+
         # 5. boss telegraphs (optional)
         self._draw_boss_telegraphs(world, surface)
 
@@ -124,6 +134,15 @@ class Renderer:
             _DrawItem(layer=sprite.layer, eid_index=int(eid), pos=pos, sprite=sprite)
             for eid, pos, sprite in world.query2(Position, Sprite)
         ]
+        # Animated sprites: synthesise a Sprite-like draw item from the
+        # current animation frame. AnimatedSprite is a render-only proxy;
+        # the AnimationSystem advances `current_index`.
+        for eid, pos, anim in world.query2(Position, AnimatedSprite):
+            if not anim.frames:
+                continue
+            idx = min(anim.current_index, len(anim.frames) - 1)
+            synthetic = Sprite(path=anim.frames[idx], layer=anim.layer)
+            items.append(_DrawItem(layer=anim.layer, eid_index=int(eid), pos=pos, sprite=synthetic))
         items.sort(key=lambda i: (i.layer, i.eid_index))
         return items
 
@@ -134,10 +153,30 @@ class Renderer:
             from math import degrees
 
             surf = pygame.transform.rotate(surf, -degrees(item.sprite.rotation_rad))
+        # Apply alpha if specified (used by InvulnerabilityBlink)
+        if item.sprite.alpha != 255:
+            surf = surf.copy()
+            surf.set_alpha(item.sprite.alpha)
         rect = surf.get_rect(center=(int(item.pos.pos.x), int(item.pos.pos.y)))
         surface.blit(surf, rect)
+        # Hit-flash overlay: bright white blend on top of the sprite.
+        # Reading flash from world is the renderer's concern but we'd
+        # need entity context here — we instead expose a separate pass.
 
     # ---------------- optional draws ----------------
+
+    def _draw_hit_flashes(self, world: World, surface: pygame.Surface) -> None:
+        """White-tint overlay on every entity that has HitFlash.ticks_remaining > 0."""
+        for _eid, pos, sprite, flash in world.query3(Position, Sprite, HitFlash):
+            if flash.ticks_remaining <= 0:
+                continue
+            base = self._atlas.get(sprite.path)
+            tint = base.copy()
+            # Multiply alpha by a fading factor; modulate with a bright tint.
+            tint.fill((255, 255, 255, 0), special_flags=pygame.BLEND_RGBA_ADD)
+            tint.set_alpha(min(180, flash.ticks_remaining * 40))
+            rect = tint.get_rect(center=(int(pos.pos.x), int(pos.pos.y)))
+            surface.blit(tint, rect)
 
     def _draw_boss_telegraphs(self, world: World, surface: pygame.Surface) -> None:
         comp_t = _optional_component_type("BossTelegraph")

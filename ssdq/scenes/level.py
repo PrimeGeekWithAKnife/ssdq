@@ -30,11 +30,14 @@ from typing import Any
 from ssdq.core.clock import TICK_DT
 from ssdq.core.collision import SpatialGrid, circles_overlap
 from ssdq.core.components import (
+    AnimatedSprite,
     CircleHitbox,
     Damage,
     Faction,
     FactionTag,
     Health,
+    HitFlash,
+    InvulnerabilityBlink,
     PlayerOwned,
     Position,
     ScoreValue,
@@ -296,10 +299,13 @@ class LevelScene(Scene):
         # 9. Respawn dead-but-INVULNERABLE players (i-frame entry)
         self._handle_respawns(world)
 
-        # 10. Cull off-screen / TTL-expired entities
+        # 10. Advance animations + decay flash/blink timers
+        self._advance_animations(world)
+
+        # 11. Cull off-screen / TTL-expired entities
         self._cull_entities(world)
 
-        # 11. Refresh HUD snapshot
+        # 12. Refresh HUD snapshot
         world.insert_resource(self._build_hud_state())
 
         # 12. Boss music switch on boss spawn
@@ -786,6 +792,9 @@ class LevelScene(Scene):
         slot = owned.slot
         if not self._session.lifecycle(slot).can_be_hit:
             return
+        # Visual: explosion at the player's position before despawn.
+        player_pos = world.must_get(player_eid, Position).pos
+        self._spawn_explosion(world, player_pos, scale=2)
         # Despawn the player entity; lifecycle goes DYING.
         world.despawn(player_eid)
         self._player_entities[slot] = None
@@ -811,7 +820,10 @@ class LevelScene(Scene):
         owned = world.get(bullet_eid, PlayerOwned)
         killer_slot = owned.slot if owned is not None else None
         world.despawn(bullet_eid)
-        if new_hp <= 0:
+        if new_hp > 0:
+            # Multi-HP enemy that survived — flash so the player sees the hit register.
+            world.replace(enemy_eid, HitFlash(ticks_remaining=4))
+        else:
             pos = world.must_get(enemy_eid, Position).pos
             self._on_enemy_killed(world, enemy_eid, pos, killer_slot=killer_slot)
 
@@ -831,8 +843,8 @@ class LevelScene(Scene):
             return
         # Score: route credit to the player whose bullet landed the kill.
         # Fallback to nearest player for bomb/collision kills (no bullet).
-        nearest_slot = killer_slot if killer_slot is not None else self._nearest_alive_player_slot(
-            pos
+        nearest_slot = (
+            killer_slot if killer_slot is not None else self._nearest_alive_player_slot(pos)
         )
         score_val = world.get(enemy_eid, ScoreValue)
         follower = world.get(enemy_eid, FormationFollower)
@@ -866,6 +878,9 @@ class LevelScene(Scene):
             pickup_name = roll_drop(slim, tick=self._internal_tick, channel=int(enemy_eid))
             if pickup_name is not None and pickup_name in bundle.pickups:
                 self._spawn_pickup(world, pickup_name, pos)
+        # Visual feedback: explosion at the enemy's position.
+        scale = 2 if follower is not None and follower.score >= 600 else 1
+        self._spawn_explosion(world, pos, scale=scale)
         world.despawn(enemy_eid)
         self.app.audio.play_sfx("explosion", volume=0.5)
 
@@ -923,6 +938,8 @@ class LevelScene(Scene):
     # ───────── helpers: respawn / culling / hud ─────────
 
     def _handle_respawns(self, world: World) -> None:
+        cfg = self.app.content.coop
+        invuln_ticks = int(cfg.respawn_invulnerability * 60)
         for slot in (P1, P2):
             lc = self._session.lifecycle(slot)
             if lc.state == LifecycleState.INVULNERABLE and self._player_entities.get(slot) is None:
@@ -932,16 +949,83 @@ class LevelScene(Scene):
                     _PLAYER_SPAWN_Y,
                 )
                 self._spawn_player(world, slot, spawn_pos)
+                # Visual feedback: tag the new ship with InvulnerabilityBlink
+                # so the kid SEES the i-frames pulse and learns they have
+                # ~2s to reposition.
+                eid = self._player_entities[slot]
+                if eid is not None:
+                    world.add(eid, InvulnerabilityBlink(ticks_remaining=invuln_ticks))
                 # Acknowledge the clearing-shockwave one-shot
                 if lc.fired_clearing_shockwave:
                     self._session.consume_clearing_shockwaves()
                     # Wipe enemy bullets in radius
-                    cfg = self.app.content.coop
-                    for eid, pos, ftag in list(world.query2(Position, FactionTag)):
+                    for ebid, pos, ftag in list(world.query2(Position, FactionTag)):
                         if ftag.faction == Faction.ENEMY_BULLET and circles_overlap(
                             spawn_pos, cfg.respawn_clearing_radius, pos.pos, 0.0
                         ):
-                            world.despawn(eid)
+                            world.despawn(ebid)
+
+    def _advance_animations(self, world: World) -> None:
+        """Advance AnimatedSprite frame indices, decay HitFlash + Blink.
+
+        AnimatedSprite frames advance every `frame_ticks` ticks; on the
+        last frame of a non-looping animation we despawn the entity so
+        explosions auto-clean.
+        """
+        from dataclasses import replace as _dc_replace
+
+        for eid, anim in list(world.query1(AnimatedSprite)):
+            new_elapsed = anim.elapsed_ticks + 1
+            if new_elapsed >= anim.frame_ticks:
+                next_idx = anim.current_index + 1
+                if next_idx >= len(anim.frames):
+                    if anim.loop:
+                        next_idx = 0
+                    else:
+                        world.despawn(eid)
+                        continue
+                world.replace(
+                    eid,
+                    _dc_replace(anim, current_index=next_idx, elapsed_ticks=0),
+                )
+            else:
+                world.replace(eid, _dc_replace(anim, elapsed_ticks=new_elapsed))
+
+        # Hit-flash decay
+        for eid, flash in list(world.query1(HitFlash)):
+            if flash.ticks_remaining <= 1:
+                world.remove(eid, HitFlash)
+            else:
+                world.replace(eid, HitFlash(ticks_remaining=flash.ticks_remaining - 1))
+
+        # Invuln blink: pulse the player sprite alpha while in i-frames.
+        for eid, blink in list(world.query1(InvulnerabilityBlink)):
+            if blink.ticks_remaining <= 1:
+                # Restore full opacity on the way out
+                spr = world.get(eid, Sprite)
+                if spr is not None:
+                    world.replace(eid, _dc_replace(spr, alpha=255))
+                world.remove(eid, InvulnerabilityBlink)
+                continue
+            # Square wave: 6 ticks visible (alpha=120), 6 ticks dimmer (alpha=60)
+            phase = (blink.ticks_remaining // 6) % 2
+            new_alpha = 120 if phase == 0 else 60
+            spr = world.get(eid, Sprite)
+            if spr is not None:
+                world.replace(eid, _dc_replace(spr, alpha=new_alpha))
+            world.replace(eid, InvulnerabilityBlink(ticks_remaining=blink.ticks_remaining - 1))
+
+    def _spawn_explosion(self, world: World, pos: Vec2, *, scale: int = 1) -> None:
+        """Spawn a one-shot explosion animation at `pos`.
+
+        scale=1 for regular enemies; pass 2 for boss / large craft.
+        """
+        frames = tuple(f"particles/explosion_{i:02d}.png" for i in range(4))
+        # The animation auto-despawns on its last frame via _advance_animations.
+        world.spawn(
+            Position(pos),
+            AnimatedSprite(frames=frames, frame_ticks=4, loop=False, layer=9),
+        )
 
     def _cull_entities(self, world: World) -> None:
         # TTL-based despawn

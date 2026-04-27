@@ -104,6 +104,9 @@ def _build_atlas(content_root: Path, app: AppState) -> SpriteAtlas:
     sprites_dir = content_root / "assets" / "sprites"
     atlas = SpriteAtlas(sprites_root=sprites_dir)
     atlas.preload_bundle(app.content)
+    # Effect sprites referenced by code (not in the content bundle)
+    extra_paths = [f"particles/explosion_{i:02d}.png" for i in range(4)]
+    atlas.preload(extra_paths)
     return atlas
 
 

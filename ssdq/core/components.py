@@ -91,11 +91,52 @@ class TimeToLive:
 @dataclass(frozen=True, slots=True)
 class Sprite:
     """Render hint — a path key into the loaded sprite atlas. Optional
-    layer (lower draws first)."""
+    layer (lower draws first). `alpha` is 0..255; 255 = fully opaque."""
 
     path: str
     layer: int = 0
     rotation_rad: float = 0.0
+    alpha: int = 255
+
+
+@dataclass(frozen=True, slots=True)
+class AnimatedSprite:
+    """Frame sequence playing at `frame_ticks` ticks per frame.
+
+    `frames` is a tuple of atlas paths (e.g. ('particles/explosion_00.png',
+    ..., 'particles/explosion_03.png')). The renderer reads the current
+    frame from `current_index` (mutated by a system, not the renderer).
+
+    `loop=False` means the AnimationSystem despawns the entity on the
+    final frame; `loop=True` cycles indefinitely.
+    """
+
+    frames: tuple[str, ...]
+    frame_ticks: int = 4
+    current_index: int = 0
+    elapsed_ticks: int = 0
+    loop: bool = False
+    layer: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class HitFlash:
+    """Tag: this entity should render with a brief white-tint flash.
+    `ticks_remaining` counts down each frame; 0 = clear flash."""
+
+    ticks_remaining: int
+
+
+@dataclass(frozen=True, slots=True)
+class InvulnerabilityBlink:
+    """Tag: this entity is in i-frames; renderer pulses its alpha.
+
+    Used on player ships during the LifecycleState.INVULNERABLE window
+    so the player can SEE they're invulnerable and use the time to
+    reposition before vulnerability resumes.
+    """
+
+    ticks_remaining: int
 
 
 # ───────── damage routing ─────────
