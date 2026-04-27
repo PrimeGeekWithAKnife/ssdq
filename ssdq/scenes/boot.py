@@ -1,4 +1,4 @@
-"""Boot scene: load content + warm assets, then transition to Title.
+"""Boot scene: load content + warm assets, then transition to Intro.
 
 Single-tick scene. Content is loaded eagerly in `__init__` so that any
 failure shows up immediately (rather than mid-game). Audio assets are
@@ -16,14 +16,14 @@ from ssdq.core.ecs import World
 from ssdq.core.scene import Replace, Scene, SceneTransition
 from ssdq.core.types import PlayerInput, TickIndex
 from ssdq.scenes.app_state import AppState
-from ssdq.scenes.title import TitleScene
+from ssdq.scenes.intro import IntroScene
 
 _CONTENT_DIR = Path("content")
 _ASSETS_DIR = _CONTENT_DIR / "assets"
 
 
 class BootScene(Scene):
-    """Load content + register audio assets. Transitions to Title on first tick."""
+    """Load content + register audio assets. Transitions to Intro on first tick."""
 
     __slots__ = ("_app", "_loaded")
 
@@ -45,10 +45,10 @@ class BootScene(Scene):
     ) -> SceneTransition | None:
         if not self._loaded:
             return None
-        return Replace(scene=TitleScene(self._app))
+        return Replace(scene=IntroScene(self._app))
 
     def render(self, world: World, surface: Any, alpha: float) -> None:
-        # One frame of black; immediately replaced by Title.
+        # One frame of black; immediately replaced by Intro.
         if isinstance(surface, pygame.Surface):
             surface.fill((0, 0, 0))
 
