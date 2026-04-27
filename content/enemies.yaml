@@ -73,17 +73,28 @@ bosses:
     score: 10000
     intro_telegraph_seconds: 2.0
     phases:
-      # Phase 1: predictable arc + symmetric spreads. ~50% HP.
+      # Phase 1: predictable arc + slow tracking spiral. ~50% HP.
+      # Was `spread_shot`. Switched to `slow_spiral` (kid playtest #8):
+      # the new pattern keeps the same beat cadence but the bullets
+      # actually trail the player slightly, which reads as a deliberate
+      # threat the kid can dodge by drifting sideways. Beats kept on the
+      # 1-second grid so the rhythm still feels learnable.
       - hp: 60
         formation: boss_phase_1
-        weapon: spread_shot
+        weapon: slow_spiral
         fire_beats: [0.5, 1.5, 2.5, 3.5, 4.5]   # loops while phase active
 
-      # Phase 2: faster, fires tri-aimed shots. Final 50% HP.
+      # Phase 2: burst-then-pause rhythm. Final 50% HP.
+      # Was `aimed_triple`. Switched to `burst_then_pause`: beats are
+      # now clustered into two short bursts per loop with a long
+      # breather, instead of a steady stream. The fan is wide so the
+      # kid has to actively reposition; the breather is the "OK now
+      # I can move" beat. This is the variant rhythm we wanted on the
+      # boss without the schema-breaking jump to a 3rd phase.
       - hp: 60
         formation: boss_phase_2
-        weapon: aimed_triple
-        fire_beats: [0.4, 1.2, 2.0, 2.8, 3.6]
+        weapon: burst_then_pause
+        fire_beats: [0.2, 0.4, 0.6, 2.4, 2.6, 2.8]
 
 # Enemy weapon definitions. Bullets are deterministic — see top-of-file note.
 enemy_weapons:
@@ -109,6 +120,50 @@ enemy_weapons:
     pattern: aimed_fan
     bullets_per_beat: 3
     fan_arc_deg: 16            # tight 3-bullet spread aimed at player
+
+  # Boss-pattern variants (kid playtest 2026-04-27, item #8).
+  # All three obey the §6.3 mastery constraint: pattern is "aimed" or
+  # "fan"/"aimed_fan", aim is a snapshot at moment of fire, no real-time
+  # tracking. Variation comes from speed, bullet count, arc width and
+  # the rhythm encoded in the boss phase's `fire_beats`, NOT from any
+  # runtime adaptation.
+
+  # Slow tracking 2-shot fan. Aimed at the player at moment of fire,
+  # then the two bullets diverge slightly. Slow enough that the kid
+  # can side-step it on first sight. Replaces spread_shot for boss_01
+  # phase 1 (see boss block above).
+  slow_spiral:
+    sprite: projectiles/enemy_orb.png
+    damage: 1
+    speed: 180                 # noticeably slower than aimed_shot
+    pattern: aimed_fan
+    bullets_per_beat: 2
+    fan_arc_deg: 24            # narrow split, reads as "tracking" not "wall"
+
+  # Wide fan straight down. Used in BURSTS via boss phase fire_beats —
+  # several beats clustered tight, then a long pause. The pattern itself
+  # has no concept of "burst"; the burstiness lives in the beat schedule.
+  # Replaces aimed_triple for boss_01 phase 2.
+  burst_then_pause:
+    sprite: projectiles/enemy_orb.png
+    damage: 1
+    speed: 220
+    pattern: fan
+    bullets_per_beat: 7
+    fan_arc_deg: 90            # wide downward fan, demands repositioning
+
+  # Full-circle ring. Fires a deterministic ring of bullets centred on
+  # the firing enemy (boss). Telegraphs as a halo on the boss sprite.
+  # Defined now as a content variant; not yet used on boss_01 because
+  # the kid is 8 and a full ring on a first boss is mean. Reserved for
+  # boss_02 or a hard-mode boss_01 phase.
+  ring_shot:
+    sprite: projectiles/enemy_orb.png
+    damage: 1
+    speed: 200
+    pattern: fan
+    bullets_per_beat: 8
+    fan_arc_deg: 360           # full circle around the boss
 
 # Pickups. Spec §2 DOD #5: weapon-up, speed-up, extra-bomb, extra-life.
 # `pickup_health` IS the extra-life pickup (no separate hp system).
