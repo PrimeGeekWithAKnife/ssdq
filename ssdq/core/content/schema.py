@@ -84,10 +84,15 @@ class EnemyDef:
 
 class PickupEffect(Enum):
     WEAPON_UPGRADE = "weapon_upgrade"
-    SPEED_UP = "speed_up"
+    SPEED_UP = "speed_up"  # legacy alias for ship_speed (timed boost)
     EXTRA_BOMB = "extra_bomb"
     EXTRA_LIFE = "extra_life"
     SHIELD = "shield"
+    # Task #9: kid-playtest pool of 8 power-ups.
+    SHIP_SPEED = "ship_speed"  # permanent +N% ship-speed bump, capped
+    WEAPON_SPEED = "weapon_speed"  # timed rate-of-fire boost
+    DRONE = "drone"  # inventory: queue +1 drone for the DRONE agent
+    MISSILE = "missile"  # inventory: +N missile charges (equippable)
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,6 +104,13 @@ class PickupDef:
     effect: PickupEffect
     speed_multiplier: float = 1.0
     duration: float = 0.0
+    # SHIP_SPEED: how much a single pickup adds to the ship-speed bonus
+    # (additive, capped by PlayerPowerupState.SHIP_SPEED_BONUS_CAP).
+    ship_speed_step: float = 0.15
+    # WEAPON_SPEED: rate-of-fire multiplier while the boost is active.
+    fire_rate_multiplier: float = 1.5
+    # MISSILE: how many missile charges a single pickup grants.
+    missile_count: int = 3
 
 
 @dataclass(frozen=True, slots=True)

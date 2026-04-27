@@ -200,6 +200,9 @@ def _load_enemies(
             effect=effect,
             speed_multiplier=float(p.get("speed_multiplier", 1.0)),
             duration=float(p.get("duration", 0.0)),
+            ship_speed_step=float(p.get("ship_speed_step", 0.15)),
+            fire_rate_multiplier=float(p.get("fire_rate_multiplier", 1.5)),
+            missile_count=int(p.get("missile_count", 3)),
         )
 
     # Cross-check: enemies' drop_pool entries resolve to known pickups.

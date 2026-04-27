@@ -44,6 +44,32 @@ _NO_BOOST = SpeedBoost(multiplier=1.0, seconds_remaining=0.0)
 
 
 @dataclass(frozen=True, slots=True)
+class FireRateBoost:
+    """Timed weapon-rate-of-fire boost (separate from temporary ship speed).
+
+    While ``seconds_remaining > 0`` the level scene shrinks the player's
+    primary-weapon cooldown by dividing the base cooldown by
+    ``multiplier``. Stacking refreshes the timer and adopts the latest
+    pickup's multiplier (matches Shield/SpeedBoost semantics).
+    """
+
+    multiplier: float
+    seconds_remaining: float
+
+    @property
+    def active(self) -> bool:
+        return self.seconds_remaining > 0.0
+
+
+_NO_FIRE_RATE = FireRateBoost(multiplier=1.0, seconds_remaining=0.0)
+
+
+# Permanent additive cap for the ship_speed pickup. A flood of pickups
+# can't push a ship past +60% of its base max_speed.
+SHIP_SPEED_BONUS_CAP: float = 0.60
+
+
+@dataclass(frozen=True, slots=True)
 class Shield:
     """Active shield (forcefield) timer. ``seconds_remaining`` zero ⇒ no shield.
 
@@ -67,13 +93,24 @@ _NO_SHIELD = Shield(seconds_remaining=0.0)
 
 @dataclass(frozen=True, slots=True)
 class PlayerPowerupState:
-    """All power-up state for one player. Held by the coop layer."""
+    """All power-up state for one player. Held by the coop layer.
+
+    Task #9 added:
+      * ``ship_speed_bonus`` — permanent additive ship-speed bump applied
+        on top of the ship's ``max_speed``. Each ``SHIP_SPEED`` pickup
+        adds ``PickupDef.ship_speed_step`` (default +15%); the running
+        total is capped at ``SHIP_SPEED_BONUS_CAP`` (+60%).
+      * ``fire_rate_boost`` — timed multiplier on weapon rate of fire
+        (15s default). Refresh-on-pickup, like Shield.
+    """
 
     weapon: WeaponState
     bombs: int
     lives: int
     speed_boost: SpeedBoost = _NO_BOOST
     shield: Shield = _NO_SHIELD
+    ship_speed_bonus: float = 0.0  # additive bonus (e.g. 0.30 == +30%)
+    fire_rate_boost: FireRateBoost = _NO_FIRE_RATE
 
     def with_weapon(self, weapon: WeaponState) -> PlayerPowerupState:
         return replace(self, weapon=weapon)
@@ -89,6 +126,14 @@ class PlayerPowerupState:
 
     def with_shield(self, shield: Shield) -> PlayerPowerupState:
         return replace(self, shield=shield)
+
+    def with_ship_speed_bonus(self, bonus: float) -> PlayerPowerupState:
+        # Cap the bonus so a flood of pickups can't make ships uncontrollable.
+        capped = max(0.0, min(SHIP_SPEED_BONUS_CAP, bonus))
+        return replace(self, ship_speed_bonus=capped)
+
+    def with_fire_rate_boost(self, boost: FireRateBoost) -> PlayerPowerupState:
+        return replace(self, fire_rate_boost=boost)
 
     def tick_speed_boost(self, dt: float) -> PlayerPowerupState:
         """Decay any active speed-boost timer by `dt`. No-op when inactive."""
@@ -110,30 +155,56 @@ class PlayerPowerupState:
             return self.with_shield(_NO_SHIELD)
         return self.with_shield(Shield(seconds_remaining=new_remaining))
 
+    def tick_fire_rate_boost(self, dt: float) -> PlayerPowerupState:
+        """Decay any active fire-rate-boost timer by `dt`. No-op when inactive."""
+        if not self.fire_rate_boost.active:
+            return self
+        new_remaining = self.fire_rate_boost.seconds_remaining - dt
+        if new_remaining <= 0.0:
+            return self.with_fire_rate_boost(_NO_FIRE_RATE)
+        return self.with_fire_rate_boost(
+            FireRateBoost(
+                multiplier=self.fire_rate_boost.multiplier, seconds_remaining=new_remaining
+            )
+        )
+
     def reset_on_death(self, *, starting_bombs: int) -> PlayerPowerupState:
         """Per spec: weapon level drops back to base on death; bombs reset
-        to `starting_bombs` (from ShipDef); speed-boost and shield cleared;
-        lives is decremented by the coop layer, not here."""
+        to `starting_bombs` (from ShipDef); speed-boost, shield and the
+        timed fire-rate boost cleared; permanent ship-speed bonus is
+        retained (kid-playtest spec — losing your hard-earned move speed
+        on every death felt awful); lives is decremented by the coop
+        layer, not here.
+        """
         return PlayerPowerupState(
             weapon=self.weapon.reset(),
             bombs=max(0, starting_bombs),
             lives=self.lives,
             speed_boost=_NO_BOOST,
             shield=_NO_SHIELD,
+            ship_speed_bonus=self.ship_speed_bonus,
+            fire_rate_boost=_NO_FIRE_RATE,
         )
 
 
 @dataclass(frozen=True, slots=True)
 class PickupResult:
     """Outcome of applying a pickup. The level scene routes side effects
-    (HUD flash, sfx) from these flags."""
+    (HUD flash, sfx, AppState inventory increments) from these flags.
+    """
 
     new_state: PlayerPowerupState
     upgraded_weapon: bool = False
     extra_bomb: bool = False
     extra_life: bool = False
-    speed_up: bool = False
+    speed_up: bool = False  # legacy temporary speed boost
     shield_up: bool = False
+    # Task #9 — kid-playtest pool extensions.
+    ship_speed_up: bool = False  # permanent ship-speed bump
+    weapon_speed_up: bool = False  # timed rate-of-fire boost
+    drone_pickup: bool = False  # queue +1 drone for the DRONE agent
+    missile_charges_added: int = 0  # how many missile charges granted (0 if N/A)
+    shield_charge_added: bool = False  # +1 shield charge to inventory
 
 
 def apply_pickup(
@@ -147,6 +218,11 @@ def apply_pickup(
     `weapon_tree_max_level` is `len(weapon_tree[tree]) - 1`; passed in so
     the powerup module doesn't need a back-reference to the content
     bundle.
+
+    For inventory-style effects (DRONE, MISSILE, SHIELD) the increment is
+    encoded on the returned ``PickupResult`` and the caller (level scene)
+    is responsible for writing it onto ``AppState`` — keeps this module
+    decoupled from the scene layer.
     """
     if pickup.effect == PickupEffect.WEAPON_UPGRADE:
         new_weapon = state.weapon.upgrade(max_level=weapon_tree_max_level)
@@ -168,6 +244,47 @@ def apply_pickup(
         # duration (not additive). Matches the user-feedback spec — the
         # forcefield "engulfs the ship for 10 seconds", any subsequent
         # pickup refreshes that 10-second window.
+        #
+        # Task #9: ALSO emit a `shield_charge_added` flag so AppState's
+        # inventory counter increments — the EQUIPPABLE agent (future
+        # work) reads those charges. The auto-activate-on-pickup
+        # behaviour is preserved as a fallback so things still work
+        # pre-EQUIPPABLE merge.
         shield = Shield(seconds_remaining=pickup.duration)
-        return PickupResult(new_state=state.with_shield(shield), shield_up=True)
+        return PickupResult(
+            new_state=state.with_shield(shield),
+            shield_up=True,
+            shield_charge_added=True,
+        )
+    if pickup.effect == PickupEffect.SHIP_SPEED:
+        # Permanent additive bump (capped). Each pickup adds
+        # ``ship_speed_step`` (default +15%), capped at +60% so flooding
+        # pickups can't make the ship uncontrollable.
+        new_bonus = state.ship_speed_bonus + max(0.0, pickup.ship_speed_step)
+        new_state = state.with_ship_speed_bonus(new_bonus)
+        # Only flag if the cap didn't entirely swallow the increment —
+        # otherwise the floating-text "SPEED!" label would lie.
+        flagged = new_state.ship_speed_bonus > state.ship_speed_bonus
+        return PickupResult(new_state=new_state, ship_speed_up=flagged)
+    if pickup.effect == PickupEffect.WEAPON_SPEED:
+        rate_boost = FireRateBoost(
+            multiplier=pickup.fire_rate_multiplier,
+            seconds_remaining=pickup.duration,
+        )
+        return PickupResult(
+            new_state=state.with_fire_rate_boost(rate_boost),
+            weapon_speed_up=True,
+        )
+    if pickup.effect == PickupEffect.DRONE:
+        # Inventory-only — no PlayerPowerupState change. The DRONE agent
+        # owns entity spawning; for now AppState.drones_pending tracks
+        # the queue so the agent can drain it on its first integration.
+        return PickupResult(new_state=state, drone_pickup=True)
+    if pickup.effect == PickupEffect.MISSILE:
+        # Inventory-only — same pattern as DRONE; charges live on
+        # AppState.missile_charges so the EQUIPPABLE agent can read them.
+        return PickupResult(
+            new_state=state,
+            missile_charges_added=max(0, pickup.missile_count),
+        )
     raise ValueError(f"unknown pickup effect: {pickup.effect}")
