@@ -92,6 +92,14 @@ licence = "CC0"
 url     = "https://kenney.nl/assets/space-shooter-extension"
 notes   = "PLACEHOLDER — spaceShips_007.png, the largest sprite in the extension pack. Per spec §11 the level-1 boss will be hand-drawn by the kid; this file is a stand-in until that art lands."
 
+[[entry]]
+path    = "content/assets/sprites/enemies/boss_02.png"
+source  = "Derived from Kenney Space Shooter Extension"
+author  = "Kenney Vleugels (sprite); SSDQ build (red/orange recolour)"
+licence = "CC0"
+url     = "https://kenney.nl/assets/space-shooter-extension"
+notes   = "Procedurally recoloured boss_01.png — luminance-mapped onto a dark-red → orange → highlight palette via PIL so the level-2 boss reads as a hotter / more dangerous variant. Trivial derivative; remains CC0. Will be replaced by hand-drawn art alongside boss_01."
+
 # ---------------------------------------------------------------------------
 # Sprites — projectiles
 # ---------------------------------------------------------------------------

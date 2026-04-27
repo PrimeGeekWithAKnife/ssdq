@@ -181,8 +181,14 @@ class DockingScene(Scene):
         self._bonus_applied = True
 
     def _next_scene(self) -> SceneTransition:
-        # No level 2 exists yet, so flow back to Title. Future-self: swap
-        # this for the next LevelScene once content lands.
+        # If there's a next level in the bundle (LevelCompleteScene
+        # already advanced ``app.current_level`` to it), launch it.
+        # Otherwise the campaign is over for now → Title.
+        bundle = self._app.content
+        if self._app.current_level in bundle.levels:
+            from ssdq.scenes.level import LevelScene
+
+            return Replace(scene=LevelScene(self._app, level_index=self._app.current_level))
         from ssdq.scenes.title import TitleScene
 
         return Replace(scene=TitleScene(self._app))

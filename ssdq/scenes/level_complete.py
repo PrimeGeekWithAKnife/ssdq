@@ -1,9 +1,15 @@
-"""Level-complete scene: 'level cleared', then docking → next chapter.
+"""Level-complete scene.
 
-Confirms forward into DockingScene (supply-ship cinematic that grants
-+2 bombs to each player). DockingScene then auto-transitions onward to
-the next chapter (currently TitleScene because the slice has only
-level 1).
+Banner + final scores, then routes to the next stop in the multi-level arc:
+
+* If the level just completed has a successor in the content bundle,
+  advance ``app.current_level`` and route through DockingScene (the
+  supply-ship cinematic that grants +2 bombs to each player).
+  DockingScene then auto-transitions onward to LevelScene with the new
+  level index.
+* If there is no next level, route through DockingScene anyway —
+  DockingScene's own next-scene logic falls back to TitleScene when no
+  successor level exists.
 """
 
 from __future__ import annotations
@@ -24,12 +30,18 @@ _TEXT_COLOUR = (220, 240, 230)
 
 
 class LevelCompleteScene(Scene):
-    """Banner + final scores. Confirms back to Title."""
+    """Banner + final scores. Routes to next level via DockingScene."""
 
-    __slots__ = ("_app", "_body_font", "_title_font")
+    __slots__ = ("_app", "_body_font", "_completed_level_index", "_title_font")
 
-    def __init__(self, app: AppState) -> None:
+    def __init__(self, app: AppState, completed_level_index: int | None = None) -> None:
         self._app = app
+        # If the caller doesn't tell us which level was completed (older
+        # callers, or scenes that don't track it), assume it's the
+        # current one.
+        self._completed_level_index: int = (
+            completed_level_index if completed_level_index is not None else app.current_level
+        )
         self._title_font: pygame.font.Font | None = None
         self._body_font: pygame.font.Font | None = None
 
@@ -45,9 +57,16 @@ class LevelCompleteScene(Scene):
         tick: TickIndex,
         inputs: tuple[PlayerInput, PlayerInput],
     ) -> SceneTransition | None:
-        if inputs[0].confirm or inputs[1].confirm or inputs[0].fire or inputs[1].fire:
-            return Replace(scene=DockingScene(self._app))
-        return None
+        if not (inputs[0].confirm or inputs[1].confirm or inputs[0].fire or inputs[1].fire):
+            return None
+        # Advance the session pointer to the next level (if any) BEFORE
+        # entering the docking cinematic, so DockingScene knows where to
+        # send us next.
+        bundle = self._app.content
+        next_index = self._completed_level_index + 1
+        if next_index in bundle.levels:
+            self._app.current_level = next_index
+        return Replace(scene=DockingScene(self._app))
 
     def render(self, world: World, surface: Any, alpha: float) -> None:
         if not isinstance(surface, pygame.Surface):

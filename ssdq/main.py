@@ -239,6 +239,13 @@ def main(argv: list[str] | None = None) -> int:
                 from ssdq.scenes.level import LevelScene as _LevelScene
 
                 if isinstance(top_scene, _LevelScene):
+                    # Make sure the renderer's backdrop matches the active
+                    # level's `background:` field. Cheap (no-op when name
+                    # is already current); cost-of-construction only fires
+                    # on actual level change.
+                    level_def = app.content.levels.get(top_scene.level_index)
+                    if level_def is not None:
+                        renderer.set_background_by_name(level_def.background)
                     renderer.draw(
                         world,
                         surface,

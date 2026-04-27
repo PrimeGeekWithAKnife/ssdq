@@ -46,14 +46,19 @@ _Page = tuple[str, str]
 _PAGES: tuple[_Page, ...] = (
     ("The galaxy is in peril.", "stars"),
     (
-        "Alien fleets have breached the outer rim. Humanity's colonies are falling, one by one.",
+        "Alien fleets have breached the outer rim. Earth's colonies are falling.",
         "stars",
     ),
     (
-        "The Special Space Defence Quasar -- SSDQ -- is humanity's last line of defence.",
+        "From the dark side of the Moon, the Special Space Defence Quasar -- SSDQ "
+        "-- is humanity's last line of defence.",
         "hangar",
     ),
-    ("Two pilots launch into the dark. The fight begins now.", "boarding"),
+    (
+        "From Moon Base Delta Bravo, two pilots launch into the dark. "
+        "The fight begins now.",
+        "boarding",
+    ),
     ("Press FIRE to begin.", "launch"),
 )
 

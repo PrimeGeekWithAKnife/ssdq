@@ -98,6 +98,33 @@ bosses:
         weapon: burst_then_pause
         fire_beats: [0.2, 0.4, 0.6, 2.4, 2.6, 2.8]
 
+  # Level-2 boss — deep-space phase. Visually distinct: red/orange recolour
+  # of the boss_01 silhouette (procedurally tinted via PIL — see
+  # tools/recolour notes in credits.toml). Mechanically harder:
+  #   * 90 HP per phase (vs boss_01's 60) — 180 total.
+  #   * Phase 1 keeps the slow_spiral pattern but on a tighter beat grid
+  #     (every ~0.7s instead of every 1s) so the kid has less breathing
+  #     room between dodges.
+  #   * Phase 2 uses the new burst_then_pause cadence with a SHORTER
+  #     pause and one extra beat per burst — the wall is denser but the
+  #     gap is still readable. Stays inside the §6.3 mastery constraint
+  #     (deterministic, fan/aimed_fan, no real-time tracking).
+  boss_02:
+    sprite: enemies/boss_02.png
+    hitbox_radius: 60
+    score: 18000
+    intro_telegraph_seconds: 2.0
+    phases:
+      - hp: 90
+        formation: boss_phase_1
+        weapon: slow_spiral
+        fire_beats: [0.4, 1.1, 1.8, 2.5, 3.2, 3.9, 4.6]
+
+      - hp: 90
+        formation: boss_phase_2
+        weapon: burst_then_pause
+        fire_beats: [0.1, 0.3, 0.5, 0.7, 1.8, 2.0, 2.2, 2.4]
+
 # Enemy weapon definitions. Bullets are deterministic — see top-of-file note.
 enemy_weapons:
   aimed_shot:

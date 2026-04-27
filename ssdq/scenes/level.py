@@ -368,7 +368,12 @@ class LevelScene(Scene):
             if self._level_complete_grace >= 1.5:
                 from ssdq.scenes.level_complete import LevelCompleteScene
 
-                return Replace(scene=LevelCompleteScene(self.app))
+                return Replace(
+                    scene=LevelCompleteScene(
+                        self.app,
+                        completed_level_index=self.level_index,
+                    )
+                )
         if self._session.is_game_over:
             from ssdq.scenes.game_over import GameOverScene
 
