@@ -1,0 +1,110 @@
+# Level 2 — "Deep Space"
+# Per the multi-level arc spec (2026-04-25-ssdq-design.md §multi-level):
+# the pilots have left the Moon and are now pushing through the alien
+# fleet between the Moon and Earth. Backdrop: standard parallax
+# starfield (bg_starfield_01). Music + boss music are reused from
+# level 1 for now — a dedicated "intense space" track is backlogged.
+#
+# Difficulty curve note: level 2 starts where level 1 ended (mid-tier
+# fighter+gunship combos, no easy drone-only ramp) and ends with
+# boss_02 — visibly red/orange variant of boss_01, ~50% more HP and
+# tighter beat patterns. The pre-boss crescendo deliberately layers
+# every learned formation at once so the kid feels the step up.
+
+level: 2
+title: "Deep Space"
+codename: deep_space
+music: music/level_01.ogg
+boss_music: music/boss_01.ogg
+background: bg_starfield_01
+length_seconds: 195
+
+waves:
+  # ───────── Stage 1 — straight into the deep end ─────────
+  # No drone-only warm-up. Open with a pair of fighter formations to
+  # remind the kid that things shoot back, then immediately add gunships.
+  - at: 2.0
+    stage: 1
+    spawn:
+      - { enemy: fighter, count: 5, formation: arc_left_to_right, spacing: 0.4 }
+      - { enemy: fighter, count: 5, formation: mirror(arc_left_to_right), spacing: 0.4, delay: 1.0 }
+
+  - at: 14.0
+    stage: 1
+    spawn:
+      - { enemy: gunship, count: 3, formation: loop_left, spacing: 0.8, return_passes: 1 }
+      - { enemy: drone, count: 6, formation: figure_eight_centre, spacing: 0.3, delay: 1.0 }
+
+  - at: 26.0
+    stage: 1
+    spawn:
+      - { enemy: bomber, count: 3, formation: slow_descent_centre, spacing: 1.0 }
+      - { enemy: fighter, count: 6, formation: dive_then_strafe, spacing: 0.3, delay: 1.5 }
+
+  # ───────── Stage 2 — pincer rhythm ─────────
+  - at: 42.0
+    stage: 2
+    spawn:
+      - { enemy: gunship, count: 3, formation: loop_left, spacing: 0.7, return_passes: 1 }
+      - { enemy: gunship, count: 3, formation: mirror(loop_left), spacing: 0.7, delay: 0.8, return_passes: 1 }
+
+  - at: 56.0
+    stage: 2
+    spawn:
+      - { enemy: fighter, count: 8, formation: dive_then_strafe, spacing: 0.25 }
+      - { enemy: fighter, count: 8, formation: mirror(dive_then_strafe), spacing: 0.25, delay: 0.5 }
+
+  - at: 70.0
+    stage: 2
+    spawn:
+      - { enemy: bomber, count: 4, formation: slow_descent_centre, spacing: 1.0 }
+      - { enemy: drone, count: 10, formation: figure_eight_centre, spacing: 0.2, delay: 1.0, return_passes: 1 }
+
+  # ───────── Stage 3 — density ramps ─────────
+  - at: 86.0
+    stage: 3
+    spawn:
+      - { enemy: fighter, count: 6, formation: arc_left_to_right, spacing: 0.3, return_passes: 1 }
+      - { enemy: fighter, count: 6, formation: mirror(arc_left_to_right), spacing: 0.3, delay: 0.6, return_passes: 1 }
+      - { enemy: gunship, count: 2, formation: loop_left, spacing: 1.0, delay: 2.0 }
+
+  - at: 102.0
+    stage: 3
+    spawn:
+      - { enemy: bomber, count: 3, formation: slow_descent_centre, spacing: 1.0 }
+      - { enemy: bomber, count: 3, formation: slow_descent_centre, spacing: 1.0, delay: 1.5 }
+      - { enemy: drone, count: 8, formation: figure_eight_centre, spacing: 0.2, delay: 0.8 }
+
+  - at: 118.0
+    stage: 3
+    spawn:
+      - { enemy: gunship, count: 2, formation: loop_left, spacing: 0.9 }
+      - { enemy: gunship, count: 2, formation: mirror(loop_left), spacing: 0.9, delay: 0.5 }
+      - { enemy: fighter, count: 8, formation: dive_then_strafe, spacing: 0.25, delay: 1.5 }
+
+  # ───────── Stage 4 — pre-boss crescendo ─────────
+  # Everything the kid has learned, stacked. The bomber/drone overlay
+  # is the new threat-vector — bullet wall + dodge-the-pattern at once.
+  - at: 138.0
+    stage: 4
+    spawn:
+      - { enemy: bomber, count: 4, formation: slow_descent_centre, spacing: 0.9 }
+      - { enemy: gunship, count: 2, formation: mirror(loop_left), spacing: 0.8, delay: 1.0 }
+
+  - at: 156.0
+    stage: 4
+    spawn:
+      - { enemy: fighter, count: 10, formation: dive_then_strafe, spacing: 0.2 }
+      - { enemy: fighter, count: 10, formation: mirror(dive_then_strafe), spacing: 0.2, delay: 0.4 }
+
+  - at: 172.0
+    stage: 4
+    spawn:
+      - { enemy: gunship, count: 3, formation: loop_left, spacing: 0.7 }
+      - { enemy: gunship, count: 3, formation: mirror(loop_left), spacing: 0.7, delay: 0.4 }
+      - { enemy: drone, count: 10, formation: figure_eight_centre, spacing: 0.2, delay: 1.0 }
+
+  # ───────── Boss ─────────
+  - at: 190.0
+    stage: boss
+    boss: boss_02
