@@ -189,6 +189,9 @@ class LevelScene(Scene):
     _level_completed: bool = field(default=False, init=False)
     _level_complete_grace: float = field(default=0.0, init=False)
     _music_playing: str | None = field(default=None, init=False)
+    # Track which (wave_idx, spawn_idx, member_idx) tuples have had a
+    # warning telegraph spawned, so we don't double-up.
+    _telegraphed: set[tuple[int, int, int]] = field(default_factory=set, init=False)
 
     def __init__(self, app: AppState, level_index: int = 1) -> None:
         self.app = app
@@ -232,6 +235,7 @@ class LevelScene(Scene):
         self._level_completed = False
         self._level_complete_grace = 0.0
         self._music_playing = None
+        self._telegraphed = set()
 
         # Spawn both player ships immediately (slice has no ship-select).
         self._spawn_player(world, P1, self._player_positions[P1])
@@ -458,9 +462,42 @@ class LevelScene(Scene):
     # ───────── helpers: waves ─────────
 
     def _spawn_wave_enemies(self, world: World) -> None:
+        # Telegraph: 0.5s before any spawn whose first sample lands inside
+        # the visible playfield (vs off-screen entry), spawn a warning
+        # circle at the spawn location so the player isn't surprised.
+        self._spawn_telegraphs(world)
         events = self._scheduler.tick(TICK_DT)
         for ev in events:
             self._spawn_enemy(world, ev)
+
+    def _spawn_telegraphs(self, world: World) -> None:
+        bundle = self.app.content
+        warn_seconds = 0.5
+        warn_ticks = int(warn_seconds * 60)
+        for ev in self._scheduler.upcoming(within=warn_seconds):
+            key = (ev.wave_index, ev.spawn_index, ev.member_index)
+            if key in self._telegraphed:
+                continue
+            formation = bundle.formations.get(ev.formation)
+            if formation is None:
+                continue
+            sample = evaluate_path(formation, 0.0, mirrored=ev.mirrored)
+            # Only telegraph if the enemy's initial position is on-screen
+            # (a "surprise" spawn from the player's POV). Off-screen entries
+            # via top/sides are visible and don't need warning.
+            if not (40 <= sample.pos.y <= PLAY_H - 40):
+                self._telegraphed.add(key)
+                continue
+            if not (0 <= sample.pos.x <= PLAY_W):
+                self._telegraphed.add(key)
+                continue
+            # Spawn a BossTelegraph (re-using the existing render path —
+            # it's just a coloured circle outline) with TTL = warn_ticks.
+            world.spawn(
+                BossTelegraph(pos=sample.pos, radius=28.0, colour=(255, 200, 60)),
+                TimeToLive(ticks=warn_ticks),
+            )
+            self._telegraphed.add(key)
 
     def _spawn_enemy(self, world: World, ev: SpawnEvent) -> None:
         bundle = self.app.content
