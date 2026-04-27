@@ -64,7 +64,9 @@ from ssdq.core.coop import (
 )
 from ssdq.core.ecs import World
 from ssdq.core.powerups import (
+    SHIELD_CONSUME_DURATION,
     PlayerPowerupState,
+    Shield,
     WeaponState,
     apply_pickup,
     roll_drop,
@@ -270,6 +272,55 @@ class BossIntroBanner:
 
     text: str
     total_ticks: int  # original lifetime, used by renderer to compute fade
+
+
+# ───────── missile tunables ─────────
+#
+# Damage: a regular pulse_lvl1 shot deals 1; a bomb deals 8 (or 20% of a
+# boss's current HP, whichever is greater). Per kid playtest the missile
+# should sit between: "more than a shot but less than a bomb". We pick
+# **3 damage** — exactly 3x a pulse_lvl1 hit and ~37.5% of a bomb's base
+# damage. Documented here so future tuning has a single source of truth.
+MISSILE_DAMAGE: int = 3
+# Initial speed (px/s) — enough to read as "fired", but lets the missile
+# curve toward its target instead of rocketing past on the first frame.
+MISSILE_INITIAL_SPEED: float = 220.0
+# Cap on the missile's speed (px/s) once it has built up acceleration.
+MISSILE_MAX_SPEED: float = 520.0
+# Acceleration along the heading (px/s^2) — reaches MAX_SPEED after ~0.6s.
+MISSILE_ACCEL: float = 500.0
+# Maximum turn rate (radians/sec) so a fast-moving target can outrun the
+# missile's heading change. ~120 deg/sec — the kid wanted "homes in on a
+# target" while still letting fast movers cause near-misses.
+MISSILE_TURN_RATE: float = math.radians(120.0)
+# Auto-cull lifetime (seconds) so a missile that never finds a target
+# doesn't linger forever. 3s is enough to cross the playfield.
+MISSILE_LIFETIME: float = 3.0
+# Hitbox radius (px) — a touch wider than a pulse bullet so glancing
+# blows still register against fast-moving formations.
+MISSILE_HITBOX_RADIUS: float = 8.0
+# Sprite path. Atlas auto-generates a placeholder if the file is absent
+# (see SpriteAtlas) so the missile is always visible during dev.
+MISSILE_SPRITE: str = "projectiles/missile.png"
+
+
+@dataclass
+class Missile:
+    """Heat-seeking missile state.
+
+    Position + Velocity are stored as standard ECS components (so the
+    motion integrator advances them); this component carries the
+    homing-specific scratch fields.
+
+    ``target`` is the entity id we're chasing. The missile latches onto
+    its target at fire-time (kid spec: "no re-target") so a target dying
+    mid-flight just lets the missile coast to the corpse's last known
+    position before lifetime auto-cull.
+    """
+
+    target: Entity | None
+    speed: float  # current speed magnitude (px/s)
+    heading: float  # current heading in radians; 0 = straight up
 
 
 @dataclass(frozen=True, slots=True)
@@ -496,6 +547,10 @@ class LevelScene(Scene):
         # 5. Advance enemies along formations + emit fire beats
         self._advance_enemies(world)
 
+        # 6a. Heat-seeking missile homing — adjust velocities BEFORE the
+        # motion integrator so the new headings take effect this tick.
+        self._tick_missiles(world, dt)
+
         # 6. Integrate plain Position+Velocity entities (bullets, pickups, particles)
         self._integrate_motion(world, dt)
 
@@ -632,6 +687,34 @@ class LevelScene(Scene):
             self._powerup_states[slot] = pstate.with_bombs(pstate.bombs - 1)
             self.app.audio.play_sfx("bomb")
 
+        # Shield (equippable). Consumes a charge from the AppState
+        # inventory and grants a brief invulnerability window via the
+        # existing forcefield/halo mechanism. Empty-press is a deliberate
+        # no-op + soft chirp so the kid hears the button is "alive".
+        if inp.shield and lifecycle.state == LifecycleState.ALIVE:
+            if self.app.consume_shield_charge(slot):
+                refreshed = self._powerup_states[slot].with_shield(
+                    Shield(seconds_remaining=SHIELD_CONSUME_DURATION)
+                )
+                self._powerup_states[slot] = refreshed
+                # Snap the halo on this tick so the forcefield engulfs the
+                # ship the moment the button fires (matches pickup behaviour).
+                self._sync_shield_halos(world)
+                self.app.audio.play_sfx("powerup")
+            else:
+                # Empty press — quiet chirp; never errors.
+                self.app.audio.play_sfx("hit", volume=0.15)
+
+        # Missile (equippable, heat-seeking). Consumes a charge from the
+        # AppState inventory and spawns a homing missile entity at the
+        # ship's position. Empty-press behaves like the shield button.
+        if inp.missile and lifecycle.state == LifecycleState.ALIVE:
+            if self.app.consume_missile_charge(slot):
+                self._fire_missile(world, slot, new_pos)
+                self.app.audio.play_sfx("missile", volume=0.6)
+            else:
+                self.app.audio.play_sfx("hit", volume=0.15)
+
     def _fire_player_weapon(
         self,
         world: World,
@@ -665,6 +748,126 @@ class LevelScene(Scene):
                 TimeToLive(ticks=180),
             )
         self.app.audio.play_sfx("laser", volume=0.4)
+
+    def _fire_missile(self, world: World, slot: PlayerSlot, pos: Vec2) -> None:
+        """Spawn a heat-seeking missile owned by ``slot`` at ``pos``.
+
+        Latches onto the closest enemy (boss preferred when present) at
+        fire time; the homing system tracks just that one target.
+        """
+        target = self._closest_enemy_to(world, pos)
+        # Initial heading: straight up unless we have a target — in which
+        # case we point at the target so the first tick already curves
+        # the missile correctly.
+        if target is not None:
+            tpos = world.get(target, Position)
+            if tpos is not None:
+                dx = tpos.pos.x - pos.x
+                dy = tpos.pos.y - pos.y
+                heading = math.atan2(dx, -dy)  # 0 = straight up
+            else:
+                heading = 0.0
+        else:
+            heading = 0.0
+        # Velocity = initial_speed in the heading direction.
+        vx = math.sin(heading) * MISSILE_INITIAL_SPEED
+        vy = -math.cos(heading) * MISSILE_INITIAL_SPEED
+        world.spawn(
+            Position(pos),
+            Velocity(Vec2(vx, vy)),
+            CircleHitbox(radius=MISSILE_HITBOX_RADIUS),
+            FactionTag(Faction.PLAYER_BULLET),
+            PlayerOwned(slot),
+            Sprite(path=MISSILE_SPRITE, layer=8, scale=1.0),
+            Damage(amount=MISSILE_DAMAGE),
+            TimeToLive(ticks=int(MISSILE_LIFETIME * 60)),
+            Missile(
+                target=target,
+                speed=MISSILE_INITIAL_SPEED,
+                heading=heading,
+            ),
+        )
+
+    def _closest_enemy_to(self, world: World, pos: Vec2) -> Entity | None:
+        """Return the entity id of the closest live ENEMY to ``pos``.
+
+        Bosses are preferred when present (they're the highest-value
+        target and the kid spec calls them out: "homes in on a target,
+        typically the closest"). Falls back to nearest non-boss enemy.
+        Returns ``None`` if no enemies exist.
+        """
+        if self._boss is not None and world.is_alive(self._boss.entity):
+            return self._boss.entity
+        best: tuple[float, Entity] | None = None
+        for eid, e_pos, ftag in world.query2(Position, FactionTag):
+            if ftag.faction != Faction.ENEMY:
+                continue
+            d2 = (e_pos.pos.x - pos.x) ** 2 + (e_pos.pos.y - pos.y) ** 2
+            if best is None or d2 < best[0]:
+                best = (d2, eid)
+        return best[1] if best else None
+
+    def _tick_missiles(self, world: World, dt: float) -> None:
+        """Advance heat-seeking missiles toward their target.
+
+        Each tick:
+          * if the target is alive, rotate the heading toward it (clamped
+            by ``MISSILE_TURN_RATE``);
+          * accelerate up to ``MISSILE_MAX_SPEED``;
+          * write the new ``Velocity`` so the standard motion integrator
+            does the rest;
+          * point the sprite along the heading so the missile reads as
+            "tracking" visually.
+        """
+        from dataclasses import replace as _dc_replace
+
+        for eid, missile in list(world.query1(Missile)):
+            pos_c = world.get(eid, Position)
+            if pos_c is None:
+                continue
+            pos = pos_c.pos
+            # Target re-acquisition: if the latched target died or vanished,
+            # we let the missile coast (per spec: no re-target). The
+            # TimeToLive component will cull it after MISSILE_LIFETIME.
+            target_alive = (
+                missile.target is not None
+                and world.is_alive(missile.target)
+                and world.get(missile.target, Position) is not None
+            )
+            if target_alive:
+                tpos = world.must_get(missile.target, Position).pos
+                desired = math.atan2(tpos.x - pos.x, -(tpos.y - pos.y))
+                # Wrap the angular delta to [-pi, pi] so we always turn the
+                # short way around.
+                delta = (desired - missile.heading + math.pi) % (2 * math.pi) - math.pi
+                max_turn = MISSILE_TURN_RATE * dt
+                if delta > max_turn:
+                    delta = max_turn
+                elif delta < -max_turn:
+                    delta = -max_turn
+                new_heading = missile.heading + delta
+            else:
+                new_heading = missile.heading
+            # Accelerate toward MAX_SPEED.
+            new_speed = min(MISSILE_MAX_SPEED, missile.speed + MISSILE_ACCEL * dt)
+            vx = math.sin(new_heading) * new_speed
+            vy = -math.cos(new_heading) * new_speed
+            world.replace(eid, Velocity(Vec2(vx, vy)))
+            # Sprite rotation — point the nose along the heading. Sprite
+            # rotation in this engine is in radians; the artwork is drawn
+            # nose-up so heading 0 == 0 rad rotation.
+            spr = world.get(eid, Sprite)
+            if spr is not None:
+                world.replace(eid, _dc_replace(spr, rotation_rad=new_heading))
+            # Persist the new homing state.
+            world.replace(
+                eid,
+                Missile(
+                    target=missile.target if target_alive else None,
+                    speed=new_speed,
+                    heading=new_heading,
+                ),
+            )
 
     def _fire_bomb(self, world: World, slot: PlayerSlot, pos: Vec2) -> None:
         bundle = self.app.content
@@ -1342,10 +1545,11 @@ class LevelScene(Scene):
             )
         world.despawn(pickup_eid)
         if result.shield_up:
-            # Attach a ShieldHalo to the player immediately so the
-            # forcefield engulfs the ship on the same tick the pickup
-            # is collected (otherwise it'd flicker on next tick).
-            self._sync_shield_halos(world)
+            # Equippable: shield pickup grants a charge to the player's
+            # AppState inventory; the player triggers the forcefield by
+            # pressing the shield button. We do NOT sync halos here —
+            # that happens on consume in :meth:`_apply_player_input`.
+            self.app.add_shield_charge(slot)
             self.app.audio.play_sfx("powerup")
         elif result.upgraded_weapon:
             self.app.audio.play_sfx("powerup")
@@ -1530,8 +1734,8 @@ class LevelScene(Scene):
                 bombs=p1.bombs,
                 weapon_level=p1.weapon.level + 1,
                 score=snap.p1,
-                shield_charges=self.app.shield_charges.get(P1, 0),
-                missile_charges=self.app.missile_charges.get(P1, 0),
+                shield_charges=self.app.get_shield_charges(P1),
+                missile_charges=self.app.get_missile_charges(P1),
                 drones=self.app.drones_pending.get(P1, 0),
             ),
             p2=HudPlayerStats(
@@ -1539,8 +1743,8 @@ class LevelScene(Scene):
                 bombs=p2.bombs,
                 weapon_level=p2.weapon.level + 1,
                 score=snap.p2,
-                shield_charges=self.app.shield_charges.get(P2, 0),
-                missile_charges=self.app.missile_charges.get(P2, 0),
+                shield_charges=self.app.get_shield_charges(P2),
+                missile_charges=self.app.get_missile_charges(P2),
                 drones=self.app.drones_pending.get(P2, 0),
             ),
         )

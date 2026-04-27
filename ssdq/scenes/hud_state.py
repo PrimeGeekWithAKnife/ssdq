@@ -23,7 +23,7 @@ class HudPlayerStats:
     bombs: int
     weapon_level: int
     score: int
-    # Task #9 — inventory counters (read by Hud panel).
+    # Inventory counters (read by Hud panel).
     shield_charges: int = 0
     missile_charges: int = 0
     drones: int = 0

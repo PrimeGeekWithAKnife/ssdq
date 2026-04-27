@@ -79,6 +79,8 @@ class PlayerInput:
     pause: bool = False  # edge-triggered
     confirm: bool = False  # menu A, edge-triggered
     cancel: bool = False  # menu B, edge-triggered
+    shield: bool = False  # edge-triggered — equippable forcefield charge
+    missile: bool = False  # edge-triggered — equippable heat-seeking missile
 
 
 NEUTRAL_INPUT = PlayerInput()

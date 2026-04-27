@@ -70,3 +70,33 @@ class AppState:
 
     # Scratch flags for Boot → Title → Level transitions to know what to do.
     asset_loaded_levels: set[int] = field(default_factory=set)
+
+    # ───────── equippable helpers ─────────
+
+    def get_shield_charges(self, slot: PlayerSlot) -> int:
+        return self.shield_charges.get(slot, 0)
+
+    def get_missile_charges(self, slot: PlayerSlot) -> int:
+        return self.missile_charges.get(slot, 0)
+
+    def add_shield_charge(self, slot: PlayerSlot, n: int = 1) -> None:
+        self.shield_charges[slot] = self.get_shield_charges(slot) + n
+
+    def add_missile_charge(self, slot: PlayerSlot, n: int = 1) -> None:
+        self.missile_charges[slot] = self.get_missile_charges(slot) + n
+
+    def consume_shield_charge(self, slot: PlayerSlot) -> bool:
+        """Decrement and return True if a charge was available."""
+        cur = self.get_shield_charges(slot)
+        if cur <= 0:
+            return False
+        self.shield_charges[slot] = cur - 1
+        return True
+
+    def consume_missile_charge(self, slot: PlayerSlot) -> bool:
+        """Decrement and return True if a charge was available."""
+        cur = self.get_missile_charges(slot)
+        if cur <= 0:
+            return False
+        self.missile_charges[slot] = cur - 1
+        return True

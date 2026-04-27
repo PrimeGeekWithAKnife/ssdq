@@ -74,11 +74,11 @@ class Shield:
     """Active shield (forcefield) timer. ``seconds_remaining`` zero ⇒ no shield.
 
     While active, the player ship is invulnerable to all incoming damage
-    (the level scene short-circuits its hit-handler). Stacking is
-    handled by ``apply_pickup``: collecting a second shield while one is
-    already up RESETs the timer to the new pickup's duration rather than
-    summing — matches the user-feedback spec ("makes it invulnerable for
-    10 seconds").
+    (the level scene short-circuits its hit-handler). The shield is now
+    triggered by the player **consuming an equippable charge** (kid playtest
+    2026-04-27: "shield is equippable like a bomb you can wait to use it");
+    pickups grant charges on the AppState, and pressing the shield button
+    activates a brief invulnerability window via this timer.
     """
 
     seconds_remaining: float
@@ -89,6 +89,11 @@ class Shield:
 
 
 _NO_SHIELD = Shield(seconds_remaining=0.0)
+
+# Duration of the invulnerability window granted when a player consumes a
+# shield charge. Short by design (3s) — the kid wanted "very useful in key
+# moments", not a permanent god mode.
+SHIELD_CONSUME_DURATION: float = 3.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -239,20 +244,15 @@ def apply_pickup(
         )
         return PickupResult(new_state=state.with_speed_boost(boost), speed_up=True)
     if pickup.effect == PickupEffect.SHIELD:
-        # Stacking semantics: collecting a second shield while one is
-        # already active RESETS the remaining time to the new pickup's
-        # duration (not additive). Matches the user-feedback spec — the
-        # forcefield "engulfs the ship for 10 seconds", any subsequent
-        # pickup refreshes that 10-second window.
-        #
-        # Task #9: ALSO emit a `shield_charge_added` flag so AppState's
-        # inventory counter increments — the EQUIPPABLE agent (future
-        # work) reads those charges. The auto-activate-on-pickup
-        # behaviour is preserved as a fallback so things still work
-        # pre-EQUIPPABLE merge.
-        shield = Shield(seconds_remaining=pickup.duration)
+        # Equippable: shield pickup adds a charge to AppState inventory.
+        # It does NOT auto-activate the forcefield (kid playtest
+        # 2026-04-27: "you can wait to use it"). The level scene reads
+        # `shield_up` plus `shield_charge_added` and routes the charge
+        # grant via `AppState.add_shield_charge`. The PlayerPowerupState
+        # `shield` field is reserved for the *active* invulnerability
+        # window granted on consumption (see SHIELD_CONSUME_DURATION).
         return PickupResult(
-            new_state=state.with_shield(shield),
+            new_state=state,
             shield_up=True,
             shield_charge_added=True,
         )

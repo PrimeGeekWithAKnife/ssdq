@@ -23,16 +23,23 @@ A (fire / confirm)   0
 B (cancel)           1
 X (bomb)             2
 Y (also bomb)        3
-LB / RB (bomb)       4 / 5
+LB (shield)          4
+RB (missile)         5
 Back                 6
 Start (pause)        7
 ==================  =========================================
 
 **Bomb on multiple buttons** — kid playtest 2026-04-27 reported that no
 button activated bombs on a Gamesir T4n Lite. Different controllers
-sometimes shuffle the X/Y/LB/RB indices, so we accept any of those four
-as a bomb press to maximise the chance the kid lands on something that
+sometimes shuffle the X/Y indices, so we accept either of those two as
+a bomb press to maximise the chance the kid lands on something that
 works.
+
+**Equippables** — shield (LB) and missile (RB) are dedicated buttons
+per kid playtest 2026-04-27 ("shield is equippable like a bomb you can
+wait to use it"; "missile is equippable, has its own button"). They
+no longer participate in the bomb fallback so the equippable inventory
+isn't accidentally drained by bomb-button mashing.
 """
 
 from __future__ import annotations
@@ -56,8 +63,13 @@ BUTTON_RB: int = 5
 BUTTON_BACK: int = 6
 BUTTON_START: int = 7
 
-# Buttons that all map to "bomb" — see module docstring.
-BOMB_BUTTONS: tuple[int, ...] = (BUTTON_X, BUTTON_Y, BUTTON_LB, BUTTON_RB)
+# Buttons that all map to "bomb" — see module docstring. LB / RB used to
+# be in here but now serve as shield (LB) and missile (RB) equippables;
+# bombs still get two buttons via X / Y for kid-friendly redundancy.
+BOMB_BUTTONS: tuple[int, ...] = (BUTTON_X, BUTTON_Y)
+# Dedicated equippable buttons.
+SHIELD_BUTTON: int = BUTTON_LB
+MISSILE_BUTTON: int = BUTTON_RB
 
 # Left-stick axis indices.
 AXIS_LX: int = 0
@@ -89,16 +101,25 @@ class _PadState:
 
     We only remember the previous-tick value for buttons that need
     edge-detection; the rest are sampled live each tick. `prev_bomb`
-    tracks the OR of all bomb-mapped buttons (X, Y, LB, RB).
+    tracks the OR of all bomb-mapped buttons (X, Y).
     """
 
-    __slots__ = ("prev_a", "prev_b", "prev_bomb", "prev_pause")
+    __slots__ = (
+        "prev_a",
+        "prev_b",
+        "prev_bomb",
+        "prev_missile",
+        "prev_pause",
+        "prev_shield",
+    )
 
     def __init__(self) -> None:
         self.prev_a: bool = False
         self.prev_b: bool = False
         self.prev_bomb: bool = False
         self.prev_pause: bool = False
+        self.prev_shield: bool = False
+        self.prev_missile: bool = False
 
 
 class GamepadProvider:
@@ -217,6 +238,11 @@ class GamepadProvider:
                         _safe_button(pad, btn) for btn in BOMB_BUTTONS
                     )
                     state.prev_pause = _safe_button(pad, BUTTON_START)
+                    # Suppress shield / missile edges that would otherwise
+                    # fire on the very tick the slot is bound (the kid is
+                    # holding *every* button to wake the pad up).
+                    state.prev_shield = _safe_button(pad, SHIELD_BUTTON)
+                    state.prev_missile = _safe_button(pad, MISSILE_BUTTON)
                     break
 
     def _read_slot(self, slot_idx: int) -> PlayerInput:
@@ -232,11 +258,13 @@ class GamepadProvider:
 
         a = _safe_button(pad, BUTTON_A)
         b = _safe_button(pad, BUTTON_B)
-        # Bomb = OR of every mapped bomb button (X / Y / LB / RB) — gamepad
+        # Bomb = OR of every mapped bomb button (X / Y) — gamepad
         # button indices vary across vendors and we don't want the kid stuck
         # because their pad puts X at index 3 instead of 2.
         bomb_held = any(_safe_button(pad, btn) for btn in BOMB_BUTTONS)
         start = _safe_button(pad, BUTTON_START)
+        shield_held = _safe_button(pad, SHIELD_BUTTON)
+        missile_held = _safe_button(pad, MISSILE_BUTTON)
 
         # Edge-triggered: true only on 0 -> 1 transition.
         bomb = bomb_held and not state.prev_bomb
@@ -244,12 +272,16 @@ class GamepadProvider:
         # A doubles as both held-fire and edge-triggered confirm in menus.
         confirm = a and not state.prev_a
         cancel = b and not state.prev_b
+        shield = shield_held and not state.prev_shield
+        missile = missile_held and not state.prev_missile
 
         # Update prev-tick state for next poll.
         state.prev_a = a
         state.prev_b = b
         state.prev_bomb = bomb_held
         state.prev_pause = start
+        state.prev_shield = shield_held
+        state.prev_missile = missile_held
 
         return PlayerInput(
             move=move,
@@ -258,6 +290,8 @@ class GamepadProvider:
             pause=pause,
             confirm=confirm,
             cancel=cancel,
+            shield=shield,
+            missile=missile,
         )
 
 

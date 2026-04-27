@@ -63,7 +63,16 @@ class BootScene(Scene):
         music_dir = _ASSETS_DIR / "audio" / "music"
         # Names match what level/coop systems play. Missing files warn
         # once and are silently no-op'd by AudioBus.
-        for name in ("laser", "hit", "explosion", "pickup", "pause", "powerup", "bomb"):
+        for name in (
+            "laser",
+            "hit",
+            "explosion",
+            "pickup",
+            "pause",
+            "powerup",
+            "bomb",
+            "missile",
+        ):
             bus.load_sfx(name, str(sfx_dir / f"{name}.ogg"))
         # Music: one track per level (1..5), one per boss (1..5), plus the
         # calmer ``resupply`` track played by DockingScene between levels.

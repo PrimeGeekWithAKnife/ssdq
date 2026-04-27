@@ -92,7 +92,7 @@ class Hud:
     def _draw_controls_hint(self, surface: pygame.Surface) -> None:
         """Tiny bottom-centre reminder of the controls — kid playtest
         showed bombs weren't obvious."""
-        text = "FIRE: A   BOMB: B   PAUSE: START"
+        text = "FIRE: A   BOMB: X/Y   SHIELD: LB   MISSILE: RB   PAUSE: START"
         rendered = self._score_font.render(text, True, _HINT_COLOUR)
         rect = rendered.get_rect(midbottom=(surface.get_width() // 2, surface.get_height() - 6))
         surface.blit(rendered, rect)
@@ -121,12 +121,12 @@ class Hud:
             (f"Bombs: {stats.bombs}", _TEXT_COLOUR),
             (f"Weapon Lv {stats.weapon_level}", _TEXT_COLOUR),
         ]
-        # Task #9 inventory rows — only render when non-zero so a clean
-        # session doesn't clutter the panel with zeroed-out counters.
+        # Equippable / drone inventory rows — only render when non-zero so a
+        # clean session doesn't clutter the panel with zeroed-out counters.
         if stats.shield_charges:
-            lines.append((f"Shields: {stats.shield_charges}", _INVENTORY_COLOUR))
+            lines.append((f"[S] Shield x{stats.shield_charges}", (140, 255, 240)))
         if stats.missile_charges:
-            lines.append((f"Missiles: {stats.missile_charges}", _INVENTORY_COLOUR))
+            lines.append((f"[M] Missile x{stats.missile_charges}", (255, 180, 100)))
         if stats.drones:
             lines.append((f"Drones: {stats.drones}", _INVENTORY_COLOUR))
         # Score is always last so its position relative to the bottom
@@ -134,8 +134,12 @@ class Hud:
         score_idx = len(lines)
         lines.append((f"{stats.score:08d}", _TEXT_COLOUR))
         y = _PADDING
+        # Layout: panel font for the label + stat lines, smaller score
+        # font for the trailing 8-digit score number. The score line is
+        # always the last entry (index == len(lines) - 1).
+        last_idx = len(lines) - 1
         for i, (text, col) in enumerate(lines):
-            font = self._panel_font if i < score_idx else self._score_font
+            font = self._score_font if i == last_idx else self._panel_font
             rendered = font.render(text, True, col)
             if anchor_left:
                 rect = rendered.get_rect(topleft=(x, y))
