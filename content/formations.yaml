@@ -97,3 +97,21 @@ formations:
       - [ 960, 280]
       - [ 320, 280]
       - [ 320, 200]
+
+  # Resupply-ship cruise. Enters from the top-left, gently arcs across
+  # the upper third of the screen, and exits top-right. Stays well
+  # above the player's working zone (y < 280) so collision is rare —
+  # the ship is "passive transport" per kid playtest #8. Long duration
+  # = slow speed; combined with `speed_along_path: 50` on the
+  # resupply_ship enemy, the actual traversal is ~24 seconds wall-clock,
+  # giving the player plenty of time to spot it and shoot.
+  resupply_cruise:
+    type: catmull_rom
+    duration: 12.0
+    control_points:
+      - [-120, 120]
+      - [ 200, 100]
+      - [ 480, 160]
+      - [ 800, 100]
+      - [1080, 140]
+      - [1400, 120]

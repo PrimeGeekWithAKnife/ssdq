@@ -95,6 +95,13 @@ waves:
     spawn:
       - { enemy: bomber, count: 2, formation: slow_descent_centre, spacing: 1.5 }
 
+  # Resupply ship #1 — kid playtest #8. Crosses the top of the screen
+  # during a quiet beat so the kid can prioritise it. 100% power-up drop.
+  - at: 88.0
+    stage: 2
+    spawn:
+      - { enemy: resupply_ship, count: 1, formation: resupply_cruise, spacing: 0.0 }
+
   - at: 84.0
     stage: 2
     spawn:
@@ -149,6 +156,13 @@ waves:
     spawn:
       - { enemy: bomber, count: 3, formation: slow_descent_centre, spacing: 1.0 }
       - { enemy: gunship, count: 2, formation: mirror(loop_left), spacing: 0.9, delay: 1.0 }
+
+  # Resupply ship #2 — kid playtest #8. Pre-boss top-up: a guaranteed
+  # power-up before the heavy stage-4 crescendo.
+  - at: 165.0
+    stage: 4
+    spawn:
+      - { enemy: resupply_ship, count: 1, formation: resupply_cruise, spacing: 0.0 }
 
   # NEW: symmetric strafe wall — left + right dive_then_strafe staggered
   # so the kid can fall back to the bottom-centre safe lane.

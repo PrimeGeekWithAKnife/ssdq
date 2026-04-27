@@ -60,6 +60,12 @@ waves:
       - { enemy: bomber, count: 4, formation: slow_descent_centre, spacing: 1.0 }
       - { enemy: drone, count: 10, formation: figure_eight_centre, spacing: 0.2, delay: 1.0, return_passes: 1 }
 
+  # Resupply ship #1 — kid playtest #8. Mid-level guaranteed drop.
+  - at: 80.0
+    stage: 2
+    spawn:
+      - { enemy: resupply_ship, count: 1, formation: resupply_cruise, spacing: 0.0 }
+
   # ───────── Stage 3 — density ramps ─────────
   - at: 86.0
     stage: 3
@@ -90,6 +96,12 @@ waves:
     spawn:
       - { enemy: bomber, count: 4, formation: slow_descent_centre, spacing: 0.9 }
       - { enemy: gunship, count: 2, formation: mirror(loop_left), spacing: 0.8, delay: 1.0 }
+
+  # Resupply ship #2 — kid playtest #8. Pre-boss top-up.
+  - at: 150.0
+    stage: 4
+    spawn:
+      - { enemy: resupply_ship, count: 1, formation: resupply_cruise, spacing: 0.0 }
 
   - at: 156.0
     stage: 4
