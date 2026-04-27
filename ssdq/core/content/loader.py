@@ -283,6 +283,11 @@ def _load_level(path: Path, formations: dict[str, FormationDef]) -> LevelDef:
                 mirrored = True
             if f_name not in formations:
                 raise ContentError(f"{where}:waves[{i}].spawn[{j}]: formation '{f_name}' not found")
+            return_passes = int(sp.get("return_passes", 0))
+            if return_passes < 0:
+                raise ContentError(
+                    f"{where}:waves[{i}].spawn[{j}]: return_passes must be ≥ 0, got {return_passes}"
+                )
             spawns.append(
                 SpawnDef(
                     enemy=_require(sp, "enemy", f"{where}:waves[{i}].spawn[{j}]"),
@@ -291,6 +296,7 @@ def _load_level(path: Path, formations: dict[str, FormationDef]) -> LevelDef:
                     spacing=float(_require(sp, "spacing", f"{where}:waves[{i}].spawn[{j}]")),
                     delay=float(sp.get("delay", 0.0)),
                     mirrored=mirrored,
+                    return_passes=return_passes,
                 )
             )
         waves.append(

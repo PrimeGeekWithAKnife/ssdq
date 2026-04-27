@@ -7,6 +7,8 @@
 # wave following the same formation path.
 # `delay` offsets a sub-wave's start within its `at:` block.
 # `mirror(name)` reflects the formation about screen-centre x=640.
+# `return_passes` (default 0) makes any survivor of a wave re-enter the
+# formation that many extra times — deterministic, no RNG (spec §6.3).
 
 level: 1
 title: "Outer Belt"
@@ -34,22 +36,25 @@ waves:
       - { enemy: drone, count: 4, formation: slow_descent_centre, spacing: 0.6 }
 
   # ───────── Stage 2 — pattern complication ─────────
+  # Survivors of these mid-level waves loop back for a second pass —
+  # rewards the kid playtester who clears the wave the first time and
+  # punishes the player who lets too many through (2026-04-27).
   - at: 44.0
     stage: 2
     spawn:
-      - { enemy: drone, count: 8, formation: figure_eight_centre, spacing: 0.3 }
+      - { enemy: drone, count: 8, formation: figure_eight_centre, spacing: 0.3, return_passes: 1 }
 
   - at: 64.0
     stage: 2
     spawn:
-      - { enemy: gunship, count: 3, formation: loop_left, spacing: 0.8 }
-      - { enemy: gunship, count: 3, formation: mirror(loop_left), spacing: 0.8, delay: 1.5 }
+      - { enemy: gunship, count: 3, formation: loop_left, spacing: 0.8, return_passes: 1 }
+      - { enemy: gunship, count: 3, formation: mirror(loop_left), spacing: 0.8, delay: 1.5, return_passes: 1 }
 
   - at: 84.0
     stage: 2
     spawn:
-      - { enemy: fighter, count: 6, formation: arc_left_to_right, spacing: 0.35 }
-      - { enemy: fighter, count: 6, formation: mirror(arc_left_to_right), spacing: 0.35, delay: 0.8 }
+      - { enemy: fighter, count: 6, formation: arc_left_to_right, spacing: 0.35, return_passes: 1 }
+      - { enemy: fighter, count: 6, formation: mirror(arc_left_to_right), spacing: 0.35, delay: 0.8, return_passes: 1 }
 
   # ───────── Stage 3 — density up ─────────
   - at: 108.0

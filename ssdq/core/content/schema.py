@@ -146,6 +146,11 @@ class SpawnDef:
     spacing: float
     delay: float = 0.0
     mirrored: bool = False  # set if formation arrived as mirror(name)
+    # Survivors of this spawn re-enter the formation this many extra
+    # times. 0 = current behaviour (single pass, despawn off-screen);
+    # 1 = one extra pass for survivors; 2 = two extra passes; etc.
+    # Deterministic — every survivor returns; no randomness (spec §6.3).
+    return_passes: int = 0
 
 
 @dataclass(frozen=True, slots=True)
