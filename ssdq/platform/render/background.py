@@ -19,6 +19,7 @@ background name and asks the registry for a matching class.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Protocol
 
 import pygame
@@ -199,12 +200,17 @@ class MoonSurfaceBackground:
 # ───────── registry ─────────
 
 
-# Map of level YAML ``background:`` string → backdrop class. New level
-# settings register here. Renderer.draw() / Renderer.set_background_by_name
-# look the name up; an unknown name falls back to the starfield default
-# rather than crashing — a typo in level data shouldn't blow up a play
-# session.
-BACKGROUND_REGISTRY: dict[str, type[Backdrop]] = {
+# Map of level YAML ``background:`` string → factory ``(width, height)
+# -> Backdrop``. New level settings register here. Renderer reads via
+# :func:`make_background`; an unknown name falls back to the starfield
+# default rather than crashing — a typo in level data shouldn't blow up
+# a play session.
+#
+# Stored as a Callable rather than ``type[Backdrop]`` so future
+# backdrops can be functions / partials with extra config without
+# inheritance ceremony.
+BackgroundFactory = Callable[[int, int], Backdrop]
+BACKGROUND_REGISTRY: dict[str, BackgroundFactory] = {
     "bg_starfield_01": ParallaxStarfield,
     "bg_moon_surface": MoonSurfaceBackground,
 }
@@ -221,5 +227,5 @@ def make_background(name: str, width: int, height: int) -> Backdrop:
     degrades gracefully — a missing backdrop should not crash a play
     session, just make a sterile-looking level.
     """
-    cls = BACKGROUND_REGISTRY.get(name) or BACKGROUND_REGISTRY[DEFAULT_BACKGROUND_NAME]
-    return cls(width, height)
+    factory = BACKGROUND_REGISTRY.get(name) or BACKGROUND_REGISTRY[DEFAULT_BACKGROUND_NAME]
+    return factory(width, height)
