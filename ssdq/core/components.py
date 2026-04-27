@@ -99,12 +99,40 @@ class TimeToLive:
 @dataclass(frozen=True, slots=True)
 class Sprite:
     """Render hint — a path key into the loaded sprite atlas. Optional
-    layer (lower draws first). `alpha` is 0..255; 255 = fully opaque."""
+    layer (lower draws first). `alpha` is 0..255; 255 = fully opaque.
+    `scale` multiplies render size (1.0 = native)."""
 
     path: str
     layer: int = 0
     rotation_rad: float = 0.0
     alpha: int = 255
+    scale: float = 1.0
+
+
+@dataclass(frozen=True, slots=True)
+class PickupHalo:
+    """Tag: render a pulsing coloured halo behind this entity.
+
+    Colour and base radius are read by the renderer; the pulse uses
+    the global tick so all halos pulse in sync (deterministic and
+    visually grouped).
+    """
+
+    radius: float
+    colour: tuple[int, int, int]
+
+
+@dataclass(frozen=True, slots=True)
+class FloatingText:
+    """A short-lived text label that drifts upward and fades out.
+
+    Used for pickup-collection feedback ("WEAPON UP!" etc.).
+    """
+
+    text: str
+    colour: tuple[int, int, int]
+    ticks_remaining: int
+    rise_speed: float = 30.0  # px/sec upward drift
 
 
 @dataclass(frozen=True, slots=True)

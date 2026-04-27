@@ -35,10 +35,12 @@ from ssdq.core.components import (
     Damage,
     Faction,
     FactionTag,
+    FloatingText,
     Health,
     HitFlash,
     InvulnerabilityBlink,
     MaxHealth,
+    PickupHalo,
     PlayerOwned,
     Position,
     ScoreValue,
@@ -931,12 +933,23 @@ class LevelScene(Scene):
     def _spawn_pickup(self, world: World, name: str, pos: Vec2) -> None:
         bundle = self.app.content
         pdef: PickupDef = bundle.pickups[name]
+        # Halo colour by effect — kid playtest 2026-04-27: pickups were
+        # invisible without a glow + scale-up.
+        from ssdq.core.content.schema import PickupEffect
+
+        halo_colour = {
+            PickupEffect.WEAPON_UPGRADE: (255, 220, 80),  # gold
+            PickupEffect.SPEED_UP: (80, 220, 255),  # cyan
+            PickupEffect.EXTRA_BOMB: (255, 120, 60),  # orange
+            PickupEffect.EXTRA_LIFE: (255, 100, 160),  # pink
+        }.get(pdef.effect, (200, 200, 200))
         world.spawn(
             Position(pos),
             Velocity(Vec2(0.0, pdef.fall_speed)),
-            CircleHitbox(radius=pdef.hitbox_radius),
+            CircleHitbox(radius=pdef.hitbox_radius * 1.6),  # bigger hit area too
             FactionTag(Faction.PICKUP),
-            Sprite(path=pdef.sprite, layer=5),
+            Sprite(path=pdef.sprite, layer=5, scale=2.0),
+            PickupHalo(radius=28.0, colour=halo_colour),
             PickupTag(pickup_name=name),
             TimeToLive(ticks=600),  # 10 seconds at 60 Hz
         )
@@ -973,11 +986,36 @@ class LevelScene(Scene):
         # Lift extra-life into the lifecycle layer.
         if result.extra_life:
             self._session.grant_extra_life(slot)
+        # Floating-text feedback so the player knows what they got.
+        pickup_pos = world.must_get(pickup_eid, Position).pos
+        text, colour = self._floating_text_for_result(result)
+        if text:
+            world.spawn(
+                Position(pickup_pos),
+                Velocity(Vec2(0.0, -30.0)),
+                FloatingText(text=text, colour=colour, ticks_remaining=42),
+                TimeToLive(ticks=42),
+            )
         world.despawn(pickup_eid)
         if result.upgraded_weapon:
             self.app.audio.play_sfx("powerup")
         else:
             self.app.audio.play_sfx("pickup")
+
+    @staticmethod
+    def _floating_text_for_result(result: object) -> tuple[str, tuple[int, int, int]]:
+        """Map a PickupResult to (label, colour) for the floating text."""
+        # `result` is a PickupResult — duck-typed read to avoid a circular
+        # import here.
+        if getattr(result, "upgraded_weapon", False):
+            return ("WEAPON UP!", (255, 220, 80))
+        if getattr(result, "speed_up", False):
+            return ("SPEED!", (80, 220, 255))
+        if getattr(result, "extra_bomb", False):
+            return ("+1 BOMB", (255, 140, 80))
+        if getattr(result, "extra_life", False):
+            return ("+1 LIFE", (255, 120, 180))
+        return ("", (255, 255, 255))
 
     # ───────── helpers: respawn / culling / hud ─────────
 

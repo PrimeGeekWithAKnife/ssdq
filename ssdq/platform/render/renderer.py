@@ -30,9 +30,11 @@ from ssdq.core.components import (
     AnimatedSprite,
     Faction,
     FactionTag,
+    FloatingText,
     Health,
     HitFlash,
     MaxHealth,
+    PickupHalo,
     Position,
     Sprite,
 )
@@ -107,12 +109,18 @@ class Renderer:
         # 2. background
         self._background.draw(surface, tick)
 
+        # 2.5 pickup halos (rendered behind sprites so they read as glow)
+        self._draw_pickup_halos(world, surface, tick)
+
         # 3+4. entity sprites (incl. particles, bullets) — single deterministic pass
         for item in self._gather_sprite_items(world):
             self._blit_item(surface, item)
 
         # 4.5 hit-flash overlay (multi-HP enemies that just took damage)
         self._draw_hit_flashes(world, surface)
+
+        # 4.55 floating text labels (pickup feedback)
+        self._draw_floating_text(world, surface)
 
         # 4.6 enemy health bars (multi-HP enemies that have taken damage)
         self._draw_enemy_health_bars(world, surface)
@@ -161,6 +169,12 @@ class Renderer:
             from math import degrees
 
             surf = pygame.transform.rotate(surf, -degrees(item.sprite.rotation_rad))
+        # Optional scale (used to make pickups visually obvious)
+        if item.sprite.scale != 1.0:
+            w, h = surf.get_size()
+            surf = pygame.transform.scale(
+                surf, (int(w * item.sprite.scale), int(h * item.sprite.scale))
+            )
         # Apply alpha if specified (used by InvulnerabilityBlink)
         if item.sprite.alpha != 255:
             surf = surf.copy()
@@ -185,6 +199,37 @@ class Renderer:
             tint.set_alpha(min(180, flash.ticks_remaining * 40))
             rect = tint.get_rect(center=(int(pos.pos.x), int(pos.pos.y)))
             surface.blit(tint, rect)
+
+    def _draw_pickup_halos(self, world: World, surface: pygame.Surface, tick: int) -> None:
+        """Pulsing coloured glow behind pickups."""
+        import math
+
+        pulse = 0.7 + 0.3 * math.sin(tick * 0.18)
+        for _eid, pos, halo in world.query2(Position, PickupHalo):
+            radius = int(halo.radius * pulse)
+            if radius <= 0:
+                continue
+            alpha = int(140 * pulse)
+            # Pre-multiplied alpha surface — pygame draws antialiased circles
+            # via gfxdraw; for cross-version reliability use a Surface blit.
+            halo_surf = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
+            pygame.draw.circle(halo_surf, (*halo.colour, alpha), (radius, radius), radius)
+            surface.blit(halo_surf, (int(pos.pos.x) - radius, int(pos.pos.y) - radius))
+
+    def _draw_floating_text(self, world: World, surface: pygame.Surface) -> None:
+        """Drift-up + fade short-lived text labels (pickup feedback)."""
+        if not pygame.font.get_init():
+            pygame.font.init()
+        font = pygame.font.SysFont(None, 24, bold=True)
+        for _eid, pos, txt in world.query2(Position, FloatingText):
+            if txt.ticks_remaining <= 0:
+                continue
+            # Fade based on remaining ticks (assume max 60).
+            alpha = max(0, min(255, int(txt.ticks_remaining * 6)))
+            rendered = font.render(txt.text, True, txt.colour)
+            rendered.set_alpha(alpha)
+            rect = rendered.get_rect(center=(int(pos.pos.x), int(pos.pos.y)))
+            surface.blit(rendered, rect)
 
     def _draw_enemy_health_bars(self, world: World, surface: pygame.Surface) -> None:
         """Tiny HP bar above multi-HP enemies that have taken damage.
@@ -212,9 +257,7 @@ class Renderer:
             pygame.draw.rect(surface, (40, 0, 0), (x, y, bar_w, bar_h))
             fill_w = int(bar_w * ratio)
             colour = (
-                (220, 60, 40) if ratio < 0.34
-                else (220, 200, 40) if ratio < 0.67
-                else (60, 220, 80)
+                (220, 60, 40) if ratio < 0.34 else (220, 200, 40) if ratio < 0.67 else (60, 220, 80)
             )
             if fill_w > 0:
                 pygame.draw.rect(surface, colour, (x, y, fill_w, bar_h))
