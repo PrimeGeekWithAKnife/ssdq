@@ -238,15 +238,21 @@ class LevelScene(Scene):
         # is parsed off the primary weapon name (e.g. "pulse_lvl1" → "pulse").
         ship = bundle.ships["vanguard"]
         tree = ship.primary_weapon.split("_lvl")[0]
+        # Apply any pending bomb bonus from an inter-level scene (e.g.
+        # DockingScene) on TOP of the ship's starting baseline. Consumed
+        # one-shot so Title → Level without another docking doesn't
+        # re-award.
+        bomb_bonus = max(0, self.app.bomb_bonus_pending)
+        self.app.bomb_bonus_pending = 0
         self._powerup_states = {
             P1: PlayerPowerupState(
                 weapon=WeaponState(tree=tree, level=0),
-                bombs=ship.starting_bombs,
+                bombs=ship.starting_bombs + bomb_bonus,
                 lives=self.app.options.starting_lives,
             ),
             P2: PlayerPowerupState(
                 weapon=WeaponState(tree=tree, level=0),
-                bombs=ship.starting_bombs,
+                bombs=ship.starting_bombs + bomb_bonus,
                 lives=self.app.options.starting_lives,
             ),
         }
