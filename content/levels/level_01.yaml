@@ -26,7 +26,7 @@ title: "Outer Belt"
 codename: outer_belt
 music: music/level_01.ogg
 boss_music: music/boss_01.ogg
-background: bg_starfield_01
+background: bg_moon_surface
 length_seconds: 225
 
 waves:
