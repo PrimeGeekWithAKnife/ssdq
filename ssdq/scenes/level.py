@@ -38,6 +38,7 @@ from ssdq.core.components import (
     Health,
     HitFlash,
     InvulnerabilityBlink,
+    MaxHealth,
     PlayerOwned,
     Position,
     ScoreValue,
@@ -476,6 +477,7 @@ class LevelScene(Scene):
             CircleHitbox(radius=enemy.hitbox_radius),
             FactionTag(Faction.ENEMY),
             Health(hp=enemy.hp),
+            MaxHealth(hp=enemy.hp),
             Sprite(path=enemy.sprite, layer=6),
             FormationFollower(
                 formation_name=ev.formation,
@@ -510,11 +512,16 @@ class LevelScene(Scene):
             return
         # Spawn boss above screen; it'll slide into formation as t advances.
         sample = evaluate_path(formation, 0.0)
+        # Boss MaxHealth: total of all phase pools, so the bar shows
+        # cumulative progress across the whole fight (per-phase chunks
+        # rendered with dividers).
+        total_max = sum(p.hp for p in boss.phases)
         eid = world.spawn(
             Position(sample.pos),
             CircleHitbox(radius=boss.hitbox_radius),
             FactionTag(Faction.ENEMY),
             Health(hp=boss.phases[0].hp),
+            MaxHealth(hp=total_max),
             Sprite(path=boss.sprite, layer=7),
             ScoreValue(points=boss.score),
         )

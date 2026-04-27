@@ -81,6 +81,14 @@ class Health:
 
 
 @dataclass(frozen=True, slots=True)
+class MaxHealth:
+    """Maximum HP at spawn. Read by the renderer for health-bar
+    fill ratios; never mutated after spawn."""
+
+    hp: int
+
+
+@dataclass(frozen=True, slots=True)
 class TimeToLive:
     """Despawn after this many ticks remain. Used for bullets, particles,
     expired pickups."""

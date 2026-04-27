@@ -30,7 +30,9 @@ from ssdq.core.components import (
     AnimatedSprite,
     Faction,
     FactionTag,
+    Health,
     HitFlash,
+    MaxHealth,
     Position,
     Sprite,
 )
@@ -112,6 +114,12 @@ class Renderer:
         # 4.5 hit-flash overlay (multi-HP enemies that just took damage)
         self._draw_hit_flashes(world, surface)
 
+        # 4.6 enemy health bars (multi-HP enemies that have taken damage)
+        self._draw_enemy_health_bars(world, surface)
+
+        # 4.7 boss health bar (across the top of the playfield)
+        self._draw_boss_health_bar(world, surface)
+
         # 5. boss telegraphs (optional)
         self._draw_boss_telegraphs(world, surface)
 
@@ -177,6 +185,80 @@ class Renderer:
             tint.set_alpha(min(180, flash.ticks_remaining * 40))
             rect = tint.get_rect(center=(int(pos.pos.x), int(pos.pos.y)))
             surface.blit(tint, rect)
+
+    def _draw_enemy_health_bars(self, world: World, surface: pygame.Surface) -> None:
+        """Tiny HP bar above multi-HP enemies that have taken damage.
+
+        Skip drones (max=1) and the boss (rendered separately as a top bar).
+        """
+        for eid, max_hp in world.query1(MaxHealth):
+            # Skip the boss — has its own top-of-screen bar (max >= 50).
+            if max_hp.hp >= 50 or max_hp.hp <= 1:
+                continue
+            hp = world.get(eid, Health)
+            pos = world.get(eid, Position)
+            if hp is None or pos is None:
+                continue
+            # Show only when damaged.
+            if hp.hp >= max_hp.hp or hp.hp <= 0:
+                continue
+            cx = int(pos.pos.x)
+            cy = int(pos.pos.y)
+            bar_w = 40
+            bar_h = 4
+            x = cx - bar_w // 2
+            y = cy - 32
+            ratio = hp.hp / max_hp.hp
+            pygame.draw.rect(surface, (40, 0, 0), (x, y, bar_w, bar_h))
+            fill_w = int(bar_w * ratio)
+            colour = (
+                (220, 60, 40) if ratio < 0.34
+                else (220, 200, 40) if ratio < 0.67
+                else (60, 220, 80)
+            )
+            if fill_w > 0:
+                pygame.draw.rect(surface, colour, (x, y, fill_w, bar_h))
+            pygame.draw.rect(surface, (200, 200, 200), (x, y, bar_w, bar_h), width=1)
+
+    def _draw_boss_health_bar(self, world: World, surface: pygame.Surface) -> None:
+        """Wide bar across the top of the playfield showing boss HP.
+
+        Boss identified as the entity with `MaxHealth.hp >= 50` (level-1
+        non-boss enemies cap at 12).
+        """
+        for boss_eid, max_hp in world.query1(MaxHealth):
+            if max_hp.hp < 50:
+                continue
+            hp = world.get(boss_eid, Health)
+            ftag = world.get(boss_eid, FactionTag)
+            if hp is None or ftag is None or ftag.faction != Faction.ENEMY:
+                continue
+            w, _h = surface.get_size()
+            bar_w = w - 240
+            bar_h = 14
+            x = (w - bar_w) // 2
+            y = 70
+            ratio = max(0.0, hp.hp / max_hp.hp)
+            pygame.draw.rect(surface, (50, 0, 0), (x - 2, y - 2, bar_w + 4, bar_h + 4))
+            pygame.draw.rect(surface, (10, 10, 10), (x, y, bar_w, bar_h))
+            fill_w = int(bar_w * ratio)
+            if fill_w > 0:
+                pygame.draw.rect(surface, (220, 50, 80), (x, y, fill_w, bar_h))
+            # Phase divider at midpoint (2-phase boss)
+            pygame.draw.line(
+                surface,
+                (255, 255, 255),
+                (x + bar_w // 2, y - 2),
+                (x + bar_w // 2, y + bar_h + 2),
+                1,
+            )
+            pygame.draw.rect(surface, (200, 200, 200), (x, y, bar_w, bar_h), width=1)
+            if not pygame.font.get_init():
+                pygame.font.init()
+            font = pygame.font.SysFont(None, 22, bold=True)
+            label = font.render("BOSS", True, (255, 240, 200))
+            surface.blit(label, label.get_rect(midright=(x - 8, y + bar_h // 2)))
+            return  # only one boss
 
     def _draw_boss_telegraphs(self, world: World, surface: pygame.Surface) -> None:
         comp_t = _optional_component_type("BossTelegraph")
