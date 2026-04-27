@@ -49,5 +49,24 @@ class AppState:
     missile_charges: dict[PlayerSlot, int] = field(default_factory=_zero_per_slot)
     shield_charges: dict[PlayerSlot, int] = field(default_factory=_zero_per_slot)
 
+    # One-shot shield charge bonus granted by DockingScene. Drained into
+    # `shield_charges` on next LevelScene.enter (same pattern as
+    # bomb_bonus_pending). Distinct from `shield_charges` because it
+    # represents the "resupply gave me +1" signal, not the running
+    # inventory.
+    shield_charge_pending: int = 0
+
+    # Weapon tier carried across LEVEL boundaries. Kid playtest 2026-04-27:
+    # "Your weapon level is retained between level transitions." The level
+    # scene captures each player's current weapon level on `exit()` and the
+    # next LevelScene seeds the player's PlayerPowerupState with it on
+    # `enter()` (clamped to the tree's max). Empty dict ⇒ start at base
+    # tier (level 0). Per-life death reset INSIDE a level still happens —
+    # this only persists across the LevelScene → LevelCompleteScene →
+    # DockingScene → next LevelScene seam. Keyed by player slot index
+    # (0 = P1, 1 = P2) so the dict is JSON/replay-friendly without
+    # leaking the PlayerSlot class.
+    last_weapon_tiers: dict[int, int] = field(default_factory=dict)
+
     # Scratch flags for Boot → Title → Level transitions to know what to do.
     asset_loaded_levels: set[int] = field(default_factory=set)

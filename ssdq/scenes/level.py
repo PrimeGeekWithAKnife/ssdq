@@ -355,14 +355,22 @@ class LevelScene(Scene):
         # re-award.
         bomb_bonus = max(0, self.app.bomb_bonus_pending)
         self.app.bomb_bonus_pending = 0
+        # Carry weapon tier across LEVEL boundaries — kid playtest:
+        # "If you were good and you got awesome weaponry then you keep
+        # it." Look up each slot's last persisted level (defaults to 0
+        # for a fresh campaign) and clamp to the tree's max so a stale
+        # tier from a previous content-bundle layout can't crash here.
+        max_tree_level = max(0, len(bundle.weapon_trees.get(tree, ())) - 1)
+        p1_tier = self._seeded_tier(P1, max_tree_level)
+        p2_tier = self._seeded_tier(P2, max_tree_level)
         self._powerup_states = {
             P1: PlayerPowerupState(
-                weapon=WeaponState(tree=tree, level=0),
+                weapon=WeaponState(tree=tree, level=p1_tier),
                 bombs=ship.starting_bombs + bomb_bonus,
                 lives=self.app.options.starting_lives,
             ),
             P2: PlayerPowerupState(
-                weapon=WeaponState(tree=tree, level=0),
+                weapon=WeaponState(tree=tree, level=p2_tier),
                 bombs=ship.starting_bombs + bomb_bonus,
                 lives=self.app.options.starting_lives,
             ),
@@ -414,6 +422,16 @@ class LevelScene(Scene):
         self.app.last_p1_score = self._session.scores.snapshot().p1
         self.app.last_p2_score = self._session.scores.snapshot().p2
         self.app.completed_level = self._level_completed
+        # Persist weapon tiers across level boundaries — only when the
+        # level was actually CLEARED (so a game-over → restart begins
+        # at base tier rather than rewarding a wipeout). The dict is
+        # keyed by slot index (0 / 1) so AppState stays free of the
+        # PlayerSlot dataclass type.
+        if self._level_completed:
+            self.app.last_weapon_tiers = {
+                P1.index: self._powerup_states[P1].weapon.level,
+                P2.index: self._powerup_states[P2].weapon.level,
+            }
         # Sweep ALL level entities so they don't ghost into the next scene —
         # kid playtest #6: "ghost ship of me on the screen where my last
         # position was". The world is shared across the scene stack; if
@@ -422,6 +440,16 @@ class LevelScene(Scene):
         # → next LevelScene.
         for eid in list(world.alive_entities()):
             world.despawn(eid)
+
+    def _seeded_tier(self, slot: PlayerSlot, max_tree_level: int) -> int:
+        """Resolve the starting weapon tier for a slot on level enter.
+
+        Reads ``app.last_weapon_tiers`` (set by the previous level's
+        exit) and clamps to the current tree's max. Falls back to 0
+        when no prior tier exists.
+        """
+        prior = self.app.last_weapon_tiers.get(slot.index, 0)
+        return max(0, min(prior, max_tree_level))
 
     # ───────── per-tick ─────────
 
