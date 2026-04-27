@@ -113,20 +113,36 @@ url     = ""
 notes   = "Generated 2026-04-27 to give the starter weapon a more modest look."
 
 [[entry]]
-path    = "content/assets/sprites/projectiles/pulse_mid.png"
+path    = "content/assets/sprites/projectiles/pulse_lvl2.png"
 source  = "Original"
-author  = "Claude (procedurally drawn — 8x20 mid-tier beam for pulse_lvl2)"
+author  = "Claude (procedurally drawn — 6x16 cyan-white twin beam, tier 2)"
 licence = "CC0"
 url     = ""
-notes   = "Generated 2026-04-27 — visible weapon-tier progression for the kid."
+notes   = "Generated 2026-04-25 by tools/gen_pulse_sprites.py. Galaga twin-shot tier of the 5-tier pulse tree."
 
 [[entry]]
-path    = "content/assets/sprites/projectiles/pulse_strong.png"
+path    = "content/assets/sprites/projectiles/pulse_lvl3.png"
 source  = "Original"
-author  = "Claude (procedurally drawn — 12x32 high-energy beam for pulse_lvl3)"
+author  = "Claude (procedurally drawn — 8x20 cyan-magenta core, tier 3)"
 licence = "CC0"
 url     = ""
-notes   = "Generated 2026-04-27 — top-tier weapon visual."
+notes   = "Generated 2026-04-25 by tools/gen_pulse_sprites.py. Gradius 'Double' tier (twin core + diagonals)."
+
+[[entry]]
+path    = "content/assets/sprites/projectiles/pulse_lvl4.png"
+source  = "Original"
+author  = "Claude (procedurally drawn — 10x24 magenta-orange beam, tier 4)"
+licence = "CC0"
+url     = ""
+notes   = "Generated 2026-04-25 by tools/gen_pulse_sprites.py. R-Type pod tier (wider spread + tail shot)."
+
+[[entry]]
+path    = "content/assets/sprites/projectiles/pulse_lvl5.png"
+source  = "Original"
+author  = "Claude (procedurally drawn — 14x36 white-hot orange superweapon, tier 5)"
+licence = "CC0"
+url     = ""
+notes   = "Generated 2026-04-25 by tools/gen_pulse_sprites.py. End-game tier — 7 bullets in a hemisphere, fattest sprite."
 
 [[entry]]
 path    = "content/assets/sprites/projectiles/enemy_orb.png"
