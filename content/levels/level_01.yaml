@@ -1,12 +1,22 @@
 # Level 1 — "Outer Belt"
-# Per spec §6.2. Three wave stages → boss → boss death → game-complete.
-# Definition-of-Done #3, #4: 3 wave stages, ≥ 4 enemy types, 1 boss with 2 phases.
+# Per spec §6.2. Wave stages → boss → boss death → game-complete.
+# Definition-of-Done #3, #4: ≥ 3 wave stages, ≥ 4 enemy types, 1 boss with 2 phases.
 #
 # `at` is wall-clock seconds from level start.
 # `spacing` is the gap (seconds) between successive enemies in the same
 # wave following the same formation path.
 # `delay` offsets a sub-wave's start within its `at:` block.
 # `mirror(name)` reflects the formation about screen-centre x=640.
+#
+# Pacing note (kid playtest 2026-04-27, item #10):
+# Originally 11 waves across 3 stages → ~165s to boss. Re-pacing for the
+# 8-year-old: 21 waves across 4 stages → ~210s to boss. The curve eases
+# in much more gently (drones-only for the first 30s, single fighters
+# before fighter pairs, single bomber preview before heavy combos) so
+# the kid has time to read each new threat type before the next one
+# stacks on top of it. Stage 4 is the new pre-boss crescendo; it
+# layers heavies + symmetric strafe walls so the boss intro feels
+# earned rather than arbitrary.
 
 level: 1
 title: "Outer Belt"
@@ -14,7 +24,7 @@ codename: outer_belt
 music: music/level_01.ogg
 boss_music: music/boss_01.ogg
 background: bg_starfield_01
-length_seconds: 180
+length_seconds: 225
 
 waves:
   # ───────── Stage 1 — gentle introduction ─────────
@@ -23,10 +33,22 @@ waves:
     spawn:
       - { enemy: drone, count: 6, formation: arc_left_to_right, spacing: 0.4 }
 
+  # NEW: tiny mirror-peek so the kid sees the symmetry before the full mirror wave.
+  - at: 8.0
+    stage: 1
+    spawn:
+      - { enemy: drone, count: 3, formation: mirror(arc_left_to_right), spacing: 0.5 }
+
   - at: 14.0
     stage: 1
     spawn:
       - { enemy: drone, count: 6, formation: mirror(arc_left_to_right), spacing: 0.4 }
+
+  # NEW: wide-spaced straight line — easiest possible read, breather before stage 2.
+  - at: 22.0
+    stage: 1
+    spawn:
+      - { enemy: drone, count: 4, formation: slow_descent_centre, spacing: 0.8 }
 
   - at: 28.0
     stage: 1
@@ -34,16 +56,37 @@ waves:
       - { enemy: drone, count: 4, formation: slow_descent_centre, spacing: 0.6 }
 
   # ───────── Stage 2 — pattern complication ─────────
+  # NEW: first armed enemy (fighter) appears solo and slow so the kid
+  # learns "those things shoot back" before being asked to dodge a swarm.
+  - at: 36.0
+    stage: 2
+    spawn:
+      - { enemy: fighter, count: 3, formation: arc_left_to_right, spacing: 0.5 }
+
   - at: 44.0
     stage: 2
     spawn:
       - { enemy: drone, count: 8, formation: figure_eight_centre, spacing: 0.3 }
+
+  # NEW: light fighter+drone pair, well-delayed, to teach "watch both lanes".
+  - at: 54.0
+    stage: 2
+    spawn:
+      - { enemy: fighter, count: 4, formation: mirror(arc_left_to_right), spacing: 0.4 }
+      - { enemy: drone, count: 5, formation: slow_descent_centre, spacing: 0.6, delay: 1.5 }
 
   - at: 64.0
     stage: 2
     spawn:
       - { enemy: gunship, count: 3, formation: loop_left, spacing: 0.8 }
       - { enemy: gunship, count: 3, formation: mirror(loop_left), spacing: 0.8, delay: 1.5 }
+
+  # NEW: bomber preview — only 2, very wide spacing, so the spread_shot
+  # is a "look at that pattern" moment, not a wall of bullets.
+  - at: 76.0
+    stage: 2
+    spawn:
+      - { enemy: bomber, count: 2, formation: slow_descent_centre, spacing: 1.5 }
 
   - at: 84.0
     stage: 2
@@ -52,16 +95,38 @@ waves:
       - { enemy: fighter, count: 6, formation: mirror(arc_left_to_right), spacing: 0.35, delay: 0.8 }
 
   # ───────── Stage 3 — density up ─────────
+  # NEW: combo intro — a familiar drone pattern overlaid with fighters
+  # on a different lane. Kid has seen both individually now.
+  - at: 96.0
+    stage: 3
+    spawn:
+      - { enemy: drone, count: 8, formation: figure_eight_centre, spacing: 0.25 }
+      - { enemy: fighter, count: 4, formation: dive_then_strafe, spacing: 0.5, delay: 1.0 }
+
   - at: 108.0
     stage: 3
     spawn:
       - { enemy: fighter, count: 12, formation: dive_then_strafe, spacing: 0.25 }
+
+  # NEW: flank wave — gunships from the left while drones arc overhead.
+  - at: 118.0
+    stage: 3
+    spawn:
+      - { enemy: gunship, count: 2, formation: loop_left, spacing: 1.0 }
+      - { enemy: drone, count: 6, formation: arc_left_to_right, spacing: 0.3, delay: 0.5 }
 
   - at: 124.0
     stage: 3
     spawn:
       - { enemy: bomber, count: 4, formation: slow_descent_centre, spacing: 1.2 }
       - { enemy: drone, count: 10, formation: figure_eight_centre, spacing: 0.2, delay: 0.5 }
+
+  # NEW: mirror-strafe pressure — same pattern as the existing dive_then_strafe
+  # wave but flipped, so the kid has to scan the OTHER side of the screen.
+  - at: 138.0
+    stage: 3
+    spawn:
+      - { enemy: fighter, count: 6, formation: mirror(dive_then_strafe), spacing: 0.3 }
 
   - at: 144.0
     stage: 3
@@ -70,7 +135,32 @@ waves:
       - { enemy: gunship, count: 2, formation: mirror(loop_left), spacing: 1.0, delay: 0.5 }
       - { enemy: fighter, count: 8, formation: dive_then_strafe, spacing: 0.3, delay: 2.0 }
 
+  # ───────── Stage 4 — pre-boss crescendo (NEW STAGE) ─────────
+  # NEW: heavy-units announcement — "the next bit is different".
+  - at: 158.0
+    stage: 4
+    spawn:
+      - { enemy: bomber, count: 3, formation: slow_descent_centre, spacing: 1.0 }
+      - { enemy: gunship, count: 2, formation: mirror(loop_left), spacing: 0.9, delay: 1.0 }
+
+  # NEW: symmetric strafe wall — left + right dive_then_strafe staggered
+  # so the kid can fall back to the bottom-centre safe lane.
+  - at: 172.0
+    stage: 4
+    spawn:
+      - { enemy: fighter, count: 8, formation: dive_then_strafe, spacing: 0.25 }
+      - { enemy: fighter, count: 8, formation: mirror(dive_then_strafe), spacing: 0.25, delay: 0.5 }
+
+  # NEW: final crescendo — gunship pincer + drone figure-eight overlay.
+  # Designed to look chaotic but every formation is one the kid has seen.
+  - at: 188.0
+    stage: 4
+    spawn:
+      - { enemy: gunship, count: 2, formation: loop_left, spacing: 0.8 }
+      - { enemy: gunship, count: 2, formation: mirror(loop_left), spacing: 0.8, delay: 0.4 }
+      - { enemy: drone, count: 8, formation: figure_eight_centre, spacing: 0.2, delay: 1.5 }
+
   # ───────── Boss ─────────
-  - at: 165.0
+  - at: 210.0
     stage: boss
     boss: boss_01
