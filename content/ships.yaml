@@ -32,50 +32,94 @@ ships:
       primary: pulse_lvl1
       bomb: shockwave
 
-# Weapon definitions. The slice has one weapon tree (pulse) with 3 levels:
-# lvl1 base, lvl2 wider spread, lvl3 widest spread + back shot.
+# Weapon definitions. Five-tier pulse tree. Each tier should change
+# *kind* (twin / spread / tail / wide+tail / heavy), not just bullet
+# count. Sprite colours walk cyan → magenta → orange so the kid can
+# read his current tier without looking at the HUD. See
+# docs/decisions/weapon-progression-research.md for the rationale.
 weapons:
-  # Level-1 starter weapon — deliberately modest. Small pellet, slower
-  # fire rate (kid playtest 2026-04-27: original lvl1 looked like an
-  # upgraded weapon already).
+  # ─── Tier 1 — starter pellet ───────────────────────────────────────
+  # Deliberately modest. Small pellet, slower fire rate (kid playtest
+  # 2026-04-27: original lvl1 looked like an upgraded weapon already).
+  # Untouched by the 5-tier rework.
   pulse_lvl1:
     type: bullet
     sprite: projectiles/pulse_basic.png
     damage: 1
     speed: 600
-    fire_rate: 5.0          # shots/sec — was 8.0, gives upgrades headroom
+    fire_rate: 5.0          # shots/sec — gives upgrades headroom
     pattern: [{ angle_deg: 0, offset_x: 0, offset_y: -8 }]
 
-  # Level-2: thicker beam, faster fire, twin shots.
-  # Damage 3 (was 2) — kid playtest #5: kills should accelerate noticeably.
+  # ─── Tier 2 — Galaga twin-shot ────────────────────────────────────
+  # Two parallel cyan beams — the "Dual Fighter" feel. Same straight
+  # column as T1 but doubled, so the firing footprint *widens*
+  # immediately on upgrade.
   pulse_lvl2:
     type: bullet
-    sprite: projectiles/pulse_mid.png
-    damage: 3
-    speed: 720
-    fire_rate: 8.0
+    sprite: projectiles/pulse_lvl2.png
+    damage: 2
+    speed: 660
+    fire_rate: 7.0
     pattern:
-      - { angle_deg: -6, offset_x: -10, offset_y: -8 }
-      - { angle_deg:  6, offset_x:  10, offset_y: -8 }
+      - { angle_deg: 0, offset_x: -8, offset_y: -8 }
+      - { angle_deg: 0, offset_x:  8, offset_y: -8 }
 
-  # Level-3: thick high-energy beam, fastest fire, triple-shot + tail.
-  # Damage 5 (was 2) — gunship (12 HP) drops in ~3 hits, fighter in 1.
+  # ─── Tier 3 — Gradius "Double" ────────────────────────────────────
+  # Twin core + two diagonal pellets opening the firing arc.
+  # Sprite shifts cyan → magenta to signal the tier jump.
   pulse_lvl3:
     type: bullet
-    sprite: projectiles/pulse_strong.png
-    damage: 5
-    speed: 760
-    fire_rate: 11.0
+    sprite: projectiles/pulse_lvl3.png
+    damage: 3
+    speed: 700
+    fire_rate: 9.0
     pattern:
-      - { angle_deg: -10, offset_x: -14, offset_y:  -8 }
-      - { angle_deg:   0, offset_x:   0, offset_y: -10 }
-      - { angle_deg:  10, offset_x:  14, offset_y:  -8 }
+      - { angle_deg:   0, offset_x:  -8, offset_y: -8 }
+      - { angle_deg:   0, offset_x:   8, offset_y: -8 }
+      - { angle_deg: -12, offset_x: -14, offset_y: -6 }
+      - { angle_deg:  12, offset_x:  14, offset_y: -6 }
+
+  # ─── Tier 4 — R-Type pod (front + tail) ───────────────────────────
+  # Wider spread + tail shot for stragglers behind the player on
+  # diagonal formations. Magenta-orange sprite — visibly hotter than T3.
+  pulse_lvl4:
+    type: bullet
+    sprite: projectiles/pulse_lvl4.png
+    damage: 4
+    speed: 740
+    fire_rate: 10.0
+    pattern:
+      - { angle_deg:   0, offset_x:  -8, offset_y: -10 }
+      - { angle_deg:   0, offset_x:   8, offset_y: -10 }
+      - { angle_deg: -16, offset_x: -16, offset_y:  -6 }
+      - { angle_deg:  16, offset_x:  16, offset_y:  -6 }
       - { angle_deg: 180, offset_x:   0, offset_y:  10 }   # tail shot
+
+  # ─── Tier 5 — superweapon ─────────────────────────────────────────
+  # Heavy core beam, twin inner beams, twin wide diagonals, twin
+  # tails. Largest sprite (white-hot orange with halo). Total = 7
+  # bullets — the cap we set ourselves to keep readable. Damage leaps
+  # 4 → 6 so end-game feels like a different weapon. Gunship (12 HP)
+  # dies in 2 core hits; fighter (3 HP) dies in 1.
+  pulse_lvl5:
+    type: bullet
+    sprite: projectiles/pulse_lvl5.png
+    damage: 6
+    speed: 780
+    fire_rate: 12.0
+    pattern:
+      - { angle_deg:   0, offset_x:   0, offset_y: -14 }   # fat core
+      - { angle_deg:   0, offset_x:  -8, offset_y: -10 }   # inner-L
+      - { angle_deg:   0, offset_x:   8, offset_y: -10 }   # inner-R
+      - { angle_deg: -18, offset_x: -18, offset_y:  -6 }   # outer-L
+      - { angle_deg:  18, offset_x:  18, offset_y:  -6 }   # outer-R
+      - { angle_deg: 165, offset_x:  -6, offset_y:  10 }   # tail-L
+      - { angle_deg: 195, offset_x:   6, offset_y:  10 }   # tail-R
 
 # Weapon-tree progression. Picking up a `pickup_powerup` advances by one
 # level; cap at the highest tier; lost on death (back to base).
 weapon_tree:
-  pulse: [pulse_lvl1, pulse_lvl2, pulse_lvl3]
+  pulse: [pulse_lvl1, pulse_lvl2, pulse_lvl3, pulse_lvl4, pulse_lvl5]
 
 # Bomb definition. Spec §5 — 2 per life by default.
 bombs:
