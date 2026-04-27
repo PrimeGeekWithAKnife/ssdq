@@ -134,6 +134,9 @@ class SceneStack:
             self.toggle_pause()
             return
         if self._paused:
+            # Pause menu (kid playtest 2026-04-27): cancel button quits.
+            if inputs[0].cancel or inputs[1].cancel:
+                self._quit_requested = True
             return
         scene = self.top()
         if scene is None:

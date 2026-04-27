@@ -47,10 +47,11 @@ weapons:
     pattern: [{ angle_deg: 0, offset_x: 0, offset_y: -8 }]
 
   # Level-2: thicker beam, faster fire, twin shots.
+  # Damage 3 (was 2) — kid playtest #5: kills should accelerate noticeably.
   pulse_lvl2:
     type: bullet
     sprite: projectiles/pulse_mid.png
-    damage: 2                # also hits harder per round
+    damage: 3
     speed: 720
     fire_rate: 8.0
     pattern:
@@ -58,10 +59,11 @@ weapons:
       - { angle_deg:  6, offset_x:  10, offset_y: -8 }
 
   # Level-3: thick high-energy beam, fastest fire, triple-shot + tail.
+  # Damage 5 (was 2) — gunship (12 HP) drops in ~3 hits, fighter in 1.
   pulse_lvl3:
     type: bullet
     sprite: projectiles/pulse_strong.png
-    damage: 2
+    damage: 5
     speed: 760
     fire_rate: 11.0
     pattern:

@@ -262,6 +262,14 @@ class LevelScene(Scene):
         self.app.last_p1_score = self._session.scores.snapshot().p1
         self.app.last_p2_score = self._session.scores.snapshot().p2
         self.app.completed_level = self._level_completed
+        # Sweep ALL level entities so they don't ghost into the next scene —
+        # kid playtest #6: "ghost ship of me on the screen where my last
+        # position was". The world is shared across the scene stack; if
+        # we don't clear, player ships, enemies, bullets, pickups, telegraphs,
+        # explosions and bombs all persist into GameOverScene → TitleScene
+        # → next LevelScene.
+        for eid in list(world.alive_entities()):
+            world.despawn(eid)
 
     # ───────── per-tick ─────────
 
@@ -359,7 +367,9 @@ class LevelScene(Scene):
             CircleHitbox(radius=ship.hitbox_radius),
             FactionTag(Faction.PLAYER),
             PlayerOwned(slot),
-            Sprite(path=ship.sprite, layer=10),
+            # Scale 0.66 (a third smaller) per kid playtest #8 — Kenney
+            # ship sprite ~98px → ~65px on screen.
+            Sprite(path=ship.sprite, layer=10, scale=0.66),
             PlayerShip(slot=slot, weapon_cooldown=0.0),
         )
         self._player_entities[slot] = eid
@@ -726,8 +736,24 @@ class LevelScene(Scene):
                 self.app.audio.play_sfx("explosion")
 
     def _transition_boss_phase(self, world: World, boss_state: BossState) -> None:
+        # Visual: spawn explosions at BOTH the old and new positions so the
+        # boss reads as "warping" rather than teleporting silently
+        # (kid playtest #4: "boss disappear and reappear at end of screen").
+        bundle = self.app.content
+        old_pos = world.must_get(boss_state.entity, Position).pos
+        new_phase: BossPhaseDef = boss_state.boss.phases[boss_state.phase_index + 1]
+        new_formation = bundle.formations.get(new_phase.formation)
+        if new_formation is not None:
+            new_pos = evaluate_path(new_formation, 0.0).pos
+            self._spawn_explosion(world, old_pos, scale=2)
+            self._spawn_explosion(world, new_pos, scale=2)
+            # Telegraph at the new position so the player sees where to look.
+            world.spawn(
+                BossTelegraph(pos=new_pos, radius=72.0, colour=(255, 200, 60)),
+                TimeToLive(ticks=30),
+            )
+            self.app.audio.play_sfx("explosion", volume=0.6)
         boss_state.phase_index += 1
-        new_phase: BossPhaseDef = boss_state.boss.phases[boss_state.phase_index]
         boss_state.shooter = EnemyShooter(beats=new_phase.fire_beats)
         boss_state.path_t0 = self._sim_time
         boss_state.phase_hp_remaining = new_phase.hp
@@ -981,7 +1007,8 @@ class LevelScene(Scene):
             Velocity(Vec2(0.0, pdef.fall_speed)),
             CircleHitbox(radius=pdef.hitbox_radius * 1.6),  # bigger hit area too
             FactionTag(Faction.PICKUP),
-            Sprite(path=pdef.sprite, layer=5, scale=2.0),
+            # Scale 1.33 — was 2.0; kid playtest #3 said "third smaller".
+            Sprite(path=pdef.sprite, layer=5, scale=1.33),
             PickupHalo(radius=28.0, colour=halo_colour),
             PickupTag(pickup_name=name),
             TimeToLive(ticks=600),  # 10 seconds at 60 Hz

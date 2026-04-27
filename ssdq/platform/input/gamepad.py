@@ -16,16 +16,23 @@ Behaviour summary (spec §8.1, §8.2):
 Button mapping is the Xbox-360 layout that pygame-CE reports for 8BitDo,
 Steam Deck Controller (in XInput mode) and most generic XInput pads:
 
-==================  ====
+==================  =========================================
 Button              Index
-==================  ====
+==================  =========================================
 A (fire / confirm)   0
 B (cancel)           1
 X (bomb)             2
-Y (unused)           3
+Y (also bomb)        3
+LB / RB (bomb)       4 / 5
 Back                 6
 Start (pause)        7
-==================  ====
+==================  =========================================
+
+**Bomb on multiple buttons** — kid playtest 2026-04-27 reported that no
+button activated bombs on a Gamesir T4n Lite. Different controllers
+sometimes shuffle the X/Y/LB/RB indices, so we accept any of those four
+as a bomb press to maximise the chance the kid lands on something that
+works.
 """
 
 from __future__ import annotations
@@ -44,8 +51,13 @@ BUTTON_A: int = 0
 BUTTON_B: int = 1
 BUTTON_X: int = 2
 BUTTON_Y: int = 3
+BUTTON_LB: int = 4
+BUTTON_RB: int = 5
 BUTTON_BACK: int = 6
 BUTTON_START: int = 7
+
+# Buttons that all map to "bomb" — see module docstring.
+BOMB_BUTTONS: tuple[int, ...] = (BUTTON_X, BUTTON_Y, BUTTON_LB, BUTTON_RB)
 
 # Left-stick axis indices.
 AXIS_LX: int = 0
@@ -76,15 +88,16 @@ class _PadState:
     """Per-pad edge-detection bookkeeping.
 
     We only remember the previous-tick value for buttons that need
-    edge-detection; the rest are sampled live each tick.
+    edge-detection; the rest are sampled live each tick. `prev_bomb`
+    tracks the OR of all bomb-mapped buttons (X, Y, LB, RB).
     """
 
-    __slots__ = ("prev_a", "prev_b", "prev_pause", "prev_x")
+    __slots__ = ("prev_a", "prev_b", "prev_bomb", "prev_pause")
 
     def __init__(self) -> None:
         self.prev_a: bool = False
         self.prev_b: bool = False
-        self.prev_x: bool = False
+        self.prev_bomb: bool = False
         self.prev_pause: bool = False
 
 
@@ -207,11 +220,14 @@ class GamepadProvider:
 
         a = _safe_button(pad, BUTTON_A)
         b = _safe_button(pad, BUTTON_B)
-        x = _safe_button(pad, BUTTON_X)
+        # Bomb = OR of every mapped bomb button (X / Y / LB / RB) — gamepad
+        # button indices vary across vendors and we don't want the kid stuck
+        # because their pad puts X at index 3 instead of 2.
+        bomb_held = any(_safe_button(pad, btn) for btn in BOMB_BUTTONS)
         start = _safe_button(pad, BUTTON_START)
 
         # Edge-triggered: true only on 0 -> 1 transition.
-        bomb = x and not state.prev_x
+        bomb = bomb_held and not state.prev_bomb
         pause = start and not state.prev_pause
         # A doubles as both held-fire and edge-triggered confirm in menus.
         confirm = a and not state.prev_a
@@ -220,7 +236,7 @@ class GamepadProvider:
         # Update prev-tick state for next poll.
         state.prev_a = a
         state.prev_b = b
-        state.prev_x = x
+        state.prev_bomb = bomb_held
         state.prev_pause = start
 
         return PlayerInput(

@@ -35,7 +35,8 @@ _GROUND_COLOUR = (40, 40, 60)
 
 # Auto-advance ceiling per page (in 60Hz sim ticks). Smoke runs hold inputs
 # continuously, so without this they would only ever clear page 1.
-_AUTO_ADVANCE_TICKS = 240  # 4 sim seconds at 60Hz
+_AUTO_ADVANCE_TICKS = 540  # 9 sim seconds at 60Hz — kid playtest #2: 4s
+# wasn't long enough for an 8-year-old to read the page.
 
 _SPRITES_DIR = Path("content") / "assets" / "sprites"
 
