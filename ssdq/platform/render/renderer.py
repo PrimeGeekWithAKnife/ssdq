@@ -424,17 +424,104 @@ class Renderer:
             return  # one banner is enough
 
     def _draw_bomb_actives(self, world: World, surface: pygame.Surface) -> None:
+        """Expanding shockwave + screen flash + radial sparks.
+
+        Driven entirely by per-bomb fields:
+          * ``radius`` — current animated outer ring (px).
+          * ``aoe_radius`` — full damage / max ring radius.
+          * ``visual_progress`` — 0..1 across the bomb's duration. Drives
+            the ring alpha, flash decay, and spark animation. No RNG —
+            spark angles are evenly spaced so the visual is deterministic
+            and identical on every machine (Pi 5 included).
+        """
+        import math as _math
+
         comp_t = _optional_component_type("BombActive")
         if comp_t is None:
             return
         for _eid, bomb in world.query1(comp_t):
             pos = _attr_vec2(bomb, ("pos", "centre", "center"))
-            radius = _attr_float(bomb, ("radius",), default=0.0)
-            if pos is None or radius <= 0.0:
+            if pos is None:
                 continue
-            pygame.draw.circle(
-                surface, (255, 255, 200), (int(pos[0]), int(pos[1])), int(radius), width=3
+            radius = _attr_float(bomb, ("radius",), default=0.0)
+            aoe_radius = _attr_float(bomb, ("aoe_radius",), default=radius)
+            progress = _attr_float(bomb, ("visual_progress",), default=0.0)
+            progress = max(0.0, min(1.0, progress))
+            if aoe_radius <= 0.0:
+                continue
+
+            cx, cy = int(pos[0]), int(pos[1])
+            sw, sh = surface.get_size()
+
+            # 1. brief white-hot screen flash (first ~12% of life).
+            if progress < 0.12:
+                flash_t = progress / 0.12
+                flash_alpha = int(220 * (1.0 - flash_t))
+                if flash_alpha > 0:
+                    flash = pygame.Surface((sw, sh), pygame.SRCALPHA)
+                    flash.fill((255, 255, 240, flash_alpha))
+                    surface.blit(flash, (0, 0))
+
+            # 2. expanding outer ring + trailing inner ring.
+            outer_r = max(2, int(radius))
+            ring_w = max(3, int(8 * (1.0 - progress) + 2))
+            ring_alpha = int(220 * (1.0 - progress) ** 2 + 35)
+            ring_surf = pygame.Surface(
+                (outer_r * 2 + 4, outer_r * 2 + 4), pygame.SRCALPHA
             )
+            pygame.draw.circle(
+                ring_surf,
+                (255, 240, 180, ring_alpha),
+                (outer_r + 2, outer_r + 2),
+                outer_r,
+                width=ring_w,
+            )
+            inner_alpha = int(140 * (1.0 - progress))
+            if inner_alpha > 0:
+                pygame.draw.circle(
+                    ring_surf,
+                    (255, 255, 255, inner_alpha),
+                    (outer_r + 2, outer_r + 2),
+                    outer_r,
+                    width=max(1, ring_w // 2),
+                )
+            surface.blit(ring_surf, (cx - outer_r - 2, cy - outer_r - 2))
+
+            trail_r = int(outer_r * 0.7)
+            if trail_r > 4:
+                trail_alpha = int(120 * (1.0 - progress))
+                trail_surf = pygame.Surface(
+                    (trail_r * 2 + 2, trail_r * 2 + 2), pygame.SRCALPHA
+                )
+                pygame.draw.circle(
+                    trail_surf,
+                    (255, 200, 120, trail_alpha),
+                    (trail_r + 1, trail_r + 1),
+                    trail_r,
+                    width=2,
+                )
+                surface.blit(trail_surf, (cx - trail_r - 1, cy - trail_r - 1))
+
+            # 3. radial spark dots (deterministic — 12 evenly spaced).
+            n_sparks = 12
+            spark_dist = aoe_radius * min(1.0, progress * 1.15)
+            spark_alpha = int(255 * (1.0 - progress))
+            spark_size = max(2, int(5 * (1.0 - progress) + 2))
+            if spark_alpha > 0 and spark_dist > 4:
+                for i in range(n_sparks):
+                    angle = (i / n_sparks) * 2 * _math.pi
+                    sx = int(cx + _math.cos(angle) * spark_dist)
+                    sy = int(cy + _math.sin(angle) * spark_dist)
+                    spark = pygame.Surface(
+                        (spark_size * 2, spark_size * 2), pygame.SRCALPHA
+                    )
+                    pygame.draw.circle(
+                        spark,
+                        (255, 230, 160, spark_alpha),
+                        (spark_size, spark_size),
+                        spark_size,
+                    )
+                    surface.blit(spark, (sx - spark_size, sy - spark_size))
 
 
 # ---------------- duck-typed component lookup ----------------

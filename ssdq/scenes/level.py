@@ -145,15 +145,39 @@ class PickupTag:
 class BombActive:
     """An active bomb shockwave — drawn by renderer, damages each enemy once.
 
-    `pos` and `radius` are duck-typed by Renderer._draw_bomb_actives.
-    `_hit` tracks already-damaged enemy entity IDs to prevent the bomb
-    dealing damage every tick of its duration (would otherwise be DPS).
+    Geometry:
+      * ``pos`` — detonation origin (player position at fire time).
+      * ``aoe_radius`` — fixed damage radius for the whole lifetime. Every
+        enemy whose centre lands inside this circle takes the bomb hit
+        once. Half-screen (~360px on 1280×720) reads as a "screen-clear".
+      * ``radius`` — animated visual outer ring radius. Expands from 0 to
+        ``aoe_radius`` over ``duration_total`` so the player sees the
+        shockwave race outwards. Duck-typed by the renderer (kept under
+        the ``radius`` name so the legacy renderer path still draws it).
+      * ``visual_progress`` — 0.0 at detonation, 1.0 at expiry. Drives the
+        ring/flash animation in the renderer (no RNG, deterministic).
+
+    ``_hit`` tracks already-damaged enemy entity IDs so the bomb deals
+    its damage exactly once per enemy across its full duration (a single
+    membership check; would otherwise become DPS).
     """
 
     pos: Vec2
-    radius: float
+    radius: float  # animated visual outer ring (px)
     duration_remaining: float
+    aoe_radius: float = 0.0  # fixed damage radius (px); falls back to radius
+    duration_total: float = 0.0  # original duration (s); falls back to duration_remaining
+    visual_progress: float = 0.0  # 0..1, advanced each tick by _tick_bombs
     _hit: set[int] = field(default_factory=set)
+
+    def __post_init__(self) -> None:
+        # Back-compat: if callers only set the (legacy) ``radius`` and
+        # ``duration_remaining`` fields, mirror them onto the explicit
+        # AoE / duration_total fields so the renderer animation works.
+        if self.aoe_radius <= 0.0:
+            self.aoe_radius = self.radius
+        if self.duration_total <= 0.0:
+            self.duration_total = max(self.duration_remaining, 0.001)
 
 
 @dataclass(frozen=True, slots=True)
@@ -499,8 +523,18 @@ class LevelScene(Scene):
         bundle = self.app.content
         ship = bundle.ships["vanguard" if slot == P1 else "vanguard_red"]
         bomb_def = bundle.bombs[ship.bomb]
+        # The visual ring expands from 0 → aoe_radius over the bomb's
+        # lifetime. The damage radius (aoe_radius) is fixed for the whole
+        # duration so a "screen-clearing" bomb feels its size from frame 1.
         world.spawn(
-            BombActive(pos=pos, radius=bomb_def.radius, duration_remaining=bomb_def.duration),
+            BombActive(
+                pos=pos,
+                radius=0.0,
+                duration_remaining=bomb_def.duration,
+                aoe_radius=bomb_def.radius,
+                duration_total=bomb_def.duration,
+                visual_progress=0.0,
+            ),
         )
         if bomb_def.clears_bullets:
             # Wipe all enemy bullets immediately.
@@ -867,6 +901,18 @@ class LevelScene(Scene):
 
     def _tick_bombs(self, world: World, dt: float) -> None:
         # Damage each enemy at most once per bomb, then decay duration.
+        #
+        # Damage model:
+        #   * non-boss enemies (MaxHealth.hp < 50, or no MaxHealth) take
+        #     the full ``bomb_def.damage`` (8) — comfortably one-shots
+        #     drones and most lvl-1 enemies (max ~12 HP).
+        #   * bosses (MaxHealth.hp >= 50) take 20% of their *current*
+        #     remaining HP — meaningful chunk that doesn't trivialise the
+        #     fight. Min 8 (the base damage) so bombs always feel useful.
+        #
+        # AoE: ``bomb.aoe_radius`` (~360 px on 1280×720 — half the shorter
+        # axis). Fixed for the whole bomb lifetime — every enemy whose
+        # centre lands inside the circle takes the hit once.
         bundle = self.app.content
         bomb_def = bundle.bombs[bundle.ships["vanguard"].bomb]
         for eid, bomb in list(world.query1(BombActive)):
@@ -877,14 +923,29 @@ class LevelScene(Scene):
                     continue
                 if not world.is_alive(enemy_eid):
                     continue
-                if not circles_overlap(bomb.pos, bomb.radius, e_pos.pos, 0.0):
+                if not circles_overlap(bomb.pos, bomb.aoe_radius, e_pos.pos, 0.0):
                     continue
                 bomb._hit.add(int(enemy_eid))
-                new_hp = hlth.hp - bomb_def.damage
+                # Boss-aware damage: 20% of current HP, floor at base.
+                max_hp = world.get(enemy_eid, MaxHealth)
+                if max_hp is not None and max_hp.hp >= 50:
+                    boss_dmg = max(bomb_def.damage, int(hlth.hp * 0.20))
+                    damage = boss_dmg
+                else:
+                    damage = bomb_def.damage
+                new_hp = hlth.hp - damage
                 world.replace(enemy_eid, Health(hp=new_hp))
                 if new_hp <= 0:
                     self._on_enemy_killed(world, enemy_eid, e_pos.pos)
+            # Advance animation: visual_progress goes 0 → 1 over the
+            # bomb's full duration; the visible ring radius eases out
+            # (sqrt) so it expands fast at first and lingers wide at
+            # the end — reads as "shockwave race outwards".
             bomb.duration_remaining -= dt
+            elapsed = max(0.0, bomb.duration_total - bomb.duration_remaining)
+            progress = max(0.0, min(1.0, elapsed / bomb.duration_total))
+            bomb.visual_progress = progress
+            bomb.radius = bomb.aoe_radius * math.sqrt(progress)
             if bomb.duration_remaining <= 0.0:
                 world.despawn(eid)
 
