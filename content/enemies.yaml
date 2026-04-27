@@ -20,7 +20,9 @@ enemies:
   # power-up set restricted to WEAPON BOOST and SPEED. Bomb / Health
   # are still defined and reachable on rare drops, but they're no
   # longer in the common pools so the kid sees the meaningful upgrades
-  # first. Wingman / missile / shield power-ups are backlogged.
+  # first. Shield (10s forcefield invulnerability) added 2026-04-27 per
+  # follow-up feedback — drops only from gunship / bomber so it feels
+  # earned. Wingman / missile power-ups remain backlogged.
   drone:
     sprite: enemies/drone.png
     hitbox_radius: 22         # was 14 — drone sprite ~50px
@@ -51,7 +53,7 @@ enemies:
     fire_beats: [1.4, 2.8, 4.2]
     score: 800
     drop_chance: 0.45
-    drop_pool: [pickup_powerup, pickup_speed, pickup_bomb]
+    drop_pool: [pickup_powerup, pickup_speed, pickup_bomb, pickup_shield]
 
   bomber:
     sprite: enemies/bomber.png
@@ -62,7 +64,7 @@ enemies:
     fire_beats: [2.0, 4.0]
     score: 600
     drop_chance: 0.40
-    drop_pool: [pickup_powerup, pickup_speed, pickup_health]
+    drop_pool: [pickup_powerup, pickup_speed, pickup_health, pickup_shield]
 
 # Boss definition. Phase inside the Level scene, not a separate scene
 # (per spec §4.4). Two phases per spec §2 DOD #4.
@@ -193,3 +195,14 @@ pickups:
     hitbox_radius: 14
     fall_speed: 80
     effect: extra_life          # the 1-up
+
+  # Shield: 10 seconds of total invulnerability via a forcefield ring.
+  # Stacking refreshes the timer (does NOT add) — collecting two shields
+  # back-to-back gives you 10 seconds, not 20. Drops from chunkier
+  # enemies (gunship, bomber) so it feels earned, not handed out.
+  pickup_shield:
+    sprite: pickups/shield.png
+    hitbox_radius: 14
+    fall_speed: 80
+    effect: shield
+    duration: 10.0             # seconds — per user feedback

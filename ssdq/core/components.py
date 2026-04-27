@@ -123,6 +123,20 @@ class PickupHalo:
 
 
 @dataclass(frozen=True, slots=True)
+class ShieldHalo:
+    """Tag: render a pulsing translucent forcefield ring around this entity.
+
+    Used by the SHIELD pickup — the level scene attaches one to the
+    player ship while ``PlayerPowerupState.shield`` is active and
+    removes it on expiry. Colour is cyan by convention; the renderer
+    reads ``base_radius`` and pulses the ring radius + alpha.
+    """
+
+    base_radius: float
+    colour: tuple[int, int, int] = (80, 220, 255)
+
+
+@dataclass(frozen=True, slots=True)
 class FloatingText:
     """A short-lived text label that drifts upward and fades out.
 

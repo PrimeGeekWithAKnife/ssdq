@@ -18,6 +18,7 @@ from ssdq.core.powerups.drops import roll_drop
 from ssdq.core.powerups.state import (
     PickupResult,
     PlayerPowerupState,
+    Shield,
     SpeedBoost,
     WeaponState,
     apply_pickup,
@@ -26,6 +27,7 @@ from ssdq.core.powerups.state import (
 __all__ = [
     "PickupResult",
     "PlayerPowerupState",
+    "Shield",
     "SpeedBoost",
     "WeaponState",
     "apply_pickup",

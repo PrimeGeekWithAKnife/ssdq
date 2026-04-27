@@ -36,6 +36,7 @@ from ssdq.core.components import (
     MaxHealth,
     PickupHalo,
     Position,
+    ShieldHalo,
     Sprite,
 )
 from ssdq.core.ecs import World
@@ -115,6 +116,9 @@ class Renderer:
         # 3+4. entity sprites (incl. particles, bullets) — single deterministic pass
         for item in self._gather_sprite_items(world):
             self._blit_item(surface, item)
+
+        # 4.4 shield halos (over the player sprite — forcefield "engulfs" the ship)
+        self._draw_shield_halos(world, surface, tick)
 
         # 4.5 hit-flash overlay (multi-HP enemies that just took damage)
         self._draw_hit_flashes(world, surface)
@@ -215,6 +219,33 @@ class Renderer:
             halo_surf = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
             pygame.draw.circle(halo_surf, (*halo.colour, alpha), (radius, radius), radius)
             surface.blit(halo_surf, (int(pos.pos.x) - radius, int(pos.pos.y) - radius))
+
+    def _draw_shield_halos(self, world: World, surface: pygame.Surface, tick: int) -> None:
+        """Translucent pulsing forcefield ring around shielded player ships.
+
+        Drawn on top of the player sprite so the field reads as
+        "engulfing" the ship. Two concentric rings — a soft fill disc
+        and a brighter outline — both pulsing on the global tick so
+        every shielded ship pulses in sync.
+        """
+        import math
+
+        pulse = 0.85 + 0.15 * math.sin(tick * 0.22)
+        for _eid, pos, halo in world.query2(Position, ShieldHalo):
+            radius = int(halo.base_radius * pulse)
+            if radius <= 0:
+                continue
+            # Inner translucent fill — gives the "engulfed" look without
+            # hiding the sprite underneath. Alpha 50 reads as gauzy.
+            fill_alpha = int(60 * pulse)
+            ring_alpha = int(180 * pulse)
+            field_surf = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
+            pygame.draw.circle(field_surf, (*halo.colour, fill_alpha), (radius, radius), radius)
+            # Bright outline ring — the "force" boundary.
+            pygame.draw.circle(
+                field_surf, (*halo.colour, ring_alpha), (radius, radius), radius, width=2
+            )
+            surface.blit(field_surf, (int(pos.pos.x) - radius, int(pos.pos.y) - radius))
 
     def _draw_floating_text(self, world: World, surface: pygame.Surface) -> None:
         """Drift-up + fade short-lived text labels (pickup feedback)."""

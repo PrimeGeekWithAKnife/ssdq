@@ -180,6 +180,14 @@ licence = "CC0"
 url     = "https://opengameart.org/content/space-shooter-redux"
 notes   = "pill_red.png — extra-life pickup."
 
+[[entry]]
+path    = "content/assets/sprites/pickups/shield.png"
+source  = "Original"
+author  = "Claude (procedurally drawn — 24x24 cyan hexagon shield icon)"
+licence = "CC0"
+url     = ""
+notes   = "Generated 2026-04-27 for the SHIELD power-up (10s forcefield invulnerability). Bright cyan hexagon with white outline + central core, drawn via PIL."
+
 # ---------------------------------------------------------------------------
 # Sprites — particles
 # ---------------------------------------------------------------------------
