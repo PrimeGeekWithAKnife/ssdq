@@ -23,6 +23,15 @@ enemies:
   # first. Shield (10s forcefield invulnerability) added 2026-04-27 per
   # follow-up feedback — drops only from gunship / bomber so it feels
   # earned. Wingman / missile power-ups remain backlogged.
+  # Task #9 drop-pool note (kid-playtest balance):
+  #   bomb / shield / weapon_upgrade  ~30% combined  (frequent, useful)
+  #   ship_speed / weapon_speed       ~30% combined  (mid)
+  #   drone / missile                 ~20% combined  (rare-ish)
+  #   extra_life                      ~5%            (very rare)
+  # Drop pools are uniform-pick over a tuple, so weighting is done by
+  # repetition — see _LIGHT_POOL / _HEAVY_POOL conceptually below.
+  # Light enemies (drone/fighter) drop the friendlier subset — no
+  # extra_life, no missile/drone (those need bomber/gunship to "earn").
   drone:
     sprite: enemies/drone.png
     hitbox_radius: 22         # was 14 — drone sprite ~50px
@@ -31,7 +40,18 @@ enemies:
     weapon: null
     score: 100
     drop_chance: 0.10         # bumped a touch
-    drop_pool: [pickup_powerup, pickup_speed]
+    # Light pool — bomb/shield/weapon_upgrade common (3 each = 9/15),
+    # ship_speed/weapon_speed mid (2 each = 4/15), missile rare (1/15),
+    # rest (drone/extra_life) reserved for chunky enemies.
+    drop_pool: [
+      pickup_powerup, pickup_powerup, pickup_powerup,
+      pickup_bomb, pickup_bomb, pickup_bomb,
+      pickup_shield, pickup_shield, pickup_shield,
+      pickup_ship_speed, pickup_ship_speed,
+      pickup_weapon_speed, pickup_weapon_speed,
+      pickup_missile,
+      pickup_speed,
+    ]
 
   fighter:
     sprite: enemies/fighter.png
@@ -42,8 +62,23 @@ enemies:
     fire_beats: [1.0, 2.2]      # path-time seconds at which to fire
     score: 250
     drop_chance: 0.20
-    drop_pool: [pickup_powerup, pickup_speed]
+    drop_pool: [
+      pickup_powerup, pickup_powerup, pickup_powerup,
+      pickup_bomb, pickup_bomb, pickup_bomb,
+      pickup_shield, pickup_shield, pickup_shield,
+      pickup_ship_speed, pickup_ship_speed,
+      pickup_weapon_speed, pickup_weapon_speed,
+      pickup_missile,
+      pickup_speed,
+    ]
 
+  # Heavy pool: full 20-slot mix matching the kid-playtest weights.
+  # bomb/shield/weapon_upgrade  = 4 each = 12/20  (~60% combined inside the pool)
+  # ship_speed / weapon_speed   = 2 each =  4/20  (~20%)
+  # drone / missile             = 1 each =  2/20  (~10%)
+  # extra_life                  = 1     =      1/20 (~5%)
+  # Plus 1 legacy pickup_speed slot to keep the existing speed-boost
+  # flavour on the drop table.
   gunship:
     sprite: enemies/gunship.png
     hitbox_radius: 32         # was 22
@@ -53,7 +88,17 @@ enemies:
     fire_beats: [1.4, 2.8, 4.2]
     score: 800
     drop_chance: 0.45
-    drop_pool: [pickup_powerup, pickup_speed, pickup_bomb, pickup_shield]
+    drop_pool: [
+      pickup_powerup, pickup_powerup, pickup_powerup, pickup_powerup,
+      pickup_bomb, pickup_bomb, pickup_bomb, pickup_bomb,
+      pickup_shield, pickup_shield, pickup_shield, pickup_shield,
+      pickup_ship_speed, pickup_ship_speed,
+      pickup_weapon_speed, pickup_weapon_speed,
+      pickup_drone,
+      pickup_missile,
+      pickup_health,
+      pickup_speed,
+    ]
 
   bomber:
     sprite: enemies/bomber.png
@@ -64,7 +109,17 @@ enemies:
     fire_beats: [2.0, 4.0]
     score: 600
     drop_chance: 0.40
-    drop_pool: [pickup_powerup, pickup_speed, pickup_health, pickup_shield]
+    drop_pool: [
+      pickup_powerup, pickup_powerup, pickup_powerup, pickup_powerup,
+      pickup_bomb, pickup_bomb, pickup_bomb, pickup_bomb,
+      pickup_shield, pickup_shield, pickup_shield, pickup_shield,
+      pickup_ship_speed, pickup_ship_speed,
+      pickup_weapon_speed, pickup_weapon_speed,
+      pickup_drone,
+      pickup_missile,
+      pickup_health,
+      pickup_speed,
+    ]
 
 # Boss definition. Phase inside the Level scene, not a separate scene
 # (per spec §4.4). Two phases per spec §2 DOD #4.
@@ -233,3 +288,44 @@ pickups:
     fall_speed: 80
     effect: shield
     duration: 10.0             # seconds — per user feedback
+
+  # Task #9 — kid-playtest pool of 8 power-ups.
+  # Permanent +15% ship-speed bump per pickup, capped at +60% (the
+  # state layer enforces the cap so a flood of pickups can't make the
+  # ship uncontrollable). Sprite: mint placeholder.
+  pickup_ship_speed:
+    sprite: pickups/ship_speed.png
+    hitbox_radius: 14
+    fall_speed: 80
+    effect: ship_speed
+    ship_speed_step: 0.15
+
+  # 15-second rate-of-fire boost — divides the weapon cooldown by
+  # `fire_rate_multiplier` while active. Refresh-on-pickup (matches
+  # Shield / SpeedBoost stacking).
+  pickup_weapon_speed:
+    sprite: pickups/weapon_speed.png
+    hitbox_radius: 14
+    fall_speed: 80
+    effect: weapon_speed
+    fire_rate_multiplier: 1.5
+    duration: 15.0
+
+  # Drone pickup — inventory only. The level scene increments
+  # AppState.drones_pending[slot]; the DRONE agent (future work)
+  # owns the entity spawn pipeline.
+  pickup_drone:
+    sprite: pickups/drone.png
+    hitbox_radius: 14
+    fall_speed: 80
+    effect: drone
+
+  # Missile pickup — +3 missile charges per pickup. Inventory only.
+  # AppState.missile_charges[slot] is read by the EQUIPPABLE agent
+  # (future work).
+  pickup_missile:
+    sprite: pickups/missile.png
+    hitbox_radius: 14
+    fall_speed: 80
+    effect: missile
+    missile_count: 3

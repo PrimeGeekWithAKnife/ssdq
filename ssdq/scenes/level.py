@@ -446,10 +446,15 @@ class LevelScene(Scene):
             if self._session.lifecycle(slot).state == LifecycleState.OUT:
                 self._session.try_consume_continue(slot)
 
-        # 2. Speed-boost + shield decay; sync ShieldHalo on player ships
+        # 2. Speed-boost + shield + fire-rate decay; sync ShieldHalo on
+        # player ships. The fire-rate boost is the WEAPON_SPEED pickup's
+        # timer (Task #9); ship_speed_bonus is permanent so doesn't tick.
         for slot in (P1, P2):
-            self._powerup_states[slot] = self._powerup_states[slot].tick_speed_boost(dt)
-            self._powerup_states[slot] = self._powerup_states[slot].tick_shield_decay(dt)
+            ps = self._powerup_states[slot]
+            ps = ps.tick_speed_boost(dt)
+            ps = ps.tick_shield_decay(dt)
+            ps = ps.tick_fire_rate_boost(dt)
+            self._powerup_states[slot] = ps
         self._sync_shield_halos(world)
 
         # 3. Player input → movement, fire, bomb
@@ -555,7 +560,10 @@ class LevelScene(Scene):
         bundle = self.app.content
         ship = bundle.ships["vanguard" if slot == P1 else "vanguard_red"]
         pstate = self._powerup_states[slot]
+        # Multiplicative: temporary SPEED_UP boost on top of the
+        # permanent SHIP_SPEED bonus (capped at +60% by the state layer).
         speed_mult = pstate.speed_boost.multiplier if pstate.speed_boost.active else 1.0
+        speed_mult *= 1.0 + pstate.ship_speed_bonus
         max_speed = ship.max_speed * speed_mult
 
         # Movement
@@ -576,7 +584,9 @@ class LevelScene(Scene):
         # Fire
         if inp.fire and new_cooldown <= 0.0 and lifecycle.state == LifecycleState.ALIVE:
             self._fire_player_weapon(world, slot, ship.primary_weapon, pstate.weapon, new_pos)
-            # Set cooldown from the fire_rate of the *current weapon level*.
+            # Set cooldown from the fire_rate of the *current weapon level*,
+            # then divide by the WEAPON_SPEED boost multiplier (Task #9)
+            # so the boost shrinks the gap between shots while active.
             tree = bundle.weapon_trees.get(pstate.weapon.tree, ())
             if tree:
                 lvl = min(pstate.weapon.level, len(tree) - 1)
@@ -584,6 +594,8 @@ class LevelScene(Scene):
                 new_cooldown = 1.0 / max(0.001, weapon_def.fire_rate)
             else:
                 new_cooldown = 0.125
+            if pstate.fire_rate_boost.active:
+                new_cooldown /= max(0.001, pstate.fire_rate_boost.multiplier)
         world.replace(eid, PlayerShip(slot=slot, weapon_cooldown=new_cooldown))
 
         # Bomb
@@ -1226,6 +1238,11 @@ class LevelScene(Scene):
             PickupEffect.EXTRA_BOMB: (255, 120, 60),  # orange
             PickupEffect.EXTRA_LIFE: (255, 100, 160),  # pink
             PickupEffect.SHIELD: (140, 255, 240),  # bright teal/cyan
+            # Task #9 — new pickup pool.
+            PickupEffect.SHIP_SPEED: (120, 240, 200),  # mint
+            PickupEffect.WEAPON_SPEED: (255, 200, 80),  # warm gold
+            PickupEffect.DRONE: (180, 200, 255),  # pale blue
+            PickupEffect.MISSILE: (255, 180, 100),  # rust orange
         }.get(pdef.effect, (200, 200, 200))
         world.spawn(
             Position(pos),
@@ -1271,6 +1288,20 @@ class LevelScene(Scene):
         # Lift extra-life into the lifecycle layer.
         if result.extra_life:
             self._session.grant_extra_life(slot)
+        # Task #9 — equippable / agent-owned inventory increments.
+        # The level scene only mutates the AppState counter; the
+        # downstream agent (DRONE / EQUIPPABLE) drains it.
+        if result.drone_pickup:
+            self.app.drones_pending[slot] = self.app.drones_pending.get(slot, 0) + 1
+        if result.missile_charges_added > 0:
+            self.app.missile_charges[slot] = (
+                self.app.missile_charges.get(slot, 0) + result.missile_charges_added
+            )
+        if result.shield_charge_added:
+            # Auto-shield (10s forcefield) is preserved by `apply_pickup`
+            # so things still work pre-EQUIPPABLE merge — we ALSO bump
+            # the inventory counter that the EQUIPPABLE agent will read.
+            self.app.shield_charges[slot] = self.app.shield_charges.get(slot, 0) + 1
         # Floating-text feedback so the player knows what they got.
         pickup_pos = world.must_get(pickup_eid, Position).pos
         text, colour = self._floating_text_for_result(result)
@@ -1300,14 +1331,22 @@ class LevelScene(Scene):
         # import here.
         if getattr(result, "upgraded_weapon", False):
             return ("WEAPON UP!", (255, 220, 80))
+        if getattr(result, "weapon_speed_up", False):
+            return ("RAPID FIRE!", (255, 220, 120))
         if getattr(result, "speed_up", False):
             return ("SPEED!", (80, 220, 255))
+        if getattr(result, "ship_speed_up", False):
+            return ("+SPEED", (80, 200, 220))
         if getattr(result, "extra_bomb", False):
             return ("+1 BOMB", (255, 140, 80))
         if getattr(result, "extra_life", False):
             return ("+1 LIFE", (255, 120, 180))
         if getattr(result, "shield_up", False):
             return ("SHIELD!", (80, 220, 255))
+        if getattr(result, "missile_charges_added", 0) > 0:
+            return ("+MISSILES", (255, 200, 100))
+        if getattr(result, "drone_pickup", False):
+            return ("+DRONE", (180, 220, 255))
         return ("", (255, 255, 255))
 
     # ───────── helpers: respawn / culling / hud ─────────
@@ -1455,6 +1494,7 @@ class LevelScene(Scene):
         p2 = self._powerup_states[P2]
         lc1 = self._session.lifecycle(P1)
         lc2 = self._session.lifecycle(P2)
+        # Task #9 — surface AppState inventory counts onto the HUD.
         return HudCoopState(
             team_score=snap.team,
             p1=HudPlayerStats(
@@ -1462,12 +1502,18 @@ class LevelScene(Scene):
                 bombs=p1.bombs,
                 weapon_level=p1.weapon.level + 1,
                 score=snap.p1,
+                shield_charges=self.app.shield_charges.get(P1, 0),
+                missile_charges=self.app.missile_charges.get(P1, 0),
+                drones=self.app.drones_pending.get(P1, 0),
             ),
             p2=HudPlayerStats(
                 lives=lc2.lives,
                 bombs=p2.bombs,
                 weapon_level=p2.weapon.level + 1,
                 score=snap.p2,
+                shield_charges=self.app.shield_charges.get(P2, 0),
+                missile_charges=self.app.missile_charges.get(P2, 0),
+                drones=self.app.drones_pending.get(P2, 0),
             ),
         )
 

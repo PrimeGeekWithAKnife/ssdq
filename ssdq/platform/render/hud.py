@@ -36,6 +36,10 @@ _TEAM_COLOUR = (255, 240, 120)
 _P1_COLOUR = (120, 180, 255)
 _P2_COLOUR = (255, 140, 140)
 _HINT_COLOUR = (180, 180, 200)
+# Task #9 — inventory rows (shields/missiles/drones) read distinctly
+# from the lives/bombs row so the kid can tell at a glance which is
+# auto-spent vs equippable.
+_INVENTORY_COLOUR = (200, 220, 255)
 
 
 class Hud:
@@ -111,16 +115,27 @@ class Hud:
         x: int,
         anchor_left: bool,
     ) -> None:
-        lines = [
+        lines: list[tuple[str, tuple[int, int, int]]] = [
             (label, colour),
             (f"Lives: {stats.lives}", _TEXT_COLOUR),
             (f"Bombs: {stats.bombs}", _TEXT_COLOUR),
             (f"Weapon Lv {stats.weapon_level}", _TEXT_COLOUR),
-            (f"{stats.score:08d}", _TEXT_COLOUR),
         ]
+        # Task #9 inventory rows — only render when non-zero so a clean
+        # session doesn't clutter the panel with zeroed-out counters.
+        if stats.shield_charges:
+            lines.append((f"Shields: {stats.shield_charges}", _INVENTORY_COLOUR))
+        if stats.missile_charges:
+            lines.append((f"Missiles: {stats.missile_charges}", _INVENTORY_COLOUR))
+        if stats.drones:
+            lines.append((f"Drones: {stats.drones}", _INVENTORY_COLOUR))
+        # Score is always last so its position relative to the bottom
+        # of the panel is consistent regardless of inventory rows.
+        score_idx = len(lines)
+        lines.append((f"{stats.score:08d}", _TEXT_COLOUR))
         y = _PADDING
         for i, (text, col) in enumerate(lines):
-            font = self._panel_font if i < 4 else self._score_font
+            font = self._panel_font if i < score_idx else self._score_font
             rendered = font.render(text, True, col)
             if anchor_left:
                 rect = rendered.get_rect(topleft=(x, y))
@@ -134,13 +149,34 @@ class Hud:
 
 
 class _PlayerStats:
-    __slots__ = ("bombs", "lives", "score", "weapon_level")
+    __slots__ = (
+        "bombs",
+        "drones",
+        "lives",
+        "missile_charges",
+        "score",
+        "shield_charges",
+        "weapon_level",
+    )
 
-    def __init__(self, lives: int, bombs: int, weapon_level: int, score: int) -> None:
+    def __init__(
+        self,
+        lives: int,
+        bombs: int,
+        weapon_level: int,
+        score: int,
+        *,
+        shield_charges: int = 0,
+        missile_charges: int = 0,
+        drones: int = 0,
+    ) -> None:
         self.lives = lives
         self.bombs = bombs
         self.weapon_level = weapon_level
         self.score = score
+        self.shield_charges = shield_charges
+        self.missile_charges = missile_charges
+        self.drones = drones
 
 
 def _try_coop_state(world: World) -> Any | None:
@@ -173,4 +209,7 @@ def _player_stats(state: Any, slot_attr: str) -> _PlayerStats:
         bombs=_attr_int(p, "bombs"),
         weapon_level=_attr_int(p, "weapon_level") or 1,
         score=_attr_int(p, "score"),
+        shield_charges=_attr_int(p, "shield_charges"),
+        missile_charges=_attr_int(p, "missile_charges"),
+        drones=_attr_int(p, "drones"),
     )
