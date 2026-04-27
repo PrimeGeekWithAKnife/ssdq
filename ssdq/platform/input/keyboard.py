@@ -26,13 +26,20 @@ from ssdq.core.types import PlayerInput, PlayerSlot, Vec2
 class _KeyState:
     """Per-player edge-detection bookkeeping (mirrors gamepad)."""
 
-    __slots__ = ("prev_bomb", "prev_cancel", "prev_confirm", "prev_pause")
+    __slots__ = (
+        "prev_bomb",
+        "prev_cancel",
+        "prev_confirm",
+        "prev_drone_cycle",
+        "prev_pause",
+    )
 
     def __init__(self) -> None:
         self.prev_bomb: bool = False
         self.prev_pause: bool = False
         self.prev_confirm: bool = False
         self.prev_cancel: bool = False
+        self.prev_drone_cycle: bool = False
 
 
 # P1 binding: WASD + Space + LShift + Enter + Esc.
@@ -45,6 +52,9 @@ _P1_BOMB = pygame.K_LSHIFT
 _P1_PAUSE = pygame.K_RETURN
 _P1_CONFIRM = pygame.K_RETURN
 _P1_CANCEL = pygame.K_ESCAPE
+# Drone-formation cycle (task #10). P1 only — keyboard is a fallback /
+# dev path and the drone feature is built around the gamepad anyway.
+_P1_DRONE_CYCLE: int | None = pygame.K_f
 
 # P2 binding: arrows + RShift + RCtrl + Tab.
 _P2_UP = pygame.K_UP
@@ -58,6 +68,7 @@ _P2_PAUSE = pygame.K_TAB
 # needs P1 in menus, so we just reuse Tab for confirm and there's no cancel.
 _P2_CONFIRM = pygame.K_TAB
 _P2_CANCEL: int | None = None
+_P2_DRONE_CYCLE: int | None = None  # P2 unbound for the slice
 
 
 class KeyboardProvider:
@@ -93,6 +104,7 @@ class KeyboardProvider:
                 pause=_P1_PAUSE,
                 confirm=_P1_CONFIRM,
                 cancel=_P1_CANCEL,
+                drone_cycle=_P1_DRONE_CYCLE,
             ),
             self._read(
                 keys,
@@ -106,6 +118,7 @@ class KeyboardProvider:
                 pause=_P2_PAUSE,
                 confirm=_P2_CONFIRM,
                 cancel=_P2_CANCEL,
+                drone_cycle=_P2_DRONE_CYCLE,
             ),
         )
 
@@ -131,6 +144,7 @@ class KeyboardProvider:
         pause: int,
         confirm: int,
         cancel: int | None,
+        drone_cycle: int | None = None,
     ) -> PlayerInput:
         # Move axis: opposing keys cancel out, and the resulting vector is
         # normalised so diagonals match cardinal magnitudes (1.0).
@@ -142,16 +156,19 @@ class KeyboardProvider:
         held_pause = bool(keys[pause])
         held_confirm = bool(keys[confirm])
         held_cancel = bool(keys[cancel]) if cancel is not None else False
+        held_drone_cycle = bool(keys[drone_cycle]) if drone_cycle is not None else False
 
         bomb_edge = held_bomb and not state.prev_bomb
         pause_edge = held_pause and not state.prev_pause
         confirm_edge = held_confirm and not state.prev_confirm
         cancel_edge = held_cancel and not state.prev_cancel
+        drone_cycle_edge = held_drone_cycle and not state.prev_drone_cycle
 
         state.prev_bomb = held_bomb
         state.prev_pause = held_pause
         state.prev_confirm = held_confirm
         state.prev_cancel = held_cancel
+        state.prev_drone_cycle = held_drone_cycle
 
         return PlayerInput(
             move=move,
@@ -160,4 +177,5 @@ class KeyboardProvider:
             pause=pause_edge,
             confirm=confirm_edge,
             cancel=cancel_edge,
+            drone_cycle=drone_cycle_edge,
         )

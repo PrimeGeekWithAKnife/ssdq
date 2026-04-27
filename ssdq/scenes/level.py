@@ -33,6 +33,7 @@ from ssdq.core.components import (
     AnimatedSprite,
     CircleHitbox,
     Damage,
+    Drone,
     Faction,
     FactionTag,
     FloatingText,
@@ -87,6 +88,59 @@ PLAY_H = 720.0
 _PLAYER_SPAWN_Y = PLAY_H - 80.0
 _OFF_SCREEN_MARGIN = 80.0  # cull entities this far past the play boundary
 _BOSS_INTRO_TELEGRAPH_RADIUS = 80.0
+
+# ───────── drones (task #10) ─────────
+#
+# Up to 2 drones per player slot. Each drone has independent HP and dies
+# from enemy fire / collision without ejecting the player from any
+# power-up state. The drone-formation cycle button (gamepad BACK / kbd F)
+# walks through these symmetric offsets on the rising edge.
+#
+# Offsets are (dx, dy) relative to the player ship; slot_index 0 takes
+# the negative-x flank and slot_index 1 mirrors to the positive-x flank.
+_DRONE_MAX = 2
+_DRONE_HP = 3
+# Drone visual scale relative to the player ship sprite (which itself
+# renders at scale 0.66 — see _spawn_player). 0.7 of the player size is
+# "noticeably smaller, still readable" — matches the kid's brief.
+_DRONE_SCALE_FACTOR = 0.7
+# Drone hitbox is a touch smaller than the player's so duels-with-bullets
+# don't feel cheap. Player hitbox = 8 px → drone = 6 px.
+_DRONE_HITBOX_RADIUS = 6.0
+
+
+@dataclass(frozen=True, slots=True)
+class _DroneConfigDef:
+    """One drone-formation preset. ``offset_x``/``offset_y`` is applied
+    to the drone whose ``slot_index`` is 0; slot_index 1 mirrors X."""
+
+    name: str
+    offset_x: float
+    offset_y: float
+
+
+# Order matters — this is the cycle the BACK button walks through.
+_DRONE_CONFIGS: tuple[_DroneConfigDef, ...] = (
+    _DroneConfigDef(name="tight", offset_x=25.0, offset_y=0.0),
+    _DroneConfigDef(name="spread", offset_x=60.0, offset_y=0.0),
+    _DroneConfigDef(name="trailing", offset_x=30.0, offset_y=50.0),
+    _DroneConfigDef(name="vanguard", offset_x=30.0, offset_y=-50.0),
+)
+
+
+def drone_offset(config_index: int, slot_index: int) -> Vec2:
+    """Return the (dx, dy) the drone with ``slot_index`` should sit at
+    under the given drone-formation preset.
+
+    ``slot_index`` 0 takes the negative-x flank, 1 mirrors to +x. y is
+    the same for both so paired drones always sit symmetric.
+    """
+    cfg = _DRONE_CONFIGS[config_index % len(_DRONE_CONFIGS)]
+    sign = -1.0 if slot_index == 0 else 1.0
+    return Vec2(sign * cfg.offset_x, cfg.offset_y)
+
+
+
 # Boss-intro overlay (text banner) duration. Slightly longer than the
 # default telegraph so the banner reads cleanly even if the boss data
 # overrides intro_telegraph_seconds to something short.
@@ -387,7 +441,7 @@ class LevelScene(Scene):
         self._spawn_player(world, P2, self._player_positions[P2])
 
         # HUD snapshot resource (renderer reads via duck-typed shape).
-        world.insert_resource(self._build_hud_state())
+        world.insert_resource(self._build_hud_state(world))
 
         # Per-level narrative banner — overlays mid-screen for a few
         # seconds while the kid reads the story beat. Input is NOT
@@ -456,6 +510,13 @@ class LevelScene(Scene):
         self._apply_player_input(world, P1, inputs[0])
         self._apply_player_input(world, P2, inputs[1])
 
+        # 3a. Drones — drain pending pickups into entities, then sync each
+        # drone's position to its owner's current formation slot. We do
+        # this AFTER player input so drones land on the same tick the
+        # player moves (otherwise they'd lag one tick behind).
+        self._spawn_pending_drones(world)
+        self._sync_drone_positions(world)
+
         # 4. Wave scheduler → spawn enemies; transition to boss if pending
         self._spawn_wave_enemies(world)
         self._maybe_spawn_boss(world)
@@ -482,7 +543,7 @@ class LevelScene(Scene):
         self._cull_entities(world)
 
         # 12. Refresh HUD snapshot
-        world.insert_resource(self._build_hud_state())
+        world.insert_resource(self._build_hud_state(world))
 
         # 12. Boss music switch on boss spawn — fade from level to boss
         # track. The boss track name is per-level (boss_NN) so the
@@ -570,12 +631,22 @@ class LevelScene(Scene):
         world.replace(eid, Position(new_pos))
         self._player_positions[slot] = new_pos
 
+        # Drone-formation cycle (task #10) — only effective if the player
+        # has at least one live drone, otherwise the press is silently
+        # ignored (no drones to reposition). Cycles in declaration order
+        # of ``_DRONE_CONFIGS``.
+        if inp.drone_cycle and self._count_drones(world, slot) > 0:
+            cur = self.app.drone_config.get(slot, 0)
+            self.app.drone_config[slot] = (cur + 1) % len(_DRONE_CONFIGS)
+
         # Update PlayerShip cooldown
         ps = world.must_get(eid, PlayerShip)
         new_cooldown = max(0.0, ps.weapon_cooldown - TICK_DT)
         # Fire
+        fired_this_tick = False
         if inp.fire and new_cooldown <= 0.0 and lifecycle.state == LifecycleState.ALIVE:
             self._fire_player_weapon(world, slot, ship.primary_weapon, pstate.weapon, new_pos)
+            fired_this_tick = True
             # Set cooldown from the fire_rate of the *current weapon level*.
             tree = bundle.weapon_trees.get(pstate.weapon.tree, ())
             if tree:
@@ -585,6 +656,12 @@ class LevelScene(Scene):
             else:
                 new_cooldown = 0.125
         world.replace(eid, PlayerShip(slot=slot, weapon_cooldown=new_cooldown))
+
+        # Drone fire — when the player fires this tick, every owned drone
+        # spits out the player's current weapon shape from its own
+        # position. Drones never trigger bombs / missiles (primary only).
+        if fired_this_tick:
+            self._fire_drones_for_slot(world, slot, ship.primary_weapon, pstate.weapon)
 
         # Bomb
         if inp.bomb and pstate.bombs > 0 and lifecycle.state == LifecycleState.ALIVE:
@@ -651,6 +728,124 @@ class LevelScene(Scene):
                     to_kill.append(eid)
             for eid in to_kill:
                 world.despawn(eid)
+
+    # ───────── helpers: drones ─────────
+
+    def _count_drones(self, world: World, slot: PlayerSlot) -> int:
+        """Return how many alive drones currently belong to ``slot``."""
+        n = 0
+        for _eid, drone in world.query1(Drone):
+            if drone.slot == slot:
+                n += 1
+        return n
+
+    def _drones_for_slot(self, world: World, slot: PlayerSlot) -> list[tuple[Entity, Drone]]:
+        """Stable list of (entity, drone) pairs for the given player slot,
+        ordered by ``slot_index`` so flank assignment is deterministic."""
+        out: list[tuple[Entity, Drone]] = []
+        for eid, drone in world.query1(Drone):
+            if drone.slot == slot:
+                out.append((eid, drone))
+        out.sort(key=lambda pair: pair[1].slot_index)
+        return out
+
+    def _next_free_drone_slot_index(self, world: World, slot: PlayerSlot) -> int | None:
+        """First slot_index in 0..(_DRONE_MAX-1) not currently occupied
+        by a live drone for ``slot``. ``None`` if all slots are full."""
+        used = {d.slot_index for _e, d in self._drones_for_slot(world, slot)}
+        for i in range(_DRONE_MAX):
+            if i not in used:
+                return i
+        return None
+
+    def _spawn_pending_drones(self, world: World) -> None:
+        """Drain ``app.drones_pending`` into actual drone entities, one per
+        tick per slot, capped at ``_DRONE_MAX`` drones alive per slot.
+        Excess pending counts beyond the cap are silently discarded so the
+        kid doesn't accumulate a stockpile during shielded full-roster
+        moments."""
+        for slot in (P1, P2):
+            pending = self.app.drones_pending.get(slot, 0)
+            if pending <= 0:
+                continue
+            free_idx = self._next_free_drone_slot_index(world, slot)
+            if free_idx is None:
+                # At cap — drop the pending count to 0 so a tactical
+                # "denied" feedback can be added later if desired.
+                self.app.drones_pending[slot] = 0
+                continue
+            # Only fulfil one drone per slot per tick — keeps the entity
+            # spawn order stable and avoids a giant burst from a stacked
+            # pickup train.
+            self._spawn_drone(world, slot, free_idx)
+            self.app.drones_pending[slot] = max(0, pending - 1)
+
+    def _spawn_drone(self, world: World, slot: PlayerSlot, slot_index: int) -> Entity:
+        """Spawn a drone entity for ``slot`` at the active formation offset
+        from the player ship (or near the player's last known position
+        if the ship is currently dead). Returns the new entity id."""
+        bundle = self.app.content
+        ship_name = "vanguard" if slot == P1 else "vanguard_red"
+        ship = bundle.ships[ship_name]
+        anchor = self._player_positions.get(slot, Vec2(PLAY_W * 0.5, _PLAYER_SPAWN_Y))
+        cfg_idx = self.app.drone_config.get(slot, 0)
+        off = drone_offset(cfg_idx, slot_index)
+        spawn_pos = Vec2(anchor.x + off.x, anchor.y + off.y)
+        # Drone scale = player_scale (0.66) * factor (~0.7) so it visibly
+        # reads as smaller than the player without becoming a dot.
+        drone_scale = 0.66 * _DRONE_SCALE_FACTOR
+        eid = world.spawn(
+            Position(spawn_pos),
+            Velocity(Vec2(0.0, 0.0)),
+            CircleHitbox(radius=_DRONE_HITBOX_RADIUS),
+            FactionTag(Faction.PLAYER),
+            PlayerOwned(slot),
+            Sprite(path=ship.sprite, layer=9, scale=drone_scale),
+            Health(hp=_DRONE_HP),
+            MaxHealth(hp=_DRONE_HP),
+            Drone(slot=slot, slot_index=slot_index),
+        )
+        return eid
+
+    def _sync_drone_positions(self, world: World) -> None:
+        """Snap each live drone to its formation offset relative to its
+        owning player. Called every tick after the player has moved so
+        drones perfectly mirror movement (no lag)."""
+        for slot in (P1, P2):
+            anchor = self._player_pos_if_alive(slot)
+            if anchor is None:
+                # Owner is dead/INVULN — leave drones in place. They'll
+                # snap back when the player respawns.
+                continue
+            cfg_idx = self.app.drone_config.get(slot, 0)
+            for eid, drone in self._drones_for_slot(world, slot):
+                if not world.is_alive(eid):
+                    continue
+                off = drone_offset(cfg_idx, drone.slot_index)
+                dx = anchor.x + off.x
+                dy = anchor.y + off.y
+                # Clamp to the same playfield inset as the player so
+                # wide formations don't park the drone off-screen.
+                dx = max(0.0, min(PLAY_W, dx))
+                dy = max(0.0, min(PLAY_H, dy))
+                world.replace(eid, Position(Vec2(dx, dy)))
+
+    def _fire_drones_for_slot(
+        self,
+        world: World,
+        slot: PlayerSlot,
+        primary_name: str,
+        weapon_state: WeaponState,
+    ) -> None:
+        """Have every live drone for ``slot`` fire the player's current
+        primary weapon. Bombs / missiles never echo through drones."""
+        for eid, _drone in self._drones_for_slot(world, slot):
+            if not world.is_alive(eid):
+                continue
+            pos = world.get(eid, Position)
+            if pos is None:
+                continue
+            self._fire_player_weapon(world, slot, primary_name, weapon_state, pos.pos)
 
     # ───────── helpers: waves ─────────
 
@@ -1108,6 +1303,14 @@ class LevelScene(Scene):
         if owned is None:
             return
         slot = owned.slot
+        # Drone branch: drones share FactionTag(PLAYER) + PlayerOwned for
+        # bullet routing and proximity multipliers, but they have
+        # independent HP and DO NOT eject the player from a power-up
+        # state on hit (per kid playtest brief). Resolve drone collisions
+        # here and bail before the ship-death path runs.
+        if world.has(player_eid, Drone):
+            self._handle_drone_hit(world, player_eid, other, ftag_a, ftag_b)
+            return
         if not self._session.lifecycle(slot).can_be_hit:
             return
         # Shield power-up: if active, absorb the hit. The forcefield
@@ -1137,6 +1340,49 @@ class LevelScene(Scene):
         # Despawn the bullet that hit the player (so it doesn't double-hit).
         if ftag_a.faction == Faction.ENEMY_BULLET or ftag_b.faction == Faction.ENEMY_BULLET:
             world.despawn(other)
+
+    def _handle_drone_hit(
+        self,
+        world: World,
+        drone_eid: Entity,
+        other: Entity,
+        ftag_a: FactionTag,
+        ftag_b: FactionTag,
+    ) -> None:
+        """Apply damage to a drone hit by an enemy bullet / enemy. Drone
+        HP=0 ⇒ despawn; the player keeps playing. Player ship vs drone
+        is a no-op (no friendly fire between own units)."""
+        if not world.is_alive(drone_eid) or not world.is_alive(other):
+            return
+        # Player ship vs own drone: leave both alone. should_apply_damage
+        # might surface this pair if SoSC is on; we just ignore it here.
+        if world.has(other, PlayerShip):
+            return
+        # Determine damage. Enemy bullets carry Damage; raw enemy ships
+        # default to 1 (the drone gets 3 HP, so even a body-slam enemy
+        # collision should kill the drone in 3 ticks at most).
+        dmg_comp = world.get(other, Damage)
+        damage = dmg_comp.amount if dmg_comp is not None else 1
+        hp_comp = world.get(drone_eid, Health)
+        if hp_comp is None:
+            return
+        new_hp = hp_comp.hp - damage
+        # Despawn the offending bullet so it doesn't double-hit on the
+        # next tick.
+        if (
+            ftag_a.faction == Faction.ENEMY_BULLET
+            or ftag_b.faction == Faction.ENEMY_BULLET
+        ):
+            world.despawn(other)
+        if new_hp <= 0:
+            pos_comp = world.get(drone_eid, Position)
+            if pos_comp is not None:
+                self._spawn_explosion(world, pos_comp.pos, scale=1)
+            world.despawn(drone_eid)
+            self.app.audio.play_sfx("hit", volume=0.4)
+        else:
+            world.replace(drone_eid, Health(hp=new_hp))
+            world.replace(drone_eid, HitFlash(ticks_remaining=4))
 
     def _handle_enemy_hit(self, world: World, enemy_eid: Entity, bullet_eid: Entity) -> None:
         damage = world.get(bullet_eid, Damage)
@@ -1449,12 +1695,14 @@ class LevelScene(Scene):
             ):
                 world.despawn(eid)
 
-    def _build_hud_state(self) -> HudCoopState:
+    def _build_hud_state(self, world: World) -> HudCoopState:
         snap = self._session.scores.snapshot()
         p1 = self._powerup_states[P1]
         p2 = self._powerup_states[P2]
         lc1 = self._session.lifecycle(P1)
         lc2 = self._session.lifecycle(P2)
+        drones_p1 = self._count_drones(world, P1)
+        drones_p2 = self._count_drones(world, P2)
         return HudCoopState(
             team_score=snap.team,
             p1=HudPlayerStats(
@@ -1462,12 +1710,14 @@ class LevelScene(Scene):
                 bombs=p1.bombs,
                 weapon_level=p1.weapon.level + 1,
                 score=snap.p1,
+                drones=drones_p1,
             ),
             p2=HudPlayerStats(
                 lives=lc2.lives,
                 bombs=p2.bombs,
                 weapon_level=p2.weapon.level + 1,
                 score=snap.p2,
+                drones=drones_p2,
             ),
         )
 

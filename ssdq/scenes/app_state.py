@@ -12,7 +12,16 @@ from dataclasses import dataclass, field
 from ssdq.core.content.loader import ContentBundle
 from ssdq.core.coop.options import CoopOptions
 from ssdq.core.replay import ReplayRecorder
+from ssdq.core.types import P1, P2, PlayerSlot
 from ssdq.platform.audio import AudioBus
+
+
+def _zero_drone_pending() -> dict[PlayerSlot, int]:
+    return {P1: 0, P2: 0}
+
+
+def _zero_drone_config() -> dict[PlayerSlot, int]:
+    return {P1: 0, P2: 0}
 
 
 @dataclass
@@ -37,3 +46,15 @@ class AppState:
 
     # Scratch flags for Boot → Title → Level transitions to know what to do.
     asset_loaded_levels: set[int] = field(default_factory=set)
+
+    # ───────── drones (task #10) ─────────
+    #
+    # ``drones_pending`` is a per-slot count of drone power-ups picked up
+    # but not yet materialised into entities. The level scene drains one
+    # at a time on tick (capped at 2 active drones per slot). Naming
+    # coordinated with POWERUP-INFRA + EQUIPPABLE.
+    drones_pending: dict[PlayerSlot, int] = field(default_factory=_zero_drone_pending)
+    # Active drone-formation index per slot (Tight=0, Spread=1, Trailing=2,
+    # Vanguard=3). Persisted across LevelScene re-enters so the kid's chosen
+    # formation isn't lost between levels. Cycled via PlayerInput.drone_cycle.
+    drone_config: dict[PlayerSlot, int] = field(default_factory=_zero_drone_config)

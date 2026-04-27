@@ -17,6 +17,9 @@ class HudPlayerStats:
     bombs: int
     weapon_level: int
     score: int
+    # Active drone count (0..2) — task #10. Surfaced so the HUD can
+    # render a small "Drones: N" line per player.
+    drones: int = 0
 
 
 @dataclass(frozen=True, slots=True)

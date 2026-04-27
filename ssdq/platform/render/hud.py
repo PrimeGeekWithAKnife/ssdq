@@ -116,11 +116,14 @@ class Hud:
             (f"Lives: {stats.lives}", _TEXT_COLOUR),
             (f"Bombs: {stats.bombs}", _TEXT_COLOUR),
             (f"Weapon Lv {stats.weapon_level}", _TEXT_COLOUR),
+            (f"Drones: {stats.drones}", _TEXT_COLOUR),
             (f"{stats.score:08d}", _TEXT_COLOUR),
         ]
         y = _PADDING
         for i, (text, col) in enumerate(lines):
-            font = self._panel_font if i < 4 else self._score_font
+            # Last line is the player score (rendered slightly smaller);
+            # everything above is the standard panel font.
+            font = self._panel_font if i < len(lines) - 1 else self._score_font
             rendered = font.render(text, True, col)
             if anchor_left:
                 rect = rendered.get_rect(topleft=(x, y))
@@ -134,13 +137,21 @@ class Hud:
 
 
 class _PlayerStats:
-    __slots__ = ("bombs", "lives", "score", "weapon_level")
+    __slots__ = ("bombs", "drones", "lives", "score", "weapon_level")
 
-    def __init__(self, lives: int, bombs: int, weapon_level: int, score: int) -> None:
+    def __init__(
+        self,
+        lives: int,
+        bombs: int,
+        weapon_level: int,
+        score: int,
+        drones: int = 0,
+    ) -> None:
         self.lives = lives
         self.bombs = bombs
         self.weapon_level = weapon_level
         self.score = score
+        self.drones = drones
 
 
 def _try_coop_state(world: World) -> Any | None:
@@ -173,4 +184,5 @@ def _player_stats(state: Any, slot_attr: str) -> _PlayerStats:
         bombs=_attr_int(p, "bombs"),
         weapon_level=_attr_int(p, "weapon_level") or 1,
         score=_attr_int(p, "score"),
+        drones=_attr_int(p, "drones"),
     )

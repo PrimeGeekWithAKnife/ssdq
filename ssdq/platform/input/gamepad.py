@@ -90,15 +90,17 @@ class _PadState:
     We only remember the previous-tick value for buttons that need
     edge-detection; the rest are sampled live each tick. `prev_bomb`
     tracks the OR of all bomb-mapped buttons (X, Y, LB, RB).
+    `prev_back` drives the drone-formation cycle edge.
     """
 
-    __slots__ = ("prev_a", "prev_b", "prev_bomb", "prev_pause")
+    __slots__ = ("prev_a", "prev_b", "prev_back", "prev_bomb", "prev_pause")
 
     def __init__(self) -> None:
         self.prev_a: bool = False
         self.prev_b: bool = False
         self.prev_bomb: bool = False
         self.prev_pause: bool = False
+        self.prev_back: bool = False
 
 
 class GamepadProvider:
@@ -217,6 +219,7 @@ class GamepadProvider:
                         _safe_button(pad, btn) for btn in BOMB_BUTTONS
                     )
                     state.prev_pause = _safe_button(pad, BUTTON_START)
+                    state.prev_back = _safe_button(pad, BUTTON_BACK)
                     break
 
     def _read_slot(self, slot_idx: int) -> PlayerInput:
@@ -237,6 +240,7 @@ class GamepadProvider:
         # because their pad puts X at index 3 instead of 2.
         bomb_held = any(_safe_button(pad, btn) for btn in BOMB_BUTTONS)
         start = _safe_button(pad, BUTTON_START)
+        back = _safe_button(pad, BUTTON_BACK)
 
         # Edge-triggered: true only on 0 -> 1 transition.
         bomb = bomb_held and not state.prev_bomb
@@ -244,12 +248,15 @@ class GamepadProvider:
         # A doubles as both held-fire and edge-triggered confirm in menus.
         confirm = a and not state.prev_a
         cancel = b and not state.prev_b
+        # BACK cycles the player's drone formation (drone task #10).
+        drone_cycle = back and not state.prev_back
 
         # Update prev-tick state for next poll.
         state.prev_a = a
         state.prev_b = b
         state.prev_bomb = bomb_held
         state.prev_pause = start
+        state.prev_back = back
 
         return PlayerInput(
             move=move,
@@ -258,6 +265,7 @@ class GamepadProvider:
             pause=pause,
             confirm=confirm,
             cancel=cancel,
+            drone_cycle=drone_cycle,
         )
 
 
