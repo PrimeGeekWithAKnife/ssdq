@@ -95,6 +95,11 @@ class DockingScene(Scene):
         # the dock-pause we still credit the bombs (prevents a "skip too
         # early" foot-gun).
         self._stage_bonus()
+        # Calmer "resupply" music — registered by BootScene. Crossfades
+        # out the boss/level track from the previous LevelScene so the
+        # docking cinematic feels like a breather rather than a continuation
+        # of the boss fight's intensity. Missing on the bus is no-op.
+        self._app.audio.crossfade_to("resupply", ms=500)
 
     def tick(
         self,

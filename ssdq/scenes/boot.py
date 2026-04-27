@@ -65,5 +65,13 @@ class BootScene(Scene):
         # once and are silently no-op'd by AudioBus.
         for name in ("laser", "hit", "explosion", "pickup", "pause", "powerup", "bomb"):
             bus.load_sfx(name, str(sfx_dir / f"{name}.ogg"))
-        bus.load_music("level_01", str(music_dir / "level_01.ogg"))
-        bus.load_music("boss_01", str(music_dir / "boss_01.ogg"))
+        # Music: one track per level (1..5), one per boss (1..5), plus the
+        # calmer ``resupply`` track played by DockingScene between levels.
+        # Levels 3..5 don't yet have full content but the placeholder
+        # tracks are pre-rendered (tools/generate_music.py); missing files
+        # are silently no-op'd by AudioBus so the registration is forward
+        # -compatible with future level content.
+        for i in range(1, 6):
+            bus.load_music(f"level_{i:02d}", str(music_dir / f"level_{i:02d}.ogg"))
+            bus.load_music(f"boss_{i:02d}", str(music_dir / f"boss_{i:02d}.ogg"))
+        bus.load_music("resupply", str(music_dir / "resupply.ogg"))

@@ -91,6 +91,68 @@ _BOSS_INTRO_TELEGRAPH_RADIUS = 80.0
 # default telegraph so the banner reads cleanly even if the boss data
 # overrides intro_telegraph_seconds to something short.
 _BOSS_INTRO_BANNER_SECONDS = 3.0
+# Level-intro overlay duration. Longer than the boss banner because the
+# kid has to read a full sentence at the start of every level (playtest
+# 2026-04-27): they need time to parse the narrative before bullets fly.
+_LEVEL_INTRO_BANNER_SECONDS = 6.0
+
+
+# Verbatim per-level intro narration shown at LevelScene.enter(). Texts
+# are stored exactly as authored (preserving any grammar / punctuation
+# quirks) so the kid playtest copy reads consistently across builds.
+# Levels 3–5 don't have content YAML yet but the text is wired so the
+# moment those levels exist the narrative is already in place.
+_LEVEL_INTROS: dict[int, str] = {
+    1: (
+        "Before you can save Earth you must destroy the aliens "
+        "preventing you from leaving the moon"
+    ),
+    2: (
+        "You have left the moon but enemies are closing in to "
+        "intercept you in space"
+    ),
+    3: (
+        "Earth's last orbital defence station is under attack, "
+        "without it all is lost. You must destroy the alien ships "
+        "so it can repair its main weapon systems!"
+    ),
+    4: (
+        "We have finally made it to Earth but aliens are attack "
+        "from all directions you must defend space above the "
+        "United Kingdom before the aliens attack the government "
+        "and the King!"
+    ),
+    5: (
+        "We have defeated all the aliens but they have called for "
+        "reinforcements and a massive alien fleet has just come out "
+        "of hyperspace near Earth. Let's hope they finished repairs "
+        "on that space station!!"
+    ),
+}
+
+
+# Per-level boss narration. Each line names the boss and ties it to
+# the level's story beat so the boss arrival feels earned rather than
+# generic ("BOSS!"). Falls back to a generic line if a level lacks an
+# entry (defensive — the dict above always provides one).
+_LEVEL_BOSS_INTROS: dict[int, str] = {
+    1: "MOON GUARDIAN approaches! Defend the lunar launch site!",
+    2: "DEEP SPACE INTERCEPTOR closing in! Hold the line!",
+    3: "ORBITAL SIEGE FLEET commander locks on — protect the station!",
+    4: "ALIEN WARLORD attacks the United Kingdom! Defend the King!",
+    5: "HYPERSPACE ARMADA flagship engaged — destroy it before reinforcements land!",
+}
+_BOSS_INTRO_FALLBACK = "A LARGE ALIEN SHIP APPROACHES — IT FEELS ANGRY"
+
+
+def level_intro_text(level_index: int) -> str:
+    """Public lookup so tests can verify each level wires the right text."""
+    return _LEVEL_INTROS.get(level_index, "")
+
+
+def boss_intro_text(level_index: int) -> str:
+    """Public lookup for the per-level boss intro line."""
+    return _LEVEL_BOSS_INTROS.get(level_index, _BOSS_INTRO_FALLBACK)
 
 
 # ───────── runtime components (Level-scene-internal) ─────────
@@ -174,6 +236,24 @@ class BossIntroBanner:
     over its TimeToLive. Spawned alongside the BossTelegraph circle so the
     player gets BOTH a visual ping and a narrative hook before the boss
     starts shooting (kid playtest feedback: boss appearance was too sudden).
+    """
+
+    text: str
+    total_ticks: int  # original lifetime, used by renderer to compute fade
+
+
+@dataclass(frozen=True, slots=True)
+class LevelIntroBanner:
+    """Centred, multi-line story banner shown when a LevelScene starts.
+
+    Distinct from :class:`BossIntroBanner` because:
+      * it lives ~6s (kid needs time to read a full sentence) vs ~3s
+      * text is long-form prose, so the renderer word-wraps it
+      * it overlays at mid-screen above the player ships rather than
+        as a top warning strip — narrative beat, not a hazard ping.
+
+    Players can shoot through it (input is unaffected); it's purely a
+    visual overlay drawn by the renderer.
     """
 
     text: str
@@ -279,8 +359,24 @@ class LevelScene(Scene):
         # HUD snapshot resource (renderer reads via duck-typed shape).
         world.insert_resource(self._build_hud_state())
 
-        # Music — start level track.
-        self._switch_music(level.music)
+        # Per-level narrative banner — overlays mid-screen for a few
+        # seconds while the kid reads the story beat. Input is NOT
+        # blocked (players can shoot through it); the wave scheduler
+        # has its own ramp-up so nothing punishing happens during the
+        # read. Skipped if the level lacks an entry (defensive).
+        intro_text = level_intro_text(self.level_index)
+        if intro_text:
+            banner_ticks = int(_LEVEL_INTRO_BANNER_SECONDS * 60)
+            world.spawn(
+                LevelIntroBanner(text=intro_text, total_ticks=banner_ticks),
+                TimeToLive(ticks=banner_ticks),
+            )
+
+        # Music — start the per-level track. Track names are registered
+        # by BootScene as ``level_NN`` / ``boss_NN`` (zero-padded). The
+        # YAML's ``level.music`` field is a content path, not a bus name,
+        # so we derive the registered name from the level index here.
+        self._switch_music(self._level_music_name())
 
     def exit(self, world: World) -> None:
         self.app.audio.stop_music()
@@ -358,9 +454,14 @@ class LevelScene(Scene):
         # 12. Refresh HUD snapshot
         world.insert_resource(self._build_hud_state())
 
-        # 12. Boss music switch on boss spawn
-        if self._boss is not None and self._music_playing != "boss_01":
-            self._switch_music("boss_01")
+        # 12. Boss music switch on boss spawn — fade from level to boss
+        # track. The boss track name is per-level (boss_NN) so the
+        # encounter has its own intensity rather than always reusing
+        # boss_01's mood.
+        if self._boss is not None:
+            boss_name = self._boss_music_name()
+            if self._music_playing != boss_name:
+                self._switch_music(boss_name)
 
         # 13. Win/loss transitions
         if self._level_completed:
@@ -625,11 +726,13 @@ class LevelScene(Scene):
             TimeToLive(ticks=intro_ticks),
         )
         # Narrative banner — same TTL as the telegraph so they fade together.
-        # Fixed copy for the slice; later this could come from BossDef.
+        # Pulls per-level themed copy from `_LEVEL_BOSS_INTROS` so each boss
+        # appearance feels tied to that level's story beat (kid playtest
+        # 2026-04-27: a generic "BOSS!" line was forgettable).
         banner_ticks = int(_BOSS_INTRO_BANNER_SECONDS * 60)
         world.spawn(
             BossIntroBanner(
-                text="A LARGE ALIEN SHIP APPROACHES — IT FEELS ANGRY",
+                text=boss_intro_text(self.level_index),
                 total_ticks=banner_ticks,
             ),
             TimeToLive(ticks=banner_ticks),
@@ -1307,6 +1410,21 @@ class LevelScene(Scene):
             return
         self.app.audio.crossfade_to(name, ms=600)
         self._music_playing = name
+
+    def _level_music_name(self) -> str:
+        """BootScene-registered track name for the current level.
+
+        Levels 1..5 get their own track. Anything outside that range
+        (defensive — content currently ships level 1 + 2) falls back to
+        level_01 so we always have *something* registered.
+        """
+        idx = self.level_index if 1 <= self.level_index <= 5 else 1
+        return f"level_{idx:02d}"
+
+    def _boss_music_name(self) -> str:
+        """BootScene-registered boss track name for the current level."""
+        idx = self.level_index if 1 <= self.level_index <= 5 else 1
+        return f"boss_{idx:02d}"
 
     # ───────── helpers: lookups ─────────
 
