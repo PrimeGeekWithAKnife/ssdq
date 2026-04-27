@@ -172,6 +172,11 @@ class Renderer:
         # entity with a BossIntroBanner component.
         self._draw_boss_intro_banner(world, surface)
 
+        # 5.2 level intro banner — large centred narrative text shown for
+        # the first few seconds of every level. Word-wrapped to ~80% of
+        # the playfield width. Players can shoot through it.
+        self._draw_level_intro_banner(world, surface)
+
         # extra: bomb shockwaves (optional)
         self._draw_bomb_actives(world, surface)
 
@@ -423,6 +428,48 @@ class Renderer:
             surface.blit(sub, sub.get_rect(center=(cx, cy + 44)))
             return  # one banner is enough
 
+    def _draw_level_intro_banner(self, world: World, surface: pygame.Surface) -> None:
+        """Big centred narrative text shown at the start of every level.
+
+        Word-wraps to ~80% of the surface width so the longer Level 3-5
+        sentences fit on a 1280x720 fullscreen at kid-distance. Holds at
+        full alpha for the first ~70% of the banner's life then fades —
+        same easing as the boss intro banner so the two read as the
+        same UI element.
+        """
+        comp_t = _optional_component_type("LevelIntroBanner")
+        if comp_t is None:
+            return
+        if not pygame.font.get_init():
+            pygame.font.init()
+        body_font = pygame.font.SysFont(None, 40, bold=True)
+        w, h = surface.get_size()
+        max_width = int(w * 0.80)
+        for eid, banner in world.query1(comp_t):
+            text = str(getattr(banner, "text", "") or "")
+            if not text:
+                continue
+            total = max(1, int(getattr(banner, "total_ticks", 60) or 60))
+            ttl = world.get(eid, TimeToLive)
+            remaining = ttl.ticks if ttl is not None else total
+            ratio = max(0.0, min(1.0, remaining / total))
+            # Hold at full for the first 70% then linear-fade.
+            alpha = 255 if ratio > 0.30 else int(255 * (ratio / 0.30))
+            lines = _wrap_text(text, body_font, max_width)
+            line_h = body_font.get_linesize()
+            block_h = line_h * len(lines)
+            cx = w // 2
+            cy = h // 2 - block_h // 2
+            for i, line in enumerate(lines):
+                shadow = body_font.render(line, True, (0, 0, 0))
+                label = body_font.render(line, True, (255, 230, 120))
+                shadow.set_alpha(alpha)
+                label.set_alpha(alpha)
+                y = cy + i * line_h + line_h // 2
+                surface.blit(shadow, shadow.get_rect(center=(cx + 2, y + 2)))
+                surface.blit(label, label.get_rect(center=(cx, y)))
+            return  # one banner is enough
+
     def _draw_bomb_actives(self, world: World, surface: pygame.Surface) -> None:
         comp_t = _optional_component_type("BombActive")
         if comp_t is None:
@@ -450,6 +497,10 @@ def _optional_component_type(name: str) -> type[Any] | None:
         "ssdq.core.components",
         "ssdq.core.coop.components",
         "ssdq.core.waves.components",
+        # Level scene owns BossTelegraph, BossIntroBanner, LevelIntroBanner,
+        # BombActive — without this entry the renderer silently never drew
+        # any of them (the import path ran out before reaching them).
+        "ssdq.scenes.level",
     )
     for module_path in candidates:
         try:
@@ -460,6 +511,26 @@ def _optional_component_type(name: str) -> type[Any] | None:
         if isinstance(cls, type):
             return cls
     return None
+
+
+def _wrap_text(text: str, font: pygame.font.Font, max_width: int) -> list[str]:
+    """Greedy word-wrap on whitespace; degrades gracefully on a single
+    long word that exceeds ``max_width`` (it occupies its own line)."""
+    words = text.split()
+    if not words:
+        return [""]
+    lines: list[str] = []
+    current: list[str] = []
+    for word in words:
+        candidate = " ".join([*current, word])
+        if font.size(candidate)[0] <= max_width or not current:
+            current.append(word)
+        else:
+            lines.append(" ".join(current))
+            current = [word]
+    if current:
+        lines.append(" ".join(current))
+    return lines
 
 
 def _attr_vec2(obj: Any, names: tuple[str, ...]) -> tuple[float, float] | None:
