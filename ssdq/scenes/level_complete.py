@@ -1,4 +1,10 @@
-"""Level-complete scene: 'level cleared', returns to title (slice has 1 level)."""
+"""Level-complete scene: 'level cleared', then docking → next chapter.
+
+Confirms forward into DockingScene (supply-ship cinematic that grants
++2 bombs to each player). DockingScene then auto-transitions onward to
+the next chapter (currently TitleScene because the slice has only
+level 1).
+"""
 
 from __future__ import annotations
 
@@ -10,7 +16,7 @@ from ssdq.core.ecs import World
 from ssdq.core.scene import Replace, Scene, SceneTransition
 from ssdq.core.types import PlayerInput, TickIndex
 from ssdq.scenes.app_state import AppState
-from ssdq.scenes.title import TitleScene
+from ssdq.scenes.docking import DockingScene
 
 _BG_COLOUR = (4, 16, 8)
 _TITLE_COLOUR = (140, 255, 200)
@@ -40,7 +46,7 @@ class LevelCompleteScene(Scene):
         inputs: tuple[PlayerInput, PlayerInput],
     ) -> SceneTransition | None:
         if inputs[0].confirm or inputs[1].confirm or inputs[0].fire or inputs[1].fire:
-            return Replace(scene=TitleScene(self._app))
+            return Replace(scene=DockingScene(self._app))
         return None
 
     def render(self, world: World, surface: Any, alpha: float) -> None:

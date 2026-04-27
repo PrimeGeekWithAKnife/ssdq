@@ -86,6 +86,10 @@ PLAY_H = 720.0
 _PLAYER_SPAWN_Y = PLAY_H - 80.0
 _OFF_SCREEN_MARGIN = 80.0  # cull entities this far past the play boundary
 _BOSS_INTRO_TELEGRAPH_RADIUS = 80.0
+# Boss-intro overlay (text banner) duration. Slightly longer than the
+# default telegraph so the banner reads cleanly even if the boss data
+# overrides intro_telegraph_seconds to something short.
+_BOSS_INTRO_BANNER_SECONDS = 3.0
 
 
 # ───────── runtime components (Level-scene-internal) ─────────
@@ -160,6 +164,21 @@ class BossTelegraph:
     colour: tuple[int, int, int] = (255, 80, 80)
 
 
+@dataclass(frozen=True, slots=True)
+class BossIntroBanner:
+    """Big top-of-screen text overlay shown during the boss intro window.
+
+    The renderer reads this duck-typed component (any entity that has it)
+    and draws ``text`` near the top of the playfield, fading to invisible
+    over its TimeToLive. Spawned alongside the BossTelegraph circle so the
+    player gets BOTH a visual ping and a narrative hook before the boss
+    starts shooting (kid playtest feedback: boss appearance was too sudden).
+    """
+
+    text: str
+    total_ticks: int  # original lifetime, used by renderer to compute fade
+
+
 # ───────── boss state ─────────
 
 
@@ -219,15 +238,21 @@ class LevelScene(Scene):
         # is parsed off the primary weapon name (e.g. "pulse_lvl1" → "pulse").
         ship = bundle.ships["vanguard"]
         tree = ship.primary_weapon.split("_lvl")[0]
+        # Apply any pending bomb bonus from an inter-level scene (e.g.
+        # DockingScene) on TOP of the ship's starting baseline. Consumed
+        # one-shot so Title → Level without another docking doesn't
+        # re-award.
+        bomb_bonus = max(0, self.app.bomb_bonus_pending)
+        self.app.bomb_bonus_pending = 0
         self._powerup_states = {
             P1: PlayerPowerupState(
                 weapon=WeaponState(tree=tree, level=0),
-                bombs=ship.starting_bombs,
+                bombs=ship.starting_bombs + bomb_bonus,
                 lives=self.app.options.starting_lives,
             ),
             P2: PlayerPowerupState(
                 weapon=WeaponState(tree=tree, level=0),
-                bombs=ship.starting_bombs,
+                bombs=ship.starting_bombs + bomb_bonus,
                 lives=self.app.options.starting_lives,
             ),
         }
@@ -583,12 +608,23 @@ class LevelScene(Scene):
             ScoreValue(points=boss.score),
         )
         # Telegraph entity — auto-cull after intro_telegraph_seconds via TTL.
+        intro_ticks = int(boss.intro_telegraph_seconds * 60)
         world.spawn(
             BossTelegraph(
                 pos=Vec2(PLAY_W / 2, 80.0),
                 radius=_BOSS_INTRO_TELEGRAPH_RADIUS,
             ),
-            TimeToLive(ticks=int(boss.intro_telegraph_seconds * 60)),
+            TimeToLive(ticks=intro_ticks),
+        )
+        # Narrative banner — same TTL as the telegraph so they fade together.
+        # Fixed copy for the slice; later this could come from BossDef.
+        banner_ticks = int(_BOSS_INTRO_BANNER_SECONDS * 60)
+        world.spawn(
+            BossIntroBanner(
+                text="A LARGE ALIEN SHIP APPROACHES — IT FEELS ANGRY",
+                total_ticks=banner_ticks,
+            ),
+            TimeToLive(ticks=banner_ticks),
         )
         self._boss = BossState(
             boss=boss,

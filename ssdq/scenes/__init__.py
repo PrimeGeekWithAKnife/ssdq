@@ -18,6 +18,7 @@ room; the others are thin chrome.
 
 from ssdq.scenes.app_state import AppState
 from ssdq.scenes.boot import BootScene
+from ssdq.scenes.docking import DockingScene
 from ssdq.scenes.game_over import GameOverScene
 from ssdq.scenes.hud_state import HudCoopState, HudPlayerStats
 from ssdq.scenes.intro import IntroScene
@@ -28,6 +29,7 @@ from ssdq.scenes.title import TitleScene
 __all__ = [
     "AppState",
     "BootScene",
+    "DockingScene",
     "GameOverScene",
     "HudCoopState",
     "HudPlayerStats",
