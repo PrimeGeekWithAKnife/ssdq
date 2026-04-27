@@ -408,17 +408,6 @@ class LevelScene(Scene):
         # so we derive the registered name from the level index here.
         self._switch_music(self._level_music_name())
 
-        # Per-level intro banner — appears immediately, fades out over
-        # _LEVEL_INTRO_BANNER_SECONDS. Players can shoot through it.
-        intro_ticks = int(_LEVEL_INTRO_BANNER_SECONDS * 60)
-        world.spawn(
-            LevelIntroBanner(
-                text=level_intro_text(self.level_index),
-                total_ticks=intro_ticks,
-            ),
-            TimeToLive(ticks=intro_ticks),
-        )
-
     def exit(self, world: World) -> None:
         self.app.audio.stop_music()
         self.app.last_team_score = self._session.scores.snapshot().team
