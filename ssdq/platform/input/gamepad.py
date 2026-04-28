@@ -5,41 +5,22 @@ Only this module touches pygame joystick APIs; the rest of the engine consumes
 
 Behaviour summary (spec §8.1, §8.2):
 
-* First pad whose START is pressed binds to P1; second to P2.
+* First pad whose any-button is pressed binds to P1; second to P2.
 * Stick deadzone is radial 0.15, with the live region renormalised so 0.15..1.0
   maps to 0..1.0; magnitude is then clamped to 1.0.
-* Edge-triggered: bomb, pause, confirm, cancel — true only on the tick the
-  button transitions 0->1. Held: fire.
+* Edge-triggered: bomb, pause, confirm, cancel, shield, missile, drone_cycle —
+  true only on the tick the button transitions 0->1. Held: fire.
 * Disconnect detection is per bound pad, exposed via :attr:`disconnected` for
   the pause-overlay scene to consult.
 
-Button mapping is the Xbox-360 layout that pygame-CE reports for 8BitDo,
-Steam Deck Controller (in XInput mode) and most generic XInput pads:
+Button assignment is no longer hard-coded — each pad's mapping comes from a
+:class:`BindingsStore` keyed by SDL pad GUID. Defaults match the canonical
+Xbox-360 layout (FIRE=0, BOMB=2, SHIELD=4, MISSILE=5, DRONE_CYCLE=6, PAUSE=7,
+CONFIRM=0, CANCEL=1) so working pads keep working without any setup.
 
-==================  =========================================
-Button              Index
-==================  =========================================
-A (fire / confirm)   0
-B (cancel)           1
-X (bomb)             2
-Y (also bomb)        3
-LB (shield)          4
-RB (missile)         5
-Back                 6
-Start (pause)        7
-==================  =========================================
-
-**Bomb on multiple buttons** — kid playtest 2026-04-27 reported that no
-button activated bombs on a Gamesir T4n Lite. Different controllers
-sometimes shuffle the X/Y indices, so we accept either of those two as
-a bomb press to maximise the chance the kid lands on something that
-works.
-
-**Equippables** — shield (LB) and missile (RB) are dedicated buttons
-per kid playtest 2026-04-27 ("shield is equippable like a bomb you can
-wait to use it"; "missile is equippable, has its own button"). They
-no longer participate in the bomb fallback so the equippable inventory
-isn't accidentally drained by bomb-button mashing.
+The kid playtest 2026-04-28 found two pads (Zikway HID, Gamesir T4n Lite)
+where these defaults didn't match the physical buttons; the SettingsScene
+reachable from Title and Pause lets the player rebind any action.
 """
 
 from __future__ import annotations
@@ -49,11 +30,15 @@ import math
 import pygame
 
 from ssdq.core.types import NEUTRAL_INPUT, PlayerInput, PlayerSlot, Vec2
+from ssdq.platform.input.bindings import BindingAction, BindingsStore
 
 # Stick deadzone — see ``_deadzone_stick``.
 STICK_DEADZONE: float = 0.15
 
-# Button indices on the canonical Xbox-360-style mapping.
+# Button indices on the canonical Xbox-360-style mapping. Kept as named
+# constants for the keyboard layer's parity tests; the gamepad runtime
+# itself reads indices from the active :class:`BindingsStore` entry, not
+# from these.
 BUTTON_A: int = 0
 BUTTON_B: int = 1
 BUTTON_X: int = 2
@@ -62,14 +47,6 @@ BUTTON_LB: int = 4
 BUTTON_RB: int = 5
 BUTTON_BACK: int = 6
 BUTTON_START: int = 7
-
-# Buttons that all map to "bomb" — see module docstring. LB / RB used to
-# be in here but now serve as shield (LB) and missile (RB) equippables;
-# bombs still get two buttons via X / Y for kid-friendly redundancy.
-BOMB_BUTTONS: tuple[int, ...] = (BUTTON_X, BUTTON_Y)
-# Dedicated equippable buttons.
-SHIELD_BUTTON: int = BUTTON_LB
-MISSILE_BUTTON: int = BUTTON_RB
 
 # Left-stick axis indices.
 AXIS_LX: int = 0
@@ -100,10 +77,9 @@ class _PadState:
     """Per-pad edge-detection bookkeeping.
 
     We only remember the previous-tick value for buttons that need
-    edge-detection; the rest are sampled live each tick. `prev_bomb`
-    tracks the OR of all bomb-mapped buttons (X, Y). `prev_shield` (LB),
-    `prev_missile` (RB), and `prev_back` (drone-cycle) drive the
-    equippable + drone edges.
+    edge-detection; the rest are sampled live each tick. ``prev_a`` tracks
+    the previously-held state of the CONFIRM-bound button; ``prev_b`` the
+    CANCEL-bound button.
     """
 
     __slots__ = (
@@ -132,9 +108,13 @@ class GamepadProvider:
     Construction initialises the joystick subsystem and opens every currently
     connected pad. New pads attached later are picked up automatically through
     pygame's ``JOYDEVICEADDED`` events on the next ``poll``.
+
+    The ``bindings`` argument is the :class:`BindingsStore` consulted on every
+    poll for each slot's bound pad. Pass ``None`` (default) to use a store
+    backed by ``~/.config/ssdq/bindings.json``.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, bindings: BindingsStore | None = None) -> None:
         if not pygame.get_init():
             pygame.init()
         if not pygame.joystick.get_init():
@@ -150,6 +130,8 @@ class GamepadProvider:
         self._slot_pads: list[int | None] = [None, None]
 
         self._disconnected: PlayerSlot | None = None
+
+        self._bindings: BindingsStore = bindings if bindings is not None else BindingsStore()
 
         self._scan_initial_pads()
 
@@ -219,8 +201,8 @@ class GamepadProvider:
         # presses *any* button on it. Generic / Chinese HID pads shuffle the
         # button indices unpredictably (kid playtest 2026-04-27: a Zikway pad
         # had no working "Start" at index 7, so the game wouldn't start). We
-        # mirror the same "accept anything reasonable" approach used for
-        # bombs: whatever the kid mashes counts.
+        # accept any button so whatever the kid mashes counts; they can then
+        # rebind from the SettingsScene if defaults misfire.
         if self._slot_pads[0] is not None and self._slot_pads[1] is not None:
             return
         for instance_id, pad in self._pads.items():
@@ -233,22 +215,32 @@ class GamepadProvider:
                 if self._slot_pads[slot_idx] is None:
                     self._slot_pads[slot_idx] = instance_id
                     # Mark every edge-tracked button as previously-pressed so
-                    # the act of binding doesn't also fire a spurious pause /
-                    # bomb / confirm / cancel on the very next tick.
+                    # the act of binding doesn't also fire spurious edges on
+                    # the very next tick (the kid is holding *every* button
+                    # to wake the pad up).
                     state = self._states[instance_id]
-                    state.prev_a = _safe_button(pad, BUTTON_A)
-                    state.prev_b = _safe_button(pad, BUTTON_B)
-                    state.prev_bomb = any(
-                        _safe_button(pad, btn) for btn in BOMB_BUTTONS
+                    binding = self._bindings.get(pad.get_guid(), pad_name=pad.get_name())
+                    state.prev_a = _safe_button(
+                        pad, binding.button_for(BindingAction.CONFIRM)
                     )
-                    state.prev_pause = _safe_button(pad, BUTTON_START)
-                    # Suppress shield / missile / drone-cycle edges that
-                    # would otherwise fire on the very tick the slot is
-                    # bound (the kid is holding *every* button to wake
-                    # the pad up).
-                    state.prev_shield = _safe_button(pad, SHIELD_BUTTON)
-                    state.prev_missile = _safe_button(pad, MISSILE_BUTTON)
-                    state.prev_back = _safe_button(pad, BUTTON_BACK)
+                    state.prev_b = _safe_button(
+                        pad, binding.button_for(BindingAction.CANCEL)
+                    )
+                    state.prev_bomb = _safe_button(
+                        pad, binding.button_for(BindingAction.BOMB)
+                    )
+                    state.prev_pause = _safe_button(
+                        pad, binding.button_for(BindingAction.PAUSE)
+                    )
+                    state.prev_shield = _safe_button(
+                        pad, binding.button_for(BindingAction.SHIELD)
+                    )
+                    state.prev_missile = _safe_button(
+                        pad, binding.button_for(BindingAction.MISSILE)
+                    )
+                    state.prev_back = _safe_button(
+                        pad, binding.button_for(BindingAction.DRONE_CYCLE)
+                    )
                     break
 
     def _read_slot(self, slot_idx: int) -> PlayerInput:
@@ -259,43 +251,40 @@ class GamepadProvider:
         if pad is None:
             return NEUTRAL_INPUT
         state = self._states[instance_id]
+        binding = self._bindings.get(pad.get_guid(), pad_name=pad.get_name())
 
         move = _deadzone_stick(_safe_axis(pad, AXIS_LX), _safe_axis(pad, AXIS_LY))
 
-        a = _safe_button(pad, BUTTON_A)
-        b = _safe_button(pad, BUTTON_B)
-        # Bomb = OR of every mapped bomb button (X / Y) — gamepad
-        # button indices vary across vendors and we don't want the kid stuck
-        # because their pad puts X at index 3 instead of 2.
-        bomb_held = any(_safe_button(pad, btn) for btn in BOMB_BUTTONS)
-        start = _safe_button(pad, BUTTON_START)
-        shield_held = _safe_button(pad, SHIELD_BUTTON)
-        missile_held = _safe_button(pad, MISSILE_BUTTON)
-        back = _safe_button(pad, BUTTON_BACK)
+        fire_held = _safe_button(pad, binding.button_for(BindingAction.FIRE))
+        confirm_held = _safe_button(pad, binding.button_for(BindingAction.CONFIRM))
+        cancel_held = _safe_button(pad, binding.button_for(BindingAction.CANCEL))
+        bomb_held = _safe_button(pad, binding.button_for(BindingAction.BOMB))
+        pause_held = _safe_button(pad, binding.button_for(BindingAction.PAUSE))
+        shield_held = _safe_button(pad, binding.button_for(BindingAction.SHIELD))
+        missile_held = _safe_button(pad, binding.button_for(BindingAction.MISSILE))
+        back_held = _safe_button(pad, binding.button_for(BindingAction.DRONE_CYCLE))
 
         # Edge-triggered: true only on 0 -> 1 transition.
         bomb = bomb_held and not state.prev_bomb
-        pause = start and not state.prev_pause
-        # A doubles as both held-fire and edge-triggered confirm in menus.
-        confirm = a and not state.prev_a
-        cancel = b and not state.prev_b
+        pause = pause_held and not state.prev_pause
+        confirm = confirm_held and not state.prev_a
+        cancel = cancel_held and not state.prev_b
         shield = shield_held and not state.prev_shield
         missile = missile_held and not state.prev_missile
-        # BACK cycles the player's drone formation (drone task #10).
-        drone_cycle = back and not state.prev_back
+        drone_cycle = back_held and not state.prev_back
 
         # Update prev-tick state for next poll.
-        state.prev_a = a
-        state.prev_b = b
+        state.prev_a = confirm_held
+        state.prev_b = cancel_held
         state.prev_bomb = bomb_held
-        state.prev_pause = start
+        state.prev_pause = pause_held
         state.prev_shield = shield_held
         state.prev_missile = missile_held
-        state.prev_back = back
+        state.prev_back = back_held
 
         return PlayerInput(
             move=move,
-            fire=a,
+            fire=fire_held,
             bomb=bomb,
             pause=pause,
             confirm=confirm,
@@ -315,7 +304,7 @@ def _safe_axis(pad: pygame.joystick.JoystickType, axis: int) -> float:
 
 def _safe_button(pad: pygame.joystick.JoystickType, button: int) -> bool:
     """Read a button, returning False if the pad doesn't expose it."""
-    if button >= pad.get_numbuttons():
+    if button < 0 or button >= pad.get_numbuttons():
         return False
     return bool(pad.get_button(button))
 
