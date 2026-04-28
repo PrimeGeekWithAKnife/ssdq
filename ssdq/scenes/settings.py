@@ -189,5 +189,23 @@ class SettingsScene(Scene):
         return None
 
     def _tick_capture(self) -> SceneTransition | None:
-        # Filled in Task 5.
+        # Read raw pygame button events directly — we deliberately do NOT use
+        # PlayerInput here because the bindings being captured are exactly
+        # what generates that. Tolerate any pad: rebinding on the wrong pad
+        # is harmless because each pad has its own GUID-keyed entry, and
+        # single-pad-per-slot is the common case.
+        for event in pygame.event.get(eventtype=pygame.JOYBUTTONDOWN):
+            idx = int(getattr(event, "button", -1))
+            if idx < 0 or self._capture_target is None:
+                continue
+            if self._app.bindings is not None:
+                cur = self._app.bindings.get(self._pad_guid, pad_name=self._pad_name)
+                self._app.bindings.set(
+                    self._pad_guid,
+                    pad_name=self._pad_name,
+                    binding=cur.with_button(self._capture_target, idx),
+                )
+            self.capturing = False
+            self._capture_target = None
+            return None
         return None
