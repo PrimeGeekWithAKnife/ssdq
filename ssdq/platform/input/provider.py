@@ -15,9 +15,10 @@ Selection rules (in order):
 from __future__ import annotations
 
 import os
-from typing import Protocol, runtime_checkable
+from typing import Callable, Protocol, runtime_checkable
 
 from ssdq.core.types import PlayerInput, PlayerSlot
+from ssdq.platform.input.bindings import BindingsStore
 from ssdq.platform.input.gamepad import GamepadProvider
 from ssdq.platform.input.keyboard import KeyboardProvider
 
@@ -44,10 +45,21 @@ class InputProvider(Protocol):
         ...
 
 
-def select_provider() -> InputProvider:
+def select_provider(
+    *,
+    bindings: BindingsStore | None = None,
+    on_pad_bound: Callable[[str, str], None] | None = None,
+) -> InputProvider:
     """Pick the right provider for this environment. Pumps pygame events
     once during construction so the chosen provider can settle its initial
-    button state without an external init step."""
+    button state without an external init step.
+
+    ``bindings`` is forwarded to the gamepad provider so per-pad rebinds
+    saved by the SettingsScene take effect. ``on_pad_bound`` is fired with
+    ``(guid, name)`` when the gamepad provider claims a slot — main.py uses
+    it to populate ``AppState.last_active_pad_*`` so the SettingsScene knows
+    which pad to configure. Keyboard provider ignores both (keyboard
+    rebinding is dev-only and behind ``SSDQ_KEYBOARD``)."""
     if os.environ.get(KEYBOARD_ENV_VAR) == "1":
         return KeyboardProvider()
-    return GamepadProvider()
+    return GamepadProvider(bindings=bindings, on_pad_bound=on_pad_bound)

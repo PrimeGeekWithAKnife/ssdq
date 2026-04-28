@@ -74,15 +74,22 @@ class SceneStack:
     `paused` is a global modal flag — set by either player's pause edge — and
     suspends `tick()` until cleared. `render()` still runs (so we can dim the
     screen and draw a pause banner).
+
+    `app` is an optional back-reference to the session-scope ``AppState`` so
+    pause-time shortcuts (CONFIRM → SettingsScene; CANCEL → quit) can build
+    their target scenes without coupling the stack to a specific scene class.
+    main.py wires it; tests that don't exercise the pause shortcut leave it
+    ``None``.
     """
 
-    __slots__ = ("_paused", "_quit_requested", "_stack", "_world")
+    __slots__ = ("_paused", "_quit_requested", "_stack", "_world", "app")
 
     def __init__(self, world: World) -> None:
         self._stack: list[Scene] = []
         self._world: World = world
         self._paused: bool = False
         self._quit_requested: bool = False
+        self.app: Any = None
 
     @property
     def world(self) -> World:
@@ -137,6 +144,22 @@ class SceneStack:
             # Pause menu (kid playtest 2026-04-27): cancel button quits.
             if inputs[0].cancel or inputs[1].cancel:
                 self._quit_requested = True
+                return
+            # CONFIRM (edge-triggered, A button on default mapping) opens the
+            # gamepad rebind scene without leaving pause from the player's
+            # perspective — they pop back to the same level. confirm-not-fire
+            # avoids re-triggering on the held FIRE that was active when the
+            # player hit pause.
+            if (inputs[0].confirm or inputs[1].confirm) and self.app is not None:
+                if getattr(self.app, "bindings", None) is not None:
+                    from ssdq.scenes.settings import SettingsScene
+
+                    self._paused = False
+                    guid = getattr(self.app, "last_active_pad_guid", "") or ""
+                    name = getattr(self.app, "last_active_pad_name", "") or ""
+                    self.push(
+                        SettingsScene(app=self.app, pad_guid=guid, pad_name=name)
+                    )
             return
         scene = self.top()
         if scene is None:

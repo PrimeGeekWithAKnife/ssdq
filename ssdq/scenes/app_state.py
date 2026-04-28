@@ -14,6 +14,7 @@ from ssdq.core.coop.options import CoopOptions
 from ssdq.core.replay import ReplayRecorder
 from ssdq.core.types import P1, P2, PlayerSlot
 from ssdq.platform.audio import AudioBus
+from ssdq.platform.input.bindings import BindingsStore
 
 
 def _zero_per_slot() -> dict[PlayerSlot, int]:
@@ -34,6 +35,18 @@ class AppState:
     last_p1_score: int = 0
     last_p2_score: int = 0
     completed_level: bool = False
+
+    # Per-pad button bindings. Optional so pre-existing scene tests that
+    # build a bare AppState still construct; main.py always wires this in
+    # at startup so production code can rely on it being present.
+    bindings: BindingsStore | None = None
+
+    # Most-recently bound pad's SDL GUID + display name. Populated by
+    # GamepadProvider on slot bind so the SettingsScene targets the pad
+    # the player is actually holding without coupling to the provider.
+    # Empty strings until the first pad is bound.
+    last_active_pad_guid: str = ""
+    last_active_pad_name: str = ""
 
     # Bombs awarded by an inter-level scene (DockingScene) that the next
     # LevelScene should add on top of the ship's `starting_bombs` baseline

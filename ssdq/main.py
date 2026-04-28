@@ -35,6 +35,7 @@ from ssdq.core.scene import SceneStack
 from ssdq.core.types import PlayerInput, TickIndex
 from ssdq.platform.audio import AudioBus
 from ssdq.platform.input import InputProvider, select_provider
+from ssdq.platform.input.bindings import BindingsStore
 from ssdq.platform.render import Renderer, SpriteAtlas
 from ssdq.platform.window import Window
 from ssdq.scenes import AppState, BootScene
@@ -97,7 +98,14 @@ def _make_app_state(record_path: Path | None) -> AppState:
     recorder = (
         ReplayRecorder(content_hash=bundle.content_hash()) if record_path is not None else None
     )
-    return AppState(content=bundle, audio=audio, options=options, recorder=recorder)
+    bindings = BindingsStore()
+    return AppState(
+        content=bundle,
+        audio=audio,
+        options=options,
+        recorder=recorder,
+        bindings=bindings,
+    )
 
 
 def _build_atlas(content_root: Path, app: AppState) -> SpriteAtlas:
@@ -179,7 +187,11 @@ def main(argv: list[str] | None = None) -> int:
     elif args.smoke:
         provider = _build_smoke_provider()
     else:
-        provider = select_provider()
+        def _on_pad_bound(guid: str, name: str) -> None:
+            app.last_active_pad_guid = guid
+            app.last_active_pad_name = name
+
+        provider = select_provider(bindings=app.bindings, on_pad_bound=_on_pad_bound)
 
     with Window(
         width=args.width,
@@ -191,6 +203,7 @@ def main(argv: list[str] | None = None) -> int:
         renderer = Renderer(atlas=atlas, size=window.size)
         world = World()
         stack = SceneStack(world)
+        stack.app = app
         stack.push(BootScene(app))
 
         clock = Clock()
