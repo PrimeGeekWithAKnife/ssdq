@@ -174,16 +174,18 @@ class PlayerPowerupState:
         )
 
     def reset_on_death(self, *, starting_bombs: int) -> PlayerPowerupState:
-        """Per spec: weapon level drops back to base on death; bombs reset
-        to `starting_bombs` (from ShipDef); speed-boost, shield and the
-        timed fire-rate boost cleared; permanent ship-speed bonus is
-        retained (kid-playtest spec — losing your hard-earned move speed
-        on every death felt awful); lives is decremented by the coop
-        layer, not here.
+        """Per spec: weapon level drops back to base on death; speed-boost,
+        shield and the timed fire-rate boost cleared; permanent ship-speed
+        bonus is retained; lives is decremented by the coop layer, not
+        here. Bombs are preserved at max(current, starting_bombs) so a
+        stockpile from pickups isn't wiped — kid playtest 2026-04-28
+        reported pickups appeared to "reset" the bomb count, which traced
+        to the death reset clobbering accumulated pickups; same rationale
+        as the ship-speed retention.
         """
         return PlayerPowerupState(
             weapon=self.weapon.reset(),
-            bombs=max(0, starting_bombs),
+            bombs=max(self.bombs, starting_bombs),
             lives=self.lives,
             speed_boost=_NO_BOOST,
             shield=_NO_SHIELD,
