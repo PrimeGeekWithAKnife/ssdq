@@ -322,7 +322,4 @@ def _safe_button(pad: pygame.joystick.JoystickType, button: int) -> bool:
 
 def _any_button_pressed(pad: pygame.joystick.JoystickType) -> bool:
     """True if any button on the pad is currently held."""
-    for i in range(pad.get_numbuttons()):
-        if pad.get_button(i):
-            return True
-    return False
+    return any(pad.get_button(i) for i in range(pad.get_numbuttons()))
