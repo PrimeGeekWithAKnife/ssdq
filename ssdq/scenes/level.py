@@ -449,7 +449,20 @@ class LevelScene(Scene):
             raise RuntimeError(f"level {self.level_index} not in content")
         level = bundle.levels[self.level_index]
         self._scheduler = WaveScheduler(level)
-        self._session = CoopSession.initial(bundle.coop, self.app.options)
+        # Seed score from any prior cleared-level totals (carry-forward).
+        # Title→PLAY and LevelSelect both clear last_*_score before launching,
+        # so a fresh session sees zeros here.
+        from ssdq.core.coop.scoring import ScoreLedger as _ScoreLedger
+
+        self._session = CoopSession.initial(
+            bundle.coop,
+            self.app.options,
+            scores=_ScoreLedger.with_seed(
+                team=self.app.last_team_score,
+                p1=self.app.last_p1_score,
+                p2=self.app.last_p2_score,
+            ),
+        )
         # Powerup state per slot — one ship type for the slice; tree name
         # is parsed off the primary weapon name (e.g. "pulse_lvl1" → "pulse").
         ship = bundle.ships["vanguard"]
@@ -468,16 +481,28 @@ class LevelScene(Scene):
         max_tree_level = max(0, len(bundle.weapon_trees.get(tree, ())) - 1)
         p1_tier = self._seeded_tier(P1, max_tree_level)
         p2_tier = self._seeded_tier(P2, max_tree_level)
+        # Kid playtest 2026-04-28 #4 — bombs/ship-speed used to reset every
+        # level. Carry forward any stockpile written by the previous cleared
+        # level (or from before death; reset_on_death already preserves
+        # bombs / ship_speed_bonus per-life). Bombs are clamped to at least
+        # ship.starting_bombs so an empty stockpile never starts below
+        # baseline; the supply-ship bonus is added on TOP.
+        p1_bombs = max(self.app.last_bombs.get(P1.index, 0), ship.starting_bombs) + bomb_bonus
+        p2_bombs = max(self.app.last_bombs.get(P2.index, 0), ship.starting_bombs) + bomb_bonus
+        p1_speed_bonus = self.app.last_ship_speed_bonus.get(P1.index, 0.0)
+        p2_speed_bonus = self.app.last_ship_speed_bonus.get(P2.index, 0.0)
         self._powerup_states = {
             P1: PlayerPowerupState(
                 weapon=WeaponState(tree=tree, level=p1_tier),
-                bombs=ship.starting_bombs + bomb_bonus,
+                bombs=p1_bombs,
                 lives=self.app.options.starting_lives,
+                ship_speed_bonus=p1_speed_bonus,
             ),
             P2: PlayerPowerupState(
                 weapon=WeaponState(tree=tree, level=p2_tier),
-                bombs=ship.starting_bombs + bomb_bonus,
+                bombs=p2_bombs,
                 lives=self.app.options.starting_lives,
+                ship_speed_bonus=p2_speed_bonus,
             ),
         }
         self._player_entities = {P1: None, P2: None}
@@ -536,6 +561,16 @@ class LevelScene(Scene):
             self.app.last_weapon_tiers = {
                 P1.index: self._powerup_states[P1].weapon.level,
                 P2.index: self._powerup_states[P2].weapon.level,
+            }
+            # Carry bombs + permanent ship-speed bonus into the next level.
+            # Kid playtest 2026-04-28 #4 — these used to reset each level.
+            self.app.last_bombs = {
+                P1.index: self._powerup_states[P1].bombs,
+                P2.index: self._powerup_states[P2].bombs,
+            }
+            self.app.last_ship_speed_bonus = {
+                P1.index: self._powerup_states[P1].ship_speed_bonus,
+                P2.index: self._powerup_states[P2].ship_speed_bonus,
             }
         # Sweep ALL level entities so they don't ghost into the next scene —
         # kid playtest #6: "ghost ship of me on the screen where my last
