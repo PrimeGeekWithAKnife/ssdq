@@ -61,11 +61,16 @@ class LevelCompleteScene(Scene):
             return None
         # Advance the session pointer to the next level (if any) BEFORE
         # entering the docking cinematic, so DockingScene knows where to
-        # send us next.
+        # send us next. If we just cleared the FINAL level, route to the
+        # VictoryScene instead — kid playtest 2026-04-28: "after the final
+        # boss the game does not end".
         bundle = self._app.content
         next_index = self._completed_level_index + 1
-        if next_index in bundle.levels:
-            self._app.current_level = next_index
+        if next_index not in bundle.levels:
+            from ssdq.scenes.victory import VictoryScene
+
+            return Replace(scene=VictoryScene(self._app))
+        self._app.current_level = next_index
         return Replace(scene=DockingScene(self._app))
 
     def render(self, world: World, surface: Any, alpha: float) -> None:

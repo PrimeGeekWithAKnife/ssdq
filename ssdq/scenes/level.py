@@ -572,6 +572,16 @@ class LevelScene(Scene):
                 P1.index: self._powerup_states[P1].ship_speed_bonus,
                 P2.index: self._powerup_states[P2].ship_speed_bonus,
             }
+            # Re-stage live drones into drones_pending so the next level's
+            # _spawn_pending_drones recreates them. The despawn sweep below
+            # would otherwise destroy them with no path back. Kid playtest
+            # 2026-04-28: "drones do not persist between resupplies".
+            self.app.drones_pending[P1] = (
+                self.app.drones_pending.get(P1, 0) + self._count_drones(world, P1)
+            )
+            self.app.drones_pending[P2] = (
+                self.app.drones_pending.get(P2, 0) + self._count_drones(world, P2)
+            )
         # Sweep ALL level entities so they don't ghost into the next scene —
         # kid playtest #6: "ghost ship of me on the screen where my last
         # position was". The world is shared across the scene stack; if

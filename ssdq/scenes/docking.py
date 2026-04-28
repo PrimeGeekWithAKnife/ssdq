@@ -343,10 +343,55 @@ def _draw_supply_ship(
     pygame.draw.rect(surface, (140, 150, 160), pygame.Rect(cx + 18, cy - 38, 12, 8))
 
 
+_PLAYER_SPRITE_CACHE: dict[str, pygame.Surface | None] = {}
+
+
+def _try_load_player_sprite(filename: str) -> pygame.Surface | None:
+    """Cached load of a player ship sprite for the docking scene.
+
+    Kid playtest 2026-04-28: resupply level showed triangles instead of
+    the real ships. Now we blit the actual ship sprite (player_blue /
+    player_red), falling back to the triangle if the file is missing
+    so headless tests still pass.
+    """
+    if filename in _PLAYER_SPRITE_CACHE:
+        return _PLAYER_SPRITE_CACHE[filename]
+    from pathlib import Path
+
+    path = Path("content") / "assets" / "sprites" / "ships" / filename
+    if not path.is_file():
+        _PLAYER_SPRITE_CACHE[filename] = None
+        return None
+    try:
+        surf = pygame.image.load(str(path))
+        if pygame.display.get_init() and pygame.display.get_surface() is not None:
+            surf = surf.convert_alpha()
+    except pygame.error:
+        _PLAYER_SPRITE_CACHE[filename] = None
+        return None
+    # Scale up so the player reads at the same size as the supply ship's
+    # silhouette — the in-game sprites are 16×16 source.
+    w, h = surf.get_size()
+    surf = pygame.transform.scale(surf, (int(w * 2.5), int(h * 2.5)))
+    _PLAYER_SPRITE_CACHE[filename] = surf
+    return surf
+
+
 def _draw_player_marker(
     surface: pygame.Surface, cx: int, cy: int, colour: tuple[int, int, int]
 ) -> None:
-    """Small upward-pointing triangle silhouette for a player ship."""
+    """Player ship silhouette for the docking scene.
+
+    Blits the real player_blue / player_red sprite based on the colour
+    hint; falls back to a coloured triangle when the sprite isn't on
+    disk (e.g. in headless tests where the assets dir is missing)."""
+    sprite_name = "player_blue.png" if colour == _PLAYER_BLUE else "player_red.png"
+    sprite = _try_load_player_sprite(sprite_name)
+    if sprite is not None:
+        surface.blit(sprite, sprite.get_rect(center=(cx, cy)))
+        return
+    # Fallback: triangle. Kid playtest noted this used to ALWAYS render
+    # because the real-sprite path didn't exist; now it's the rare case.
     pygame.draw.polygon(
         surface,
         colour,

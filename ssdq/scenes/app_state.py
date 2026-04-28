@@ -150,3 +150,9 @@ class AppState:
         self.last_weapon_tiers = {}
         self.last_bombs = {}
         self.last_ship_speed_bonus = {}
+        # Equippable inventories — kid expects a clean slate on a fresh
+        # campaign, not whatever stockpile a prior wipeout left behind.
+        self.shield_charges = _zero_per_slot()
+        self.missile_charges = _zero_per_slot()
+        self.drones_pending = _zero_per_slot()
+        self.drone_config = _zero_per_slot()
