@@ -146,6 +146,82 @@ enemies:
     drop_chance: 1.0          # 100% drop — guaranteed power-up
     drop_pool: [pickup_powerup, pickup_speed, pickup_bomb, pickup_health, pickup_shield]
 
+  # ───────── Levels 3-5 introductions ─────────
+  # New enemy palette to ramp difficulty across the back half of the
+  # campaign. Each is mechanically distinct so the kid reads a new
+  # threat type per level rather than a re-skin.
+
+  # Level 3 introduction — fast harasser. Two HP, rapid 2-bullet aimed
+  # bursts, brisker speed than fighter. Designed to populate the screen
+  # in pairs along curved paths so the kid has to weave between fire
+  # streams rather than parking under one fighter at a time.
+  interceptor:
+    sprite: enemies/interceptor.png
+    hitbox_radius: 24         # slim profile, generous-but-honest box
+    hp: 2
+    speed_along_path: 170
+    weapon: rapid_aim
+    fire_beats: [0.6, 1.2, 1.8, 2.4]
+    score: 350
+    drop_chance: 0.18
+    drop_pool: [
+      pickup_powerup, pickup_powerup,
+      pickup_bomb, pickup_bomb,
+      pickup_shield, pickup_shield,
+      pickup_ship_speed, pickup_ship_speed,
+      pickup_weapon_speed, pickup_weapon_speed,
+      pickup_missile,
+      pickup_speed,
+    ]
+
+  # Level 4 introduction — kamikaze diver. No weapon, but extremely fast
+  # along straight diving paths. The threat is body-collision, not bullets,
+  # so the kid has to dodge the silhouette itself. 1 HP — easy to pop if
+  # you see them coming, lethal if you don't.
+  kamikaze:
+    sprite: enemies/kamikaze.png
+    hitbox_radius: 22
+    hp: 1
+    speed_along_path: 240     # fastest enemy in the game pre-boss
+    weapon: null
+    score: 200
+    # 10% — the kid-playtest floor (test_resupply_ship.py guards this).
+    # Kamikazes die in one shot so even a thin drop rate reads as "real
+    # reward" when the kid picks them off the dive line.
+    drop_chance: 0.10
+    drop_pool: [
+      pickup_powerup,
+      pickup_bomb,
+      pickup_ship_speed,
+      pickup_weapon_speed,
+      pickup_speed,
+    ]
+
+  # Level 5 introduction — heavy turret. Slow, fat, fires a wide twin-aim
+  # fan on a steady beat. Acts as the "anchor" enemy in late waves: the
+  # kid must commit to killing it because it sits in the playfield long
+  # enough to actually dictate positioning. Drops from the heavy pool.
+  sentinel:
+    sprite: enemies/sentinel.png
+    hitbox_radius: 36
+    hp: 15
+    speed_along_path: 40
+    weapon: twin_aim
+    fire_beats: [1.0, 2.2, 3.4, 4.6]
+    score: 1200
+    drop_chance: 0.50
+    drop_pool: [
+      pickup_powerup, pickup_powerup, pickup_powerup, pickup_powerup,
+      pickup_bomb, pickup_bomb, pickup_bomb, pickup_bomb,
+      pickup_shield, pickup_shield, pickup_shield, pickup_shield,
+      pickup_ship_speed, pickup_ship_speed,
+      pickup_weapon_speed, pickup_weapon_speed,
+      pickup_drone,
+      pickup_missile,
+      pickup_health,
+      pickup_speed,
+    ]
+
 # Boss definition. Phase inside the Level scene, not a separate scene
 # (per spec §4.4). Two phases per spec §2 DOD #4.
 bosses:
@@ -204,6 +280,220 @@ bosses:
         formation: boss_phase_2
         weapon: burst_then_pause
         fire_beats: [0.1, 0.3, 0.5, 0.7, 1.8, 2.0, 2.2, 2.4]
+
+
+  # Level-3 boss "Tense Orbital" — finale of chapter 3, sits between
+  # boss_02 (180 HP total) and the campaign-final boss_05 (~50000 score).
+  # Visually re-uses the boss silhouette path (placeholder — SpriteAtlas
+  # auto-fills missing files with a stable colour).
+  #
+  # Mechanical step from boss_02 (kid playtest 2026-04-28):
+  #   * 110 HP per phase (vs boss_02's 90) — 220 total. Small bump so the
+  #     fight is meaningfully longer without being a slog for an 8-year-old.
+  #   * Phase 1 swaps slow_spiral for `aimed_triple` on a tight ~0.55s grid.
+  #     The kid already knows the 3-bullet aimed fan from earlier enemies
+  #     — boss_03 makes the difficulty step read as "wow it's faster"
+  #     before the new attack arrives in phase 2. Familiar pattern,
+  #     denser cadence — pure tempo bump on something the kid can read.
+  #   * Phase 2 INTRODUCES `ring_shot` (full 360° ring of bullets). Beat
+  #     grid is deliberately sparse — 3 fires across the 5s loop (~one
+  #     ring every 1.6s) — so each ring telegraphs, expands, and the kid
+  #     has time to spot a gap and slip through. A dense ring on a
+  #     first-encounter boss would be mean; three big readable rings is
+  #     the "wow new attack" beat we want here.
+  #   * Stays inside the §6.3 mastery constraint: deterministic, no
+  #     real-time tracking. All variation is beat density and weapon
+  #     choice — same input → same fight.
+  boss_03:
+    sprite: enemies/boss_03.png
+    hitbox_radius: 60
+    score: 26000
+    intro_telegraph_seconds: 2.0
+    phases:
+      # Phase 1: familiar aimed_triple at a tighter cadence. ~50% HP.
+      # Beats sit roughly on a 0.55s grid across the 8s boss_phase_1
+      # loop — the kid hears a steady drumbeat of tight 3-bullet fans
+      # and learns to micro-dodge between volleys. No ring yet — just
+      # "the same enemy fire I already know, but quicker". This is the
+      # difficulty step boss_02 → boss_03 expressed purely as tempo.
+      - hp: 110
+        formation: boss_phase_1
+        weapon: aimed_triple
+        fire_beats: [0.4, 0.95, 1.5, 2.05, 2.6, 3.15, 3.7, 4.25]   # loops while phase active
+
+      # Phase 2: NEW attack — full-circle ring_shot. Final 50% HP.
+      # boss_phase_2 is a 5s loop; we fire the ring only 3 times per loop
+      # (~every 1.6s) so each ring has room to expand and the kid has a
+      # clear "spot the gap, slide through" beat between fires. Per the
+      # ring_shot definition (8 bullets across 360°) the gaps are big
+      # and readable. First time the kid sees this attack in the
+      # campaign — keep it fair on the rhythm side.
+      - hp: 110
+        formation: boss_phase_2
+        weapon: ring_shot
+        fire_beats: [0.6, 2.2, 3.8]
+
+  # Level-4 boss — "Over Earth" phase. Penultimate boss of the campaign,
+  # NOT the finale. Slot in difficulty: harder than boss_03, but still
+  # acts as a check before the level-5 final boss — the kid should beat
+  # it in 2-3 attempts once they've cleared boss_03 cleanly.
+  #
+  # Visual: enemies/boss_04.png (placeholder — same silhouette family as
+  # boss_01..03; the orchestrator will tint/recolour separately).
+  #
+  # Difficulty step (kid playtest 2026-04-28):
+  #   * From boss_02 (the last burst_then_pause / spiral boss the kid has
+  #     truly internalised): boss_04 keeps the SAME two weapon families
+  #     the kid has now mastered (burst_then_pause and a ring pattern),
+  #     so nothing about the SHAPE of the danger is new — what changes is
+  #     density and gap width. No new mechanics to learn under pressure.
+  #   * From boss_03 (the immediate predecessor — sparse rings + the
+  #     spiral cadence): boss_04 tightens the ring schedule. Where
+  #     boss_03 fired ONE ring per beat-cluster with generous spacing,
+  #     boss_04 fires TWO rings per beat-cluster (paired beats 0.15s
+  #     apart), so the dodge window between rings is roughly half. The
+  #     burst_then_pause phase also gets one extra beat per cluster
+  #     compared to boss_02 (4 beats per burst instead of 3-4).
+  #
+  # HP: 135 per phase × 2 phases = 270 total. Step up from boss_02 (180)
+  # and a deliberately smaller HP step than boss_02 → boss_03 will be
+  # (boss_03 is expected ~210-225); the LETHALITY does the heavy lifting
+  # here, not the bullet-sponge. Two phases (not three) — three phases on
+  # a penultimate boss risks fatiguing the kid before the finale, and a
+  # clean two-act structure keeps the phase telegraph readable.
+  #
+  # Score: 35000 — sits between boss_03 (~25000-30000 expected) and the
+  # eventual boss_05 finale.
+  #
+  # §6.3 mastery-constraint compliance:
+  #   * Both weapons are pre-existing definitions (burst_then_pause is
+  #     pattern=fan, ring_shot is pattern=fan with a 360° arc). Aim is
+  #     either fixed-down or full-circle — no real-time tracking.
+  #   * All variation lives in the deterministic fire_beats schedule.
+  #   * Formations are the existing boss_phase_1 / boss_phase_2 (both
+  #     loop:true) — no new movement primitives introduced.
+  boss_04:
+    sprite: enemies/boss_04.png
+    hitbox_radius: 60
+    score: 35000
+    intro_telegraph_seconds: 2.0
+    phases:
+      # Phase 1 — "the wall". High-density burst_then_pause: TWO bursts
+      # per loop, each burst is FOUR beats clustered ~0.15s apart, then a
+      # long ~1.4s breather. Compared to boss_02 phase 2 (which was 4+4
+      # beats but spaced 0.2s apart inside each burst), boss_04 packs the
+      # beats tighter so the wall reads as a single sustained sheet of
+      # fan-fire rather than a strobing pulse — but the breather is still
+      # there as the kid's "OK, reposition now" signal.
+      #
+      # The fan_arc of burst_then_pause is 90° downward, so positioning
+      # near the screen edges stays viable; the breather is when the kid
+      # cuts back across the centre.
+      - hp: 135
+        formation: boss_phase_1
+        weapon: burst_then_pause
+        fire_beats: [0.10, 0.25, 0.40, 0.55, 1.95, 2.10, 2.25, 2.40]
+
+      # Phase 2 — "the cage". ring_shot, but fired in PAIRS: each
+      # beat-cluster is two rings ~0.15s apart, then a ~0.9s gap before
+      # the next pair. Where boss_03 used sparse single rings (one ring
+      # per beat with a long breath after), boss_04 doubles them up — the
+      # second ring of each pair lands in the gap between the first
+      # ring's bullets, so the effective dodge window between bullets is
+      # roughly half. Kid still has the inter-pair breather to relocate.
+      #
+      # ring_shot is pattern=fan / fan_arc=360° / 8 bullets per beat, so
+      # 8 bullets per ring × 2 rings per pair = 16 bullets per pair. The
+      # offset firing makes the second ring's bullets appear in the gaps
+      # of the first — deterministic, learnable, and the kid can still
+      # find the weave once they've seen one full loop.
+      - hp: 135
+        formation: boss_phase_2
+        weapon: ring_shot
+        fire_beats: [0.20, 0.35, 1.40, 1.55, 2.60, 2.75, 3.80, 3.95]
+
+  # Level-5 boss — THE CAMPAIGN-FINAL boss ("Hyperspace Final Push").
+  # Kid playtest 2026-04-28: this is the last fight in the campaign, and
+  # it's allowed to be the hardest thing in the game — but the kid arrives
+  # here with the full earned kit (max-tier primary, drone companion,
+  # missile charges, shield pickups), so "hardest" still means "beatable
+  # by an 8-year-old who has played the run". No real-time tracking, no
+  # adaptation — same mastery constraint as every other boss (§6.3).
+  #
+  # Visually: enemies/boss_05.png placeholder for now. A future tools/
+  # recolour pass will give it the campaign-finale look (tinted gold +
+  # heavier silhouette per the boss_02 recolour precedent).
+  #
+  # THREE phases — boss_01 / boss_02 only had two; the campaign finale
+  # earns the extra phase. HP target ~150 per phase = ~450 total. That is
+  # a serious wall but it is paced: phase 1 teaches the new weapon, phase
+  # 2 is the wall-of-bullets crucible the kid already knows from boss_02
+  # (just denser), phase 3 is the crescendo. Each phase reuses an
+  # existing boss formation (boss_phase_1 / boss_phase_2 — both loop) so
+  # we don't add a third spline; per loader.py, ≥1 phase is valid and 3
+  # is fine.
+  #
+  # Weapons:
+  #   * Phase 1 — heavy_spread (NEW level-5 wide downward fan, slower
+  #     bullets — the kid has to dash side-to-side every beat). Mid
+  #     density beat schedule. NOTE: heavy_spread itself lives in
+  #     enemy_weapons: and will be added by the same content pass that
+  #     integrates this block — referenced here by name only.
+  #   * Phase 2 — burst_then_pause (existing). Tighter than boss_02:
+  #     two clusters of 5 beats each per loop with the SHORTEST breather
+  #     of any boss in the campaign (~0.6s gap). The "wall" phase.
+  #   * Phase 3 — ring_shot (existing — defined but never used in the
+  #     campaign until now). Three full rings per loop at boss tempo.
+  #     Cyclic gaps mean the kid weaves between rings rather than
+  #     dodging individual bullets — telegraphs the campaign-final
+  #     crescendo.
+  #
+  # Score: 55000 — the biggest single reward in the campaign (boss_01
+  # was 10000, boss_02 was 18000). The kid earned it.
+  #
+  # Mastery-constraint adherence: every weapon is fan / aimed_fan / fan
+  # (the ring is just fan with arc=360). No tracking, no adaptation. The
+  # difficulty lives in beat density and weapon stacking, NOT in any
+  # runtime feedback loop. Same input → same fight, every run. Replay
+  # determinism preserved.
+  boss_05:
+    sprite: enemies/boss_05.png
+    hitbox_radius: 64                    # slightly chunkier than boss_01/02 (60) — finale silhouette
+    score: 55000                         # campaign-final reward, dwarfs boss_02 (18000)
+    intro_telegraph_seconds: 3.0         # extra beat of telegraph — kid needs to register "this is THE one"
+    phases:
+      # Phase 1 — TEACH the new weapon. heavy_spread is a wide downward
+      # fan with slower bullets; the kid learns the side-to-side dash
+      # rhythm while HP is still fresh. Mid-density beat schedule on a
+      # ~0.9s grid (5 beats over 4.5s of the 8s loop). Boss_phase_1 is
+      # the slow side-to-side path so the boss itself is also moving —
+      # the fan re-aims-by-position each beat without any tracking.
+      - hp: 150
+        formation: boss_phase_1
+        weapon: heavy_spread
+        fire_beats: [0.6, 1.5, 2.4, 3.3, 4.2, 5.1, 6.0]
+
+      # Phase 2 — THE WALL. burst_then_pause at tighter-than-boss_02
+      # density. Two clusters of 5 beats per loop with a ~0.6s breather
+      # (boss_02 had ~1.4s). Boss_phase_2 is the tight figure-8 path so
+      # the boss itself shifts between bursts — the kid uses the
+      # breather to reposition, then weathers the wall.
+      - hp: 150
+        formation: boss_phase_2
+        weapon: burst_then_pause
+        fire_beats: [0.1, 0.3, 0.5, 0.7, 0.9, 1.5, 1.7, 1.9, 2.1, 2.3]
+
+      # Phase 3 — CRESCENDO. ring_shot at boss tempo: three full rings
+      # per loop, evenly spaced through the 8s boss_phase_1 loop. Cyclic
+      # gaps in the ring (8 bullets, arc 360) form predictable wedges
+      # the kid weaves through. This is the campaign's final test of
+      # rhythmic dodging — and because the kit is maxed (drone aux fire,
+      # missiles for chip damage, shield for the worst beat), the kid
+      # has the answers if they kept their shields banked.
+      - hp: 150
+        formation: boss_phase_1
+        weapon: ring_shot
+        fire_beats: [0.5, 3.2, 5.9]
 
 # Enemy weapon definitions. Bullets are deterministic — see top-of-file note.
 enemy_weapons:
@@ -273,6 +563,43 @@ enemy_weapons:
     pattern: fan
     bullets_per_beat: 8
     fan_arc_deg: 360           # full circle around the boss
+
+  # ───────── Levels 3-5 weapon palette ─────────
+
+  # Used by `interceptor` (level 3+). Quick 2-shot burst aimed at the
+  # player at moment of fire — slightly faster bullets than `aimed_shot`
+  # so the kid can't park in front of one and tank, but only 2 bullets
+  # per beat so the screen doesn't fill with walls.
+  rapid_aim:
+    sprite: projectiles/enemy_orb.png
+    damage: 1
+    speed: 320
+    pattern: aimed_fan
+    bullets_per_beat: 2
+    fan_arc_deg: 8             # tight pair — reads as a "twin shot"
+
+  # Used by `sentinel` (level 5+). Wider 3-bullet aimed fan, slower
+  # bullets so the kid has time to sidestep each beat. The combination
+  # of slow bullets + wide spread + 4-beat cadence is the "turret" feel.
+  twin_aim:
+    sprite: projectiles/enemy_orb.png
+    damage: 1
+    speed: 220
+    pattern: aimed_fan
+    bullets_per_beat: 3
+    fan_arc_deg: 28
+
+  # Used by boss_05 phase 1 — heavy spread that demands the kid commit
+  # to one side of the screen for each beat. Wide downward fan, slower
+  # bullets than burst_then_pause so the wall reads as "wait then dash"
+  # rather than "panic".
+  heavy_spread:
+    sprite: projectiles/enemy_orb.png
+    damage: 1
+    speed: 200
+    pattern: fan
+    bullets_per_beat: 9
+    fan_arc_deg: 110
 
 # Pickups. Spec §2 DOD #5: weapon-up, speed-up, extra-bomb, extra-life.
 # `pickup_health` IS the extra-life pickup (no separate hp system).

@@ -115,3 +115,50 @@ formations:
       - [ 800, 100]
       - [1080, 140]
       - [1400, 120]
+
+  # ───────── Levels 3-5 formations ─────────
+  # Three new paths added so the back-half of the campaign reads as
+  # "harder versions of patterns I know" plus one genuinely new shape
+  # per stage.
+
+  # Steep diving line down the right gutter. Used by kamikaze runs —
+  # reads as "incoming dive on your right" so the kid can pull left.
+  kamikaze_dive_right:
+    type: catmull_rom
+    duration: 3.5
+    control_points:
+      - [1100, -80]
+      - [1080, 120]
+      - [1040, 360]
+      - [ 960, 600]
+      - [ 880, 820]
+
+  # Wide horizontal sweep that traverses the upper-mid playfield twice
+  # (out then back). Sentinels and gunships use this when paired so the
+  # kid sees a "screen-wide patrol" they have to thread through.
+  sweep_horizontal:
+    type: catmull_rom
+    duration: 10.0
+    control_points:
+      - [-100, 220]
+      - [ 320, 200]
+      - [ 720, 260]
+      - [1080, 200]
+      - [ 720, 280]
+      - [ 320, 220]
+      - [-100, 240]
+
+  # Pincer entry from both top corners that converges toward centre-top
+  # and then dives. Shape demands the kid sit dead-centre between two
+  # incoming streams. Use mirror() if you want the symmetric pair to
+  # cross the kid in a different rhythm.
+  pincer_top:
+    type: catmull_rom
+    duration: 6.5
+    control_points:
+      - [ 100, -80]
+      - [ 240, 120]
+      - [ 440, 240]
+      - [ 640, 320]
+      - [ 640, 480]
+      - [ 640, 800]

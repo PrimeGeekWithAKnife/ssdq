@@ -1,0 +1,213 @@
+# Level 4 — "Over Earth"
+# Per the multi-level arc spec (2026-04-25-ssdq-design.md §multi-level):
+# the pilots have re-entered Earth's atmosphere; the alien fleet is
+# making its final push at the planet. Heroic, ascending energy. The
+# track (music/level_04.ogg) is mid-tempo major key — see
+# tools/generate_music.py LEVEL_04 spec.
+#
+# Background: bg_starfield_01 reused. The dedicated Earth backdrop is
+# still backlogged (only two backdrops exist in tree); the music + boss
+# music carry the "we're home" mood instead. Boss music is its own
+# track (boss_04.ogg) for the first time outside level 1/2 reuse.
+#
+# Difficulty curve note: this level introduces the NEW `kamikaze` enemy
+# — a fast diving suicide-runner with no weapon, only a body-collision
+# threat. We deliberately teach the kid the dive pattern in clean
+# squadrons of 4-6 along `kamikaze_dive_right` (and its mirror) so the
+# silhouette of "incoming dive" becomes a recognisable shape. By stage
+# 3 it's stacked on top of the bomber/gunship layer the kid already
+# knows; by stage 4 it overlaps a falling bullet wall, which is the
+# new threat-vector for level 4 — "wall + dive at the same time". The
+# `interceptor` (introduced last level) gets heavy use as the workhorse
+# fast threat; we mix it into nearly every stage so the kid keeps the
+# muscle memory from level 3.
+#
+# Length: 245s. Slightly longer than levels 1-3 (210/195/~225) so the
+# kid feels the ascent build before the final push at level 5. Boss
+# spawns at 240s (length - 5) per the level-loader convention.
+
+level: 4
+title: "Over Earth"
+codename: over_earth
+music: music/level_04.ogg
+boss_music: music/boss_04.ogg
+background: bg_starfield_01
+length_seconds: 245
+
+waves:
+  # ───────── Stage 1 — re-entry, the fleet shows its teeth ─────────
+  # Open with a fighter sweep so the kid immediately remembers "things
+  # shoot back" — no drone-only ramp, level 4 assumes mastery of the
+  # earlier rhythm. Then introduce interceptor pressure (the level-3
+  # workhorse) before the FIRST kamikaze squadron, so the kid sees the
+  # new dive silhouette in isolation against a familiar backdrop.
+  - at: 2.0
+    stage: 1
+    spawn:
+      - { enemy: fighter, count: 6, formation: arc_left_to_right, spacing: 0.35 }
+      - { enemy: fighter, count: 6, formation: mirror(arc_left_to_right), spacing: 0.35, delay: 0.8 }
+
+  - at: 14.0
+    stage: 1
+    spawn:
+      - { enemy: interceptor, count: 4, formation: dive_then_strafe, spacing: 0.35 }
+      - { enemy: interceptor, count: 4, formation: mirror(dive_then_strafe), spacing: 0.35, delay: 0.6 }
+
+  # FIRST kamikaze sighting. Clean 4-each squadron on the signature
+  # `kamikaze_dive_right` path (and its mirror) — no bullet noise, no
+  # other enemies, so the dive silhouette reads loud and clear. The
+  # kid should learn here that kamikazes are "the diving ones with no
+  # bullets — just don't be where they're going".
+  - at: 26.0
+    stage: 1
+    spawn:
+      - { enemy: kamikaze, count: 4, formation: kamikaze_dive_right, spacing: 0.3 }
+      - { enemy: kamikaze, count: 4, formation: mirror(kamikaze_dive_right), spacing: 0.3, delay: 0.8 }
+
+  # Bomber preview + drone weave to close stage 1 with a mixed-rhythm
+  # block. Sets up the bomber-wall idiom we'll lean on heavily in
+  # stages 3 and 4.
+  - at: 38.0
+    stage: 1
+    spawn:
+      - { enemy: bomber, count: 3, formation: slow_descent_centre, spacing: 1.0 }
+      - { enemy: drone, count: 6, formation: figure_eight_centre, spacing: 0.3, delay: 1.0 }
+
+  # ───────── Stage 2 — layer it up, give them a top-up ─────────
+  - at: 52.0
+    stage: 2
+    spawn:
+      - { enemy: gunship, count: 3, formation: loop_left, spacing: 0.7, return_passes: 1 }
+      - { enemy: gunship, count: 3, formation: mirror(loop_left), spacing: 0.7, delay: 0.5, return_passes: 1 }
+
+  # Second kamikaze pass — bumped to 5 each. Still clean (no other
+  # enemies), but tighter spacing and bigger squadron so the kid
+  # internalises "kamikazes always come in pairs of dives".
+  - at: 64.0
+    stage: 2
+    spawn:
+      - { enemy: kamikaze, count: 5, formation: kamikaze_dive_right, spacing: 0.25 }
+      - { enemy: kamikaze, count: 5, formation: mirror(kamikaze_dive_right), spacing: 0.25, delay: 0.5 }
+
+  - at: 78.0
+    stage: 2
+    spawn:
+      - { enemy: interceptor, count: 5, formation: dive_then_strafe, spacing: 0.3 }
+      - { enemy: bomber, count: 3, formation: slow_descent_centre, spacing: 1.0, delay: 1.5 }
+
+  # Resupply ship #1 — kid playtest #8. Mid-level guaranteed power-up
+  # drop. Slotted between the interceptor/bomber overlap and the
+  # heavier fighter wall so the kid has 8s of "spot it, kill it, grab
+  # the drop" before the next pressure block.
+  - at: 88.0
+    stage: 2
+    spawn:
+      - { enemy: resupply_ship, count: 1, formation: resupply_cruise, spacing: 0.0 }
+
+  - at: 96.0
+    stage: 2
+    spawn:
+      - { enemy: fighter, count: 8, formation: arc_left_to_right, spacing: 0.25, return_passes: 1 }
+      - { enemy: fighter, count: 8, formation: mirror(arc_left_to_right), spacing: 0.25, delay: 0.5, return_passes: 1 }
+
+  # ───────── Stage 3 — density ramps, kamikaze gets stacked ─────────
+  - at: 112.0
+    stage: 3
+    spawn:
+      - { enemy: gunship, count: 2, formation: loop_left, spacing: 0.9 }
+      - { enemy: interceptor, count: 6, formation: dive_then_strafe, spacing: 0.25, delay: 1.0 }
+
+  # Big kamikaze block — 6 each. This is the densest pure-dive wave
+  # we'll show; after this, kamikaze always comes layered with
+  # something else. 6 is the top of the "squadrons of 4-6" brief.
+  - at: 124.0
+    stage: 3
+    spawn:
+      - { enemy: kamikaze, count: 6, formation: kamikaze_dive_right, spacing: 0.22 }
+      - { enemy: kamikaze, count: 6, formation: mirror(kamikaze_dive_right), spacing: 0.22, delay: 0.4 }
+
+  - at: 138.0
+    stage: 3
+    spawn:
+      - { enemy: bomber, count: 4, formation: slow_descent_centre, spacing: 0.9 }
+      - { enemy: drone, count: 8, formation: figure_eight_centre, spacing: 0.2, delay: 1.0 }
+
+  # Interceptor sweep across the top — `sweep_horizontal` is the
+  # horizontal-strafe formation, mirrored on both sides for a true
+  # pincer feel. New shape for the kid to read; pure interceptor so
+  # the bullet rhythm stays predictable.
+  - at: 150.0
+    stage: 3
+    spawn:
+      - { enemy: interceptor, count: 6, formation: sweep_horizontal, spacing: 0.25 }
+      - { enemy: interceptor, count: 6, formation: mirror(sweep_horizontal), spacing: 0.25, delay: 0.5 }
+
+  # Stage-3 closer: the full level-2 idiom (gunship pincer + fighter
+  # strafe) but compressed in time. Sets up the "everything at once"
+  # feel of stage 4.
+  - at: 162.0
+    stage: 3
+    spawn:
+      - { enemy: gunship, count: 3, formation: loop_left, spacing: 0.7 }
+      - { enemy: gunship, count: 3, formation: mirror(loop_left), spacing: 0.7, delay: 0.6 }
+      - { enemy: fighter, count: 6, formation: dive_then_strafe, spacing: 0.3, delay: 2.0 }
+
+  # ───────── Stage 4 — pre-boss crescendo: WALL + DIVE ─────────
+  # The new threat-vector for level 4. The kid has learned bombers as
+  # a "stand still and the bullet wall falls on you" pattern; we now
+  # overlay kamikazes diving on the same beat, so they HAVE to move
+  # — but the bullet wall punishes lazy lateral drift. This is the
+  # signature stage-4 setup, repeated in two flavours.
+
+  # Wall + dive #1: bomber wall down the centre, kamikaze dive on the
+  # right at the same time. Kid has to dodge bullets AND not be where
+  # the kamikaze is going.
+  - at: 180.0
+    stage: 4
+    spawn:
+      - { enemy: bomber, count: 4, formation: slow_descent_centre, spacing: 0.9 }
+      - { enemy: kamikaze, count: 5, formation: kamikaze_dive_right, spacing: 0.25 }
+
+  # Heavy interceptor pressure + a slow gunship loop underneath, so
+  # the bullet density is high on a beat the kid expects.
+  - at: 192.0
+    stage: 4
+    spawn:
+      - { enemy: interceptor, count: 6, formation: dive_then_strafe, spacing: 0.22 }
+      - { enemy: interceptor, count: 6, formation: mirror(dive_then_strafe), spacing: 0.22, delay: 0.4 }
+      - { enemy: gunship, count: 2, formation: loop_left, spacing: 0.9, delay: 1.0 }
+
+  # Wall + dive #2: this time the kamikazes come in mirrored from BOTH
+  # sides while bombers descend down the middle. Three threat axes at
+  # once — the brief's "wall + dive at the same time" taken as far as
+  # we'd ever take it for an 8yo.
+  - at: 204.0
+    stage: 4
+    spawn:
+      - { enemy: kamikaze, count: 5, formation: kamikaze_dive_right, spacing: 0.25 }
+      - { enemy: kamikaze, count: 5, formation: mirror(kamikaze_dive_right), spacing: 0.25, delay: 0.4 }
+      - { enemy: bomber, count: 3, formation: slow_descent_centre, spacing: 1.0, delay: 0.8 }
+
+  # Resupply ship #2 — pre-boss top-up, kid playtest #8. Same idiom as
+  # level 2: guaranteed drop right before the boss intro so the kid
+  # walks into the boss fight with refreshed power-ups / shield.
+  - at: 214.0
+    stage: 4
+    spawn:
+      - { enemy: resupply_ship, count: 1, formation: resupply_cruise, spacing: 0.0 }
+
+  # Final pre-boss block. Pincer-from-the-top interceptors (the
+  # `pincer_top` formation closes from both upper corners) plus a
+  # fighter strafe under the pincer. Last thing the kid sees before
+  # the boss intro telegraph.
+  - at: 220.0
+    stage: 4
+    spawn:
+      - { enemy: interceptor, count: 4, formation: pincer_top, spacing: 0.3 }
+      - { enemy: interceptor, count: 4, formation: mirror(pincer_top), spacing: 0.3, delay: 0.4 }
+      - { enemy: fighter, count: 6, formation: dive_then_strafe, spacing: 0.3, delay: 0.7 }
+
+  # ───────── Boss ─────────
+  - at: 240.0
+    stage: boss
+    boss: boss_04
