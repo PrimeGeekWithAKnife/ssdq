@@ -237,7 +237,7 @@ bosses:
       # actually trail the player slightly, which reads as a deliberate
       # threat the kid can dodge by drifting sideways. Beats kept on the
       # 1-second grid so the rhythm still feels learnable.
-      - hp: 60
+      - hp: 180
         formation: boss_phase_1
         weapon: slow_spiral
         fire_beats: [0.5, 1.5, 2.5, 3.5, 4.5]   # loops while phase active
@@ -249,7 +249,7 @@ bosses:
       # kid has to actively reposition; the breather is the "OK now
       # I can move" beat. This is the variant rhythm we wanted on the
       # boss without the schema-breaking jump to a 3rd phase.
-      - hp: 60
+      - hp: 180
         formation: boss_phase_2
         weapon: burst_then_pause
         fire_beats: [0.2, 0.4, 0.6, 2.4, 2.6, 2.8]
@@ -271,12 +271,12 @@ bosses:
     score: 18000
     intro_telegraph_seconds: 2.0
     phases:
-      - hp: 90
+      - hp: 360
         formation: boss_phase_1
         weapon: slow_spiral
         fire_beats: [0.4, 1.1, 1.8, 2.5, 3.2, 3.9, 4.6]
 
-      - hp: 90
+      - hp: 360
         formation: boss_phase_2
         weapon: burst_then_pause
         fire_beats: [0.1, 0.3, 0.5, 0.7, 1.8, 2.0, 2.2, 2.4]
@@ -316,7 +316,7 @@ bosses:
       # and learns to micro-dodge between volleys. No ring yet — just
       # "the same enemy fire I already know, but quicker". This is the
       # difficulty step boss_02 → boss_03 expressed purely as tempo.
-      - hp: 110
+      - hp: 540
         formation: boss_phase_1
         weapon: aimed_triple
         fire_beats: [0.4, 0.95, 1.5, 2.05, 2.6, 3.15, 3.7, 4.25]   # loops while phase active
@@ -328,7 +328,7 @@ bosses:
       # ring_shot definition (8 bullets across 360°) the gaps are big
       # and readable. First time the kid sees this attack in the
       # campaign — keep it fair on the rhythm side.
-      - hp: 110
+      - hp: 540
         formation: boss_phase_2
         weapon: ring_shot
         fire_beats: [0.6, 2.2, 3.8]
@@ -389,7 +389,7 @@ bosses:
       # The fan_arc of burst_then_pause is 90° downward, so positioning
       # near the screen edges stays viable; the breather is when the kid
       # cuts back across the centre.
-      - hp: 135
+      - hp: 810
         formation: boss_phase_1
         weapon: burst_then_pause
         fire_beats: [0.10, 0.25, 0.40, 0.55, 1.95, 2.10, 2.25, 2.40]
@@ -407,7 +407,7 @@ bosses:
       # offset firing makes the second ring's bullets appear in the gaps
       # of the first — deterministic, learnable, and the kid can still
       # find the weave once they've seen one full loop.
-      - hp: 135
+      - hp: 810
         formation: boss_phase_2
         weapon: ring_shot
         fire_beats: [0.20, 0.35, 1.40, 1.55, 2.60, 2.75, 3.80, 3.95]
@@ -468,7 +468,7 @@ bosses:
       # ~0.9s grid (5 beats over 4.5s of the 8s loop). Boss_phase_1 is
       # the slow side-to-side path so the boss itself is also moving —
       # the fan re-aims-by-position each beat without any tracking.
-      - hp: 150
+      - hp: 1620
         formation: boss_phase_1
         weapon: heavy_spread
         fire_beats: [0.6, 1.5, 2.4, 3.3, 4.2, 5.1, 6.0]
@@ -478,7 +478,7 @@ bosses:
       # (boss_02 had ~1.4s). Boss_phase_2 is the tight figure-8 path so
       # the boss itself shifts between bursts — the kid uses the
       # breather to reposition, then weathers the wall.
-      - hp: 150
+      - hp: 1620
         formation: boss_phase_2
         weapon: burst_then_pause
         fire_beats: [0.1, 0.3, 0.5, 0.7, 0.9, 1.5, 1.7, 1.9, 2.1, 2.3]
@@ -490,7 +490,7 @@ bosses:
       # rhythmic dodging — and because the kit is maxed (drone aux fire,
       # missiles for chip damage, shield for the worst beat), the kid
       # has the answers if they kept their shields banked.
-      - hp: 150
+      - hp: 1620
         formation: boss_phase_1
         weapon: ring_shot
         fire_beats: [0.5, 3.2, 5.9]
