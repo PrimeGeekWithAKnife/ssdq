@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import signal
 import sys
 import time
 from pathlib import Path
@@ -205,6 +206,24 @@ def main(argv: list[str] | None = None) -> int:
         stack = SceneStack(world)
         stack.app = app
         stack.push(BootScene(app))
+
+        # Install signal handlers so SSH disconnect / Ctrl-C / systemd
+        # stop trigger a graceful exit. Without these, pygame's SDL event
+        # loop swallows SIGHUP and the python keeps running after the
+        # remote ssh session ends (kid playtest 2026-04-28 — orphaned
+        # ssdq.main processes piling up on the Pi). We don't try to do
+        # any cleanup in the handler — just flip the stack's quit flag
+        # so the main loop exits its next iteration and the ``with
+        # Window(...)`` teardown runs normally.
+        def _request_quit_signal(_signum: int, _frame: object) -> None:
+            stack.request_quit()
+
+        for _sig in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
+            try:
+                signal.signal(_sig, _request_quit_signal)
+            except (OSError, ValueError):
+                # Some platforms (Windows) don't support SIGHUP; skip.
+                pass
 
         clock = Clock()
         # Frame-rate cap belt-and-braces with vsync. On Pi 5's kmsdrm driver
