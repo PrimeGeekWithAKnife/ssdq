@@ -81,6 +81,20 @@ class AppState:
     # leaking the PlayerSlot class.
     last_weapon_tiers: dict[int, int] = field(default_factory=dict)
 
+    # Bomb stockpile carried across cleared levels — kid playtest 2026-04-28
+    # #4: "the supply ship does not seem to always add bombs, sometimes the
+    # total bomb count goes down after the supply level". Same persist-on-
+    # clear rule as last_weapon_tiers. The next LevelScene applies
+    # bomb_bonus_pending ON TOP of this stockpile (max-clamped to
+    # ship.starting_bombs so an empty stockpile never starts below baseline).
+    last_bombs: dict[int, int] = field(default_factory=dict)
+
+    # Permanent ship-speed bonus accumulated via SHIP_SPEED pickups —
+    # carried across cleared levels alongside weapon tier and bombs.
+    # Within-level death already preserves it via reset_on_death; level
+    # boundaries used to drop it. Same persist-on-clear semantics.
+    last_ship_speed_bonus: dict[int, float] = field(default_factory=dict)
+
     # Scratch flags for Boot → Title → Level transitions to know what to do.
     asset_loaded_levels: set[int] = field(default_factory=set)
 
@@ -118,3 +132,21 @@ class AppState:
             return False
         self.missile_charges[slot] = cur - 1
         return True
+
+    # ───────── progression carry-forward ─────────
+
+    def clear_progression(self) -> None:
+        """Reset every cross-level carry-forward field to its empty default.
+
+        Called by Title→PLAY and LevelSelect entries so a fresh session
+        (or dev-jump to a specific level) doesn't inherit stale numbers
+        from a previous game-over or campaign run. Does NOT touch the
+        in-flight DockingScene staging (``bomb_bonus_pending``, etc.) —
+        those are normally zero outside the level-complete chain anyway.
+        """
+        self.last_team_score = 0
+        self.last_p1_score = 0
+        self.last_p2_score = 0
+        self.last_weapon_tiers = {}
+        self.last_bombs = {}
+        self.last_ship_speed_bonus = {}

@@ -28,13 +28,21 @@ class CoopSession:
     scores: ScoreLedger = field(default_factory=ScoreLedger)
 
     @staticmethod
-    def initial(config: CoopConfig, options: CoopOptions) -> CoopSession:
+    def initial(
+        config: CoopConfig,
+        options: CoopOptions,
+        scores: ScoreLedger | None = None,
+    ) -> CoopSession:
+        """Build a fresh session. Pass ``scores`` to seed cross-level totals
+        (kid playtest 2026-04-28 #4 — points were resetting between levels).
+        Default constructs a zero ledger as before."""
         return CoopSession(
             config=config,
             options=options,
             p1=PlayerLifecycle.initial(P1, options.starting_lives),
             p2=PlayerLifecycle.initial(P2, options.starting_lives),
             continues_remaining=options.continues,
+            scores=scores if scores is not None else ScoreLedger(),
         )
 
     def lifecycle(self, slot: PlayerSlot) -> PlayerLifecycle:

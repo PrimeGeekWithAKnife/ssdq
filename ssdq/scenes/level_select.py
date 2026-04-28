@@ -79,6 +79,10 @@ class LevelSelectScene(Scene):
 
             chosen = self.level_indices[self.selected_index]
             self._app.current_level = chosen
+            # Dev-jump should always begin with default state — don't leak
+            # stockpile / score from whatever the user did before opening
+            # the menu (kid playtest 2026-04-28 #4).
+            self._app.clear_progression()
             return Replace(scene=LevelScene(self._app, level_index=chosen))
         return None
 

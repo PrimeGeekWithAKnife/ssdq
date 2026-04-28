@@ -61,6 +61,19 @@ class ScoreLedger:
         self._p2: int = 0
         self._team: int = 0
 
+    @staticmethod
+    def with_seed(*, team: int, p1: int, p2: int) -> ScoreLedger:
+        """Construct a ledger pre-loaded with prior-level totals so kid
+        playtest 2026-04-28 #4 — score reset between levels — doesn't bite.
+        ``team`` is taken as-is (it may diverge from p1+p2 in edge cases —
+        e.g. resupply ship awards counted as team-only). All values clamped
+        ≥ 0 to absorb stale negative state from defensive callers."""
+        led = ScoreLedger()
+        led._team = max(0, int(team))
+        led._p1 = max(0, int(p1))
+        led._p2 = max(0, int(p2))
+        return led
+
     def award(self, slot: PlayerSlot, base_points: int, *, multiplier: float = 1.0) -> int:
         """Award `base_points * multiplier` to `slot`'s personal score and
         the team total. Returns the actual points awarded (after
