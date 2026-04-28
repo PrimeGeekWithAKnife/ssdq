@@ -60,6 +60,7 @@ class SettingsScene(Scene):
         "_title_font",
         "_row_font",
         "_hint_font",
+        "_pad_button_state",
     )
 
     def __init__(
@@ -82,6 +83,12 @@ class SettingsScene(Scene):
         self._title_font: pygame.font.Font | None = None
         self._row_font: pygame.font.Font | None = None
         self._hint_font: pygame.font.Font | None = None
+        # Per-pad previous-tick button state for capture-mode edge detection.
+        # Keyed by SDL pad GUID. Refreshed on every capture-mode tick. We
+        # poll button state directly rather than reading JOYBUTTONDOWN events
+        # because the GamepadProvider's poll() drains the event queue before
+        # any scene tick runs, leaving capture mode no events to consume.
+        self._pad_button_state: dict[str, list[bool]] = {}
 
     def selected_action(self) -> BindingAction:
         return self._actions[self.selected_index]
@@ -180,32 +187,78 @@ class SettingsScene(Scene):
         if i.confirm:
             self.capturing = True
             self._capture_target = self.selected_action()
-            # Drain any pending JOYBUTTONDOWN so the FIRE press that
-            # entered capture mode doesn't immediately re-bind.
-            pygame.event.get(eventtype=pygame.JOYBUTTONDOWN)
+            # Seed the prev-button state so the held CONFIRM/FIRE button
+            # that just opened capture mode doesn't immediately re-bind.
+            self._pad_button_state = {
+                guid: list(buttons) for guid, (_n, buttons) in self._poll_pad_states().items()
+            }
             return None
         if i.cancel:
             return Pop()
         return None
 
-    def _tick_capture(self) -> SceneTransition | None:
-        # Read raw pygame button events directly — we deliberately do NOT use
-        # PlayerInput here because the bindings being captured are exactly
-        # what generates that. Tolerate any pad: rebinding on the wrong pad
-        # is harmless because each pad has its own GUID-keyed entry, and
-        # single-pad-per-slot is the common case.
-        for event in pygame.event.get(eventtype=pygame.JOYBUTTONDOWN):
-            idx = int(getattr(event, "button", -1))
-            if idx < 0 or self._capture_target is None:
+    def _poll_pad_states(self) -> dict[str, tuple[str, list[bool]]]:
+        """Return ``{guid: (name, [button_states])}`` for every connected pad.
+
+        Independent of GamepadProvider's event queue so capture mode works
+        even though the provider drains events first. Tests monkeypatch this
+        method to inject synthetic pad state.
+        """
+        result: dict[str, tuple[str, list[bool]]] = {}
+        try:
+            count = pygame.joystick.get_count()
+        except pygame.error:
+            return result
+        for i in range(count):
+            try:
+                pad = pygame.joystick.Joystick(i)
+                pad.init()
+            except pygame.error:
                 continue
-            if self._app.bindings is not None:
-                cur = self._app.bindings.get(self._pad_guid, pad_name=self._pad_name)
-                self._app.bindings.set(
-                    self._pad_guid,
-                    pad_name=self._pad_name,
-                    binding=cur.with_button(self._capture_target, idx),
-                )
-            self.capturing = False
-            self._capture_target = None
+            guid = pad.get_guid()
+            buttons = [bool(pad.get_button(b)) for b in range(pad.get_numbuttons())]
+            result[guid] = (pad.get_name(), buttons)
+        return result
+
+    def _tick_capture(self) -> SceneTransition | None:
+        # Sample current button state across every connected pad and look for
+        # a rising edge versus the previous tick. The first one we find is
+        # the new binding for the selected action. Polling button state is
+        # robust against the provider's event drain — JOYBUTTONDOWN events
+        # are gone by the time scenes tick, but get_button() still reports
+        # live state.
+        states = self._poll_pad_states()
+        detected_idx: int | None = None
+        detected_guid: str | None = None
+        detected_name: str | None = None
+        for guid, (name, buttons) in states.items():
+            prev = self._pad_button_state.get(guid, [])
+            for i, val in enumerate(buttons):
+                if val and (i >= len(prev) or not prev[i]):
+                    detected_idx = i
+                    detected_guid = guid
+                    detected_name = name
+                    break
+            if detected_idx is not None:
+                break
+        # Refresh prev-state for next tick regardless of detection.
+        self._pad_button_state = {guid: list(buttons) for guid, (_n, buttons) in states.items()}
+        if detected_idx is None or self._capture_target is None:
             return None
+        # Trust the press — single-pad-per-slot is the common case, and
+        # rebinding the "wrong" pad is harmless (each GUID owns its own
+        # entry). Use detected_guid so the binding lands on the pad the
+        # player actually pressed, even if the scene was opened with a
+        # stale guid.
+        if self._app.bindings is not None:
+            target_guid = detected_guid or self._pad_guid
+            target_name = detected_name or self._pad_name
+            cur = self._app.bindings.get(target_guid, pad_name=target_name)
+            self._app.bindings.set(
+                target_guid,
+                pad_name=target_name,
+                binding=cur.with_button(self._capture_target, detected_idx),
+            )
+        self.capturing = False
+        self._capture_target = None
         return None
