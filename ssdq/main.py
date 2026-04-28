@@ -207,6 +207,15 @@ def main(argv: list[str] | None = None) -> int:
         stack.push(BootScene(app))
 
         clock = Clock()
+        # Frame-rate cap belt-and-braces with vsync. On Pi 5's kmsdrm driver
+        # vsync doesn't always block effectively, leaving the loop hot at
+        # 100% CPU even on Title (kid playtest 2026-04-28). pygame's Clock
+        # sleeps for the remainder of each frame's budget so we idle low.
+        # Smoke + replay paths skip the cap so they still run sim as fast
+        # as possible.
+        frame_clock: pygame.time.Clock | None = (
+            None if (args.smoke or args.replay is not None) else pygame.time.Clock()
+        )
         last_real = time.perf_counter()
         ticks_done = 0
         frame_cap = (
@@ -271,6 +280,11 @@ def main(argv: list[str] | None = None) -> int:
                     # Chrome scenes paint themselves; pause overlay still applies.
                     stack.render(surface, clock.alpha)
                 window.flip()
+                if frame_clock is not None:
+                    # Cap the frame rate; sleeps for the remainder of the
+                    # frame's budget to avoid a hot loop when vsync isn't
+                    # blocking.
+                    frame_clock.tick(60)
 
                 if args.quit_on_game_over and (app.completed_level or _is_game_over(world)):
                     stack.request_quit()

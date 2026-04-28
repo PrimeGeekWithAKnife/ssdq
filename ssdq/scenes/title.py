@@ -14,7 +14,7 @@ from typing import Any
 import pygame
 
 from ssdq.core.ecs import World
-from ssdq.core.scene import Push, Replace, Scene, SceneTransition
+from ssdq.core.scene import Push, Quit, Replace, Scene, SceneTransition
 from ssdq.core.types import PlayerInput, TickIndex
 from ssdq.scenes.app_state import AppState
 
@@ -80,6 +80,14 @@ class TitleScene(Scene):
             self._selected_index = (self._selected_index - 1) % len(_OPTIONS)
         self._prev_y = y
 
+        # CANCEL on Title is the gamepad-friendly quit path. Without this
+        # there's no way to exit the game from the title menu using a
+        # controller (the X11/kmsdrm host has no Alt-F4 equivalent on
+        # the Pi's TV launch). Kid playtest 2026-04-28: game would pin
+        # the Pi at 100% CPU because the user couldn't quit cleanly.
+        if inputs[0].cancel or inputs[1].cancel:
+            return Quit()
+
         fire_now = inputs[0].fire or inputs[1].fire
         confirm = inputs[0].confirm or inputs[1].confirm
         rising_fire = fire_now and not self._prev_fire
@@ -125,7 +133,7 @@ class TitleScene(Scene):
             text = self._prompt_font.render(option, True, colour)
             surface.blit(text, text.get_rect(center=(w // 2, h // 2 + i * 50)))
         hint = self._hint_font.render(
-            "Up/Down: select   FIRE: choose", True, _HINT_COLOUR
+            "Up/Down: select   FIRE: choose   CANCEL: quit", True, _HINT_COLOUR
         )
         surface.blit(hint, hint.get_rect(center=(w // 2, h // 2 + len(_OPTIONS) * 50 + 30)))
 
