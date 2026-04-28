@@ -28,12 +28,13 @@ _HINT_COLOUR = (130, 130, 150)
 _NAV_THRESHOLD = 0.5
 
 _OPTION_PLAY = "PLAY"
+_OPTION_LEVELS = "LEVELS"
 _OPTION_SETTINGS = "SETTINGS"
-_OPTIONS: tuple[str, ...] = (_OPTION_PLAY, _OPTION_SETTINGS)
+_OPTIONS: tuple[str, ...] = (_OPTION_PLAY, _OPTION_LEVELS, _OPTION_SETTINGS)
 
 
 class TitleScene(Scene):
-    """Two-option menu (PLAY / SETTINGS). Confirm activates the highlighted row."""
+    """Three-option menu (PLAY / LEVELS / SETTINGS). Confirm activates the row."""
 
     __slots__ = (
         "_app",
@@ -90,6 +91,10 @@ class TitleScene(Scene):
             from ssdq.scenes.level import LevelScene
 
             return Replace(scene=LevelScene(self._app, level_index=self._app.current_level))
+        if chosen == _OPTION_LEVELS:
+            from ssdq.scenes.level_select import LevelSelectScene
+
+            return Push(scene=LevelSelectScene(app=self._app))
         if chosen == _OPTION_SETTINGS:
             from ssdq.scenes.settings import SettingsScene
 
