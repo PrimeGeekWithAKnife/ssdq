@@ -203,6 +203,7 @@ def main(argv: list[str] | None = None) -> int:
         renderer = Renderer(atlas=atlas, size=window.size)
         world = World()
         stack = SceneStack(world)
+        stack.app = app
         stack.push(BootScene(app))
 
         clock = Clock()
