@@ -41,6 +41,13 @@ class AppState:
     # at startup so production code can rely on it being present.
     bindings: BindingsStore | None = None
 
+    # Most-recently bound pad's SDL GUID + display name. Populated by
+    # GamepadProvider on slot bind so the SettingsScene targets the pad
+    # the player is actually holding without coupling to the provider.
+    # Empty strings until the first pad is bound.
+    last_active_pad_guid: str = ""
+    last_active_pad_name: str = ""
+
     # Bombs awarded by an inter-level scene (DockingScene) that the next
     # LevelScene should add on top of the ship's `starting_bombs` baseline
     # in `enter()`. Reset to 0 once consumed so re-entering Title → Level

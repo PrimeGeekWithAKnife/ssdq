@@ -187,7 +187,11 @@ def main(argv: list[str] | None = None) -> int:
     elif args.smoke:
         provider = _build_smoke_provider()
     else:
-        provider = select_provider(bindings=app.bindings)
+        def _on_pad_bound(guid: str, name: str) -> None:
+            app.last_active_pad_guid = guid
+            app.last_active_pad_name = name
+
+        provider = select_provider(bindings=app.bindings, on_pad_bound=_on_pad_bound)
 
     with Window(
         width=args.width,

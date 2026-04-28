@@ -26,6 +26,7 @@ reachable from Title and Pause lets the player rebind any action.
 from __future__ import annotations
 
 import math
+from typing import Callable
 
 import pygame
 
@@ -114,7 +115,12 @@ class GamepadProvider:
     backed by ``~/.config/ssdq/bindings.json``.
     """
 
-    def __init__(self, *, bindings: BindingsStore | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        bindings: BindingsStore | None = None,
+        on_pad_bound: Callable[[str, str], None] | None = None,
+    ) -> None:
         if not pygame.get_init():
             pygame.init()
         if not pygame.joystick.get_init():
@@ -132,6 +138,10 @@ class GamepadProvider:
         self._disconnected: PlayerSlot | None = None
 
         self._bindings: BindingsStore = bindings if bindings is not None else BindingsStore()
+        # Fired with (guid, name) the moment a pad is bound to any slot. The
+        # SettingsScene needs this so it can target the pad the player is
+        # actually holding; AppState owns the storage and main.py wires it.
+        self._on_pad_bound: Callable[[str, str], None] | None = on_pad_bound
 
         self._scan_initial_pads()
 
@@ -241,6 +251,8 @@ class GamepadProvider:
                     state.prev_back = _safe_button(
                         pad, binding.button_for(BindingAction.DRONE_CYCLE)
                     )
+                    if self._on_pad_bound is not None:
+                        self._on_pad_bound(pad.get_guid(), pad.get_name())
                     break
 
     def _read_slot(self, slot_idx: int) -> PlayerInput:
