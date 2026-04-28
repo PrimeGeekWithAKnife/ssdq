@@ -31,7 +31,7 @@ title: "Over Earth"
 codename: over_earth
 music: music/level_04.ogg
 boss_music: music/boss_04.ogg
-background: bg_starfield_01
+background: bg_earth
 length_seconds: 245
 
 waves:

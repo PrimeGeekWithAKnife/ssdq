@@ -279,6 +279,10 @@ def main(argv: list[str] | None = None) -> int:
                 else:
                     # Chrome scenes paint themselves; pause overlay still applies.
                     stack.render(surface, clock.alpha)
+                # Resolve any pending music crossfade (kid playtest 2026-04-28
+                # #5 — fade-outs were getting clobbered by an immediate load,
+                # cutting music abruptly). Cheap no-op when nothing pending.
+                app.audio.tick()
                 window.flip()
                 if frame_clock is not None:
                     # Cap the frame rate; sleeps for the remainder of the

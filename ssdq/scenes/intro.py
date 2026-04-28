@@ -108,6 +108,16 @@ class IntroScene(Scene):
         tick: TickIndex,
         inputs: tuple[PlayerInput, PlayerInput],
     ) -> SceneTransition | None:
+        # Dev shortcut: SSDQ_SKIP_INTRO=1 jumps straight to the title menu
+        # so testing iterations don't sit through the prologue every run.
+        # Checked on tick 0 so the skip is instant. Kid playtest 2026-04-28.
+        import os as _os
+
+        if _os.environ.get("SSDQ_SKIP_INTRO") == "1":
+            from ssdq.scenes.title import TitleScene
+
+            return Replace(scene=TitleScene(self._app))
+
         self._page_tick += 1
 
         any_now = _any_advance_input(inputs)

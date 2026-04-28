@@ -47,6 +47,14 @@ class AudioBus:
         self._play_seq = itertools.count()
         # channel index -> sequence number of the play that owns it.
         self._channel_seq: dict[int, int] = {}
+        # Music transition state. ``crossfade_to`` schedules a fade-out and
+        # records the next track to load here; ``tick()`` (called once per
+        # frame from main.py) loads + plays the pending track when the
+        # current music actually finishes. Without this two-step approach
+        # the fadeout was getting clobbered by an immediate ``load()`` —
+        # kid playtest 2026-04-28 #5 ("music sometimes cuts out and
+        # restarts").
+        self._pending_music: tuple[str, int] | None = None
         self._enabled = False
         self._init_mixer()
 
@@ -134,13 +142,19 @@ class AudioBus:
         if not self._enabled:
             return
         pygame.mixer.music.stop()
+        self._pending_music = None
 
     def crossfade_to(self, name: str, ms: int) -> None:
         """Fade out the current music over ``ms`` then start ``name`` (looped).
 
         Pygame's mixer doesn't support a true overlapping crossfade on the
-        single music channel, so this is a fade-out / play-with-fadein
-        approximation — close enough for the slice's transition needs.
+        single music channel. The previous version called
+        ``mixer.music.load()`` immediately after ``fadeout(ms)`` which
+        clobbered the fade-out — the listener heard an abrupt cut, not
+        a smooth fade. Instead, schedule the fade-out and record the
+        target track in ``_pending_music``; ``tick()`` (called from the
+        main loop) finishes the transition once the mixer is free.
+        Kid playtest 2026-04-28 #5 ("music cuts out and restarts").
         """
         if not self._enabled:
             return
@@ -150,10 +164,34 @@ class AudioBus:
         try:
             if pygame.mixer.music.get_busy():
                 pygame.mixer.music.fadeout(ms)
+                self._pending_music = (path, ms)
+            else:
+                pygame.mixer.music.load(path)
+                pygame.mixer.music.play(-1, fade_ms=ms)
+                self._pending_music = None
+        except pygame.error as exc:
+            logger.warning("failed to crossfade to %r: %s", name, exc)
+
+    def tick(self) -> None:
+        """Resolve any pending music transition. Call once per frame.
+
+        When ``crossfade_to`` was issued mid-track it scheduled a fade-out
+        and stashed the next track. Once the mixer reports idle (the
+        fade-out completed), load the pending track and play it with a
+        fade-in. No-op when there's nothing pending.
+        """
+        if not self._enabled or self._pending_music is None:
+            return
+        try:
+            if pygame.mixer.music.get_busy():
+                return
+            path, ms = self._pending_music
+            self._pending_music = None
             pygame.mixer.music.load(path)
             pygame.mixer.music.play(-1, fade_ms=ms)
         except pygame.error as exc:
-            logger.warning("failed to crossfade to %r: %s", name, exc)
+            logger.warning("failed to resolve pending music: %s", exc)
+            self._pending_music = None
 
     # -- internals ------------------------------------------------------
 
