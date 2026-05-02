@@ -1,19 +1,26 @@
-"""Intro scene: short multi-page story crawl shown after Boot, before Title.
+"""Intro scene: short multi-page story crawl shown after Title's PLAY action.
 
 Sets up the SSDQ premise (galaxy in peril, two pilots boarding their ships).
 The kid will redraw the pilot art later; for now each page renders a small
 tableau combining the existing Kenney ship sprites with placeholder
 "pilot" silhouettes drawn with ``pygame.draw``.
 
-Flow: Boot --> Intro --> Title --> Level. Any input button advances one
-page (rising edge); on the final page that input transitions to Title.
-After a per-page ceiling of ~4 sim seconds the scene auto-advances even
+Flow (post-2026-05-02): Boot --> Title --> (PLAY) --> Intro --> Level. Any
+input button advances one page (rising edge); on the final page that input
+transitions to ``next_scene_factory()`` — defaulting to TitleScene if the
+caller didn't supply one (legacy compatibility for tests / the dev skip).
+After a per-page ceiling of ~9 sim seconds the scene auto-advances even
 without input -- this is how the headless smoke playthrough (which holds
 fire continuously) gets through the intro.
+
+The scene plays the ``intro_epic`` music track on enter and lets the next
+scene's own music cue take over on exit (LevelScene crossfades to its
+level track in ``enter()``).
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -70,6 +77,7 @@ class IntroScene(Scene):
         "_app",
         "_body_font",
         "_hint_font",
+        "_next_scene_factory",
         "_page",
         "_page_tick",
         "_prev_input",
@@ -78,8 +86,19 @@ class IntroScene(Scene):
         "_title_font",
     )
 
-    def __init__(self, app: AppState) -> None:
+    def __init__(
+        self,
+        app: AppState,
+        *,
+        next_scene_factory: Callable[[], Scene] | None = None,
+    ) -> None:
         self._app = app
+        # ``next_scene_factory`` builds the scene to transition to once the
+        # intro is done. Default = TitleScene, which keeps the legacy
+        # path (Boot → Intro → Title) working when older callers haven't
+        # been updated. Title.PLAY now passes a factory that builds the
+        # appropriate LevelScene so the new flow lands on level 1.
+        self._next_scene_factory: Callable[[], Scene] | None = next_scene_factory
         self._page: int = 0
         self._page_tick: int = 0
         # _prev_input gates rising-edge detection. Start True so that an
@@ -101,6 +120,9 @@ class IntroScene(Scene):
         self._hint_font = pygame.font.SysFont(None, 22)
         self._ship_blue = _try_load_sprite(_SPRITES_DIR / "ships" / "player_blue.png")
         self._ship_red = _try_load_sprite(_SPRITES_DIR / "ships" / "player_red.png")
+        # Cinematic music for the story crawl. The next scene's enter()
+        # is responsible for crossfading to its own track.
+        self._app.audio.crossfade_to("intro_epic", ms=400)
 
     def tick(
         self,
@@ -108,15 +130,13 @@ class IntroScene(Scene):
         tick: TickIndex,
         inputs: tuple[PlayerInput, PlayerInput],
     ) -> SceneTransition | None:
-        # Dev shortcut: SSDQ_SKIP_INTRO=1 jumps straight to the title menu
+        # Dev shortcut: SSDQ_SKIP_INTRO=1 jumps straight past the intro
         # so testing iterations don't sit through the prologue every run.
         # Checked on tick 0 so the skip is instant. Kid playtest 2026-04-28.
         import os as _os
 
         if _os.environ.get("SSDQ_SKIP_INTRO") == "1":
-            from ssdq.scenes.title import TitleScene
-
-            return Replace(scene=TitleScene(self._app))
+            return Replace(scene=self._build_next_scene())
 
         self._page_tick += 1
 
@@ -131,13 +151,20 @@ class IntroScene(Scene):
             return None
 
         if self._page >= len(_PAGES) - 1:
-            from ssdq.scenes.title import TitleScene
-
-            return Replace(scene=TitleScene(self._app))
+            return Replace(scene=self._build_next_scene())
 
         self._page += 1
         self._page_tick = 0
         return None
+
+    def _build_next_scene(self) -> Scene:
+        if self._next_scene_factory is not None:
+            return self._next_scene_factory()
+        # Legacy default — the pre-2026-05-02 flow ended at TitleScene.
+        # Importing here avoids a circular import with title.py.
+        from ssdq.scenes.title import TitleScene
+
+        return TitleScene(self._app)
 
     def render(self, world: World, surface: Any, alpha: float) -> None:
         if not isinstance(surface, pygame.Surface):

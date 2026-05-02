@@ -96,13 +96,26 @@ class TitleScene(Scene):
             return None
         chosen = _OPTIONS[self._selected_index]
         if chosen == _OPTION_PLAY:
+            from ssdq.scenes.intro import IntroScene
             from ssdq.scenes.level import LevelScene
 
             # Fresh campaign start — clear any carry-forward state from a
             # previous game-over so we don't inherit stale bomb stockpile,
             # weapon tier or score (kid playtest 2026-04-28 #4).
             self._app.clear_progression()
-            return Replace(scene=LevelScene(self._app, level_index=self._app.current_level))
+            # Post-2026-05-02 sequence: the intro story crawl plays
+            # AFTER PLAY (not before Title). On completion, IntroScene
+            # transitions to the level. Captured the level index now so
+            # changes to current_level during the intro don't surprise.
+            level_index = self._app.current_level
+            return Replace(
+                scene=IntroScene(
+                    self._app,
+                    next_scene_factory=lambda: LevelScene(
+                        self._app, level_index=level_index
+                    ),
+                )
+            )
         if chosen == _OPTION_LEVELS:
             from ssdq.scenes.level_select import LevelSelectScene
 
