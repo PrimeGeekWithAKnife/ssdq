@@ -358,6 +358,27 @@ MISSILE_HITBOX_RADIUS: float = 8.0
 # (see SpriteAtlas) so the missile is always visible during dev.
 MISSILE_SPRITE: str = "projectiles/missile.png"
 
+# ───── auto-fire (post-2026-04-30 missile redesign) ─────
+# Cadence: a slot's missile_level (0..MISSILE_LEVEL_CAP) determines how
+# many missiles are spawned every MISSILE_AUTOFIRE_TICKS. Driven off the
+# integer tick counter so replays stay deterministic. 120 ticks = 2.0s
+# at 60Hz — matches the "fires every 2s" in the design doc.
+MISSILE_AUTOFIRE_TICKS: int = 120
+
+# Per-tier x-offsets relative to the firing ship's position. Shape per
+# the design doc: L1 fires from one side, L2 from each side, L3 adds a
+# centre shot, L4 doubles up each side, L5 adds a centre on top of L4.
+# Offsets are first-pass numbers — adjust during Pi playtest if missiles
+# overlap with the ship sprite or with each other.
+_MISSILE_PATTERNS: dict[int, tuple[float, ...]] = {
+    0: (),
+    1: (-12.0,),
+    2: (-12.0, 12.0),
+    3: (-12.0, 0.0, 12.0),
+    4: (-18.0, -6.0, 6.0, 18.0),
+    5: (-18.0, -6.0, 0.0, 6.0, 18.0),
+}
+
 
 @dataclass
 class Missile:
@@ -425,6 +446,10 @@ class LevelScene(Scene):
     _powerup_states: dict[PlayerSlot, PlayerPowerupState] = field(init=False)
     _player_entities: dict[PlayerSlot, Entity | None] = field(init=False)
     _player_positions: dict[PlayerSlot, Vec2] = field(init=False)
+    # Per-slot internal-tick at which the next missile auto-fire is due.
+    # Initialised to 0 so the first auto-fire happens on enter; the gate
+    # at the dispatch site checks current_tick >= next_fire_tick.
+    _missile_next_fire_tick: dict[PlayerSlot, int] = field(init=False)
     _grid: SpatialGrid = field(init=False)
     _sim_time: float = field(default=0.0, init=False)
     _internal_tick: int = field(default=0, init=False)
@@ -515,6 +540,7 @@ class LevelScene(Scene):
             P1: Vec2(PLAY_W * 0.40, _PLAYER_SPAWN_Y),
             P2: Vec2(PLAY_W * 0.60, _PLAYER_SPAWN_Y),
         }
+        self._missile_next_fire_tick = {P1: 0, P2: 0}
         self._grid = SpatialGrid(cell_size=64.0)
         self._sim_time = 0.0
         self._internal_tick = 0
@@ -857,6 +883,13 @@ class LevelScene(Scene):
             else:
                 self.app.audio.play_sfx("hit", volume=0.15)
 
+        # Tier-based missile auto-fire (post-2026-04-30 redesign). Lives
+        # alongside the equippable button-press path while the migration
+        # commits land; the strip-out commit will remove the inp.missile
+        # block above and leave only this dispatcher.
+        if lifecycle.state == LifecycleState.ALIVE:
+            self._maybe_auto_fire_missiles(world, slot, new_pos, self._internal_tick)
+
     def _fire_player_weapon(
         self,
         world: World,
@@ -929,6 +962,42 @@ class LevelScene(Scene):
                 heading=heading,
             ),
         )
+
+    def _auto_fire_missiles_for_slot(
+        self, world: World, slot: PlayerSlot, ship_pos: Vec2
+    ) -> None:
+        """Spawn the per-tier missile pattern at offsets from ``ship_pos``.
+
+        Reads ``missile_level`` off the slot's PlayerPowerupState and
+        looks up ``_MISSILE_PATTERNS``. Tier 0 is a no-op. The audio
+        cue plays once per fire-cycle, not once per spawned missile.
+        """
+        pstate = self._powerup_states[slot]
+        pattern = _MISSILE_PATTERNS.get(pstate.missile_level, ())
+        if not pattern:
+            return
+        for dx in pattern:
+            self._fire_missile(world, slot, Vec2(ship_pos.x + dx, ship_pos.y))
+        self.app.audio.play_sfx("missile", volume=0.6)
+
+    def _maybe_auto_fire_missiles(
+        self,
+        world: World,
+        slot: PlayerSlot,
+        ship_pos: Vec2,
+        current_tick: int,
+    ) -> None:
+        """Per-tick auto-fire trigger. Fires when the slot is due (per
+        ``_missile_next_fire_tick[slot]``) and at a non-zero tier; the
+        caller is responsible for the lifecycle ALIVE check so a dying
+        ship doesn't keep auto-firing.
+        """
+        if self._powerup_states[slot].missile_level <= 0:
+            return
+        if current_tick < self._missile_next_fire_tick[slot]:
+            return
+        self._auto_fire_missiles_for_slot(world, slot, ship_pos)
+        self._missile_next_fire_tick[slot] = current_tick + MISSILE_AUTOFIRE_TICKS
 
     def _closest_enemy_to(self, world: World, pos: Vec2) -> Entity | None:
         """Return the entity id of the closest live ENEMY to ``pos``.
