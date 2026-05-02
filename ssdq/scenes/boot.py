@@ -84,3 +84,7 @@ class BootScene(Scene):
             bus.load_music(f"level_{i:02d}", str(music_dir / f"level_{i:02d}.ogg"))
             bus.load_music(f"boss_{i:02d}", str(music_dir / f"boss_{i:02d}.ogg"))
         bus.load_music("resupply", str(music_dir / "resupply.ogg"))
+        # Cinematic intro cue, played once during the post-PLAY story
+        # crawl (kid playtest 2026-05-02 #4 — "intro needs dramatic /
+        # epic music").
+        bus.load_music("intro_epic", str(music_dir / "intro_epic.ogg"))
