@@ -34,6 +34,7 @@ from ssdq.scenes.app_state import AppState
 _BG_COLOUR = (4, 4, 16)
 _STAR_COLOUR = (160, 160, 200)
 _TEXT_COLOUR = (230, 230, 240)
+_TEXT_SHADOW = (0, 0, 0)
 _HINT_COLOUR = (130, 130, 150)
 _PILOT_SUIT = (200, 200, 210)
 _PILOT_VISOR = (60, 90, 160)
@@ -44,6 +45,12 @@ _GROUND_COLOUR = (40, 40, 60)
 # continuously, so without this they would only ever clear page 1.
 _AUTO_ADVANCE_TICKS = 540  # 9 sim seconds at 60Hz — kid playtest #2: 4s
 # wasn't long enough for an 8-year-old to read the page.
+
+# Star scrolling on the launch page sells the ships moving up. Speed
+# is in fractional-screen-heights per second. Kid playtest 2026-05-02
+# #4: "the space/stars on screen should make it seem like they are
+# moving" when the engines are firing on the launch tableau.
+_LAUNCH_STAR_SCROLL_PX_PER_SEC = 240.0
 
 _SPRITES_DIR = Path("content") / "assets" / "sprites"
 
@@ -77,6 +84,7 @@ class IntroScene(Scene):
         "_app",
         "_body_font",
         "_hint_font",
+        "_launch_sfx_played",
         "_next_scene_factory",
         "_page",
         "_page_tick",
@@ -109,15 +117,19 @@ class IntroScene(Scene):
         self._hint_font: pygame.font.Font | None = None
         self._ship_blue: pygame.Surface | None = None
         self._ship_red: pygame.Surface | None = None
+        self._launch_sfx_played: bool = False
 
     # ------------------------------------------------------------------ lifecycle
 
     def enter(self, world: World) -> None:
         if not pygame.font.get_init():
             pygame.font.init()
-        self._title_font = pygame.font.SysFont(None, 48, bold=True)
-        self._body_font = pygame.font.SysFont(None, 32)
-        self._hint_font = pygame.font.SysFont(None, 22)
+        # Title goes from 48 → 80; body 32 → 64 (bold) per kid playtest
+        # 2026-05-02 #4 — "in the middle of the screen in double sized
+        # fonts." Hint kept small so it doesn't compete with the body.
+        self._title_font = pygame.font.SysFont(None, 80, bold=True)
+        self._body_font = pygame.font.SysFont(None, 64, bold=True)
+        self._hint_font = pygame.font.SysFont(None, 24)
         self._ship_blue = _try_load_sprite(_SPRITES_DIR / "ships" / "player_blue.png")
         self._ship_red = _try_load_sprite(_SPRITES_DIR / "ships" / "player_red.png")
         # Cinematic music for the story crawl. The next scene's enter()
@@ -155,6 +167,9 @@ class IntroScene(Scene):
 
         self._page += 1
         self._page_tick = 0
+        # New page → reset the one-shot launch-SFX latch so if the next
+        # page is the "launch" tableau, the rocket whoosh fires again.
+        self._launch_sfx_played = False
         return None
 
     def _build_next_scene(self) -> Scene:
@@ -176,26 +191,48 @@ class IntroScene(Scene):
         w, h = surface.get_size()
         text, tableau = _PAGES[self._page]
 
-        _draw_starfield(surface)
+        # Star scroll: only on the launch page (engines firing). Stars
+        # drift downward to sell the ships moving UP — kid playtest
+        # 2026-05-02 #4. _page_tick is 60Hz so the scroll is frame-stable.
+        star_offset = (
+            int(self._page_tick * (_LAUNCH_STAR_SCROLL_PX_PER_SEC / 60.0))
+            if tableau == "launch"
+            else 0
+        )
+        _draw_starfield(surface, y_offset=star_offset)
         if tableau == "hangar":
             _draw_hangar(surface, self._ship_blue, self._ship_red)
         elif tableau == "boarding":
             _draw_boarding(surface, self._ship_blue, self._ship_red)
         elif tableau == "launch":
             _draw_launch(surface, self._ship_blue, self._ship_red)
+            # Rocket SFX cue (kid playtest 2026-05-02 #4 — "rocket fire
+            # sound should be added"). Reuse the missile SFX which has
+            # the right whoosh/boost character. Played ONCE per page
+            # entry so re-renders during the same page don't re-trigger.
+            if not self._launch_sfx_played:
+                self._app.audio.play_sfx("missile", volume=0.7)
+                self._launch_sfx_played = True
 
         # SSDQ banner at the top of every page so the kid always sees the title.
+        banner_shadow = self._title_font.render("SSDQ", True, _TEXT_SHADOW)
+        surface.blit(banner_shadow, banner_shadow.get_rect(center=(w // 2 + 3, 60 + 3)))
         banner = self._title_font.render("SSDQ", True, (255, 240, 120))
-        surface.blit(banner, banner.get_rect(center=(w // 2, 40)))
+        surface.blit(banner, banner.get_rect(center=(w // 2, 60)))
 
-        # Wrap the body text into screen-fit lines and centre-stack them.
+        # Body text — centred VERTICALLY (kid playtest 2026-05-02 #4 —
+        # "needs to be in the middle of the screen"). Drop-shadowed so
+        # it stays legible over the star/launch tableau.
         lines = _wrap_text(text, self._body_font, max_width=int(w * 0.85))
         line_height = self._body_font.get_linesize()
         block_height = line_height * len(lines)
-        baseline_y = h - 110 - block_height // 2
+        top_y = (h - block_height) // 2
         for i, line in enumerate(lines):
+            cy = top_y + i * line_height + line_height // 2
+            shadow = self._body_font.render(line, True, _TEXT_SHADOW)
+            surface.blit(shadow, shadow.get_rect(center=(w // 2 + 3, cy + 3)))
             surf = self._body_font.render(line, True, _TEXT_COLOUR)
-            surface.blit(surf, surf.get_rect(center=(w // 2, baseline_y + i * line_height)))
+            surface.blit(surf, surf.get_rect(center=(w // 2, cy)))
 
         page_label = f"{self._page + 1} / {len(_PAGES)}"
         hint_text = "press FIRE to continue" if self._page < len(_PAGES) - 1 else "press FIRE"
@@ -260,29 +297,34 @@ def _wrap_text(text: str, font: pygame.font.Font, max_width: int) -> list[str]:
     return lines
 
 
-def _draw_starfield(surface: pygame.Surface) -> None:
-    """Sparse deterministic star pattern -- no RNG, screenshot-stable."""
+_STAR_POSITIONS: tuple[tuple[int, int], ...] = (
+    (40, 60), (110, 30), (220, 90), (340, 50), (470, 110), (560, 40),
+    (640, 80), (760, 30), (860, 100), (980, 60), (90, 200),
+    (310, 250), (590, 220), (820, 270), (1010, 230),
+    # Extra stars across the lower half so the launch-page scroll has
+    # density to read against the darker background.
+    (60, 380), (180, 440), (300, 500), (420, 380), (540, 460),
+    (700, 410), (820, 480), (940, 360), (1060, 440), (1180, 510),
+    (140, 600), (320, 650), (500, 580), (680, 660), (880, 600),
+)
+
+
+def _draw_starfield(surface: pygame.Surface, *, y_offset: int = 0) -> None:
+    """Sparse deterministic star pattern -- no RNG, screenshot-stable.
+
+    ``y_offset`` (kid playtest 2026-05-02 #4) shifts every star down by
+    the given pixel count, wrapping at the surface height — used on the
+    launch page so the stars scroll past the rocket-firing ships and
+    sell the "we're moving" feeling.
+    """
     w, h = surface.get_size()
-    # Hand-picked offsets so the same backdrop renders identically every time.
-    for sx, sy in (
-        (40, 60),
-        (110, 30),
-        (220, 90),
-        (340, 50),
-        (470, 110),
-        (560, 40),
-        (640, 80),
-        (760, 30),
-        (860, 100),
-        (980, 60),
-        (90, 200),
-        (310, 250),
-        (590, 220),
-        (820, 270),
-        (1010, 230),
-    ):
-        if sx < w and sy < h:
-            surface.set_at((sx, sy), _STAR_COLOUR)
+    if h <= 0:
+        return
+    for sx, sy_base in _STAR_POSITIONS:
+        if sx >= w:
+            continue
+        sy = (sy_base + y_offset) % h
+        surface.set_at((sx, sy), _STAR_COLOUR)
 
 
 def _draw_pilot(surface: pygame.Surface, cx: int, cy: int, suit: tuple[int, int, int]) -> None:
