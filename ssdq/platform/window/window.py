@@ -80,6 +80,13 @@ class Window:
         self._surface: pygame.Surface = pygame.display.set_mode(
             (width, height), flags, vsync=1 if vsync else 0
         )
+        # Hide the OS cursor — kid playtest 2026-05-02 #5: visible mouse
+        # pointer over a fullscreen game looks broken. Harmless on the
+        # dummy driver (mouse module is initialised but no real cursor).
+        try:
+            pygame.mouse.set_visible(False)
+        except pygame.error:
+            pass
         self._width = width
         self._height = height
         self._fullscreen = fullscreen and driver != "dummy"
