@@ -32,15 +32,27 @@ class CoopSession:
         config: CoopConfig,
         options: CoopOptions,
         scores: ScoreLedger | None = None,
+        *,
+        p1_lives: int | None = None,
+        p2_lives: int | None = None,
     ) -> CoopSession:
         """Build a fresh session. Pass ``scores`` to seed cross-level totals
         (kid playtest 2026-04-28 #4 — points were resetting between levels).
-        Default constructs a zero ledger as before."""
+        Default constructs a zero ledger as before.
+
+        Pass ``p1_lives``/``p2_lives`` to seed each slot's lifecycle with a
+        carried-forward count — kid playtest 2026-05-02 found that lives
+        were silently resetting to ``options.starting_lives`` every level.
+        ``None`` means "fall back to ``options.starting_lives``" so existing
+        callers (Title→PLAY fresh campaigns) are unaffected.
+        """
+        p1l = options.starting_lives if p1_lives is None else max(0, p1_lives)
+        p2l = options.starting_lives if p2_lives is None else max(0, p2_lives)
         return CoopSession(
             config=config,
             options=options,
-            p1=PlayerLifecycle.initial(P1, options.starting_lives),
-            p2=PlayerLifecycle.initial(P2, options.starting_lives),
+            p1=PlayerLifecycle.initial(P1, p1l),
+            p2=PlayerLifecycle.initial(P2, p2l),
             continues_remaining=options.continues,
             scores=scores if scores is not None else ScoreLedger(),
         )

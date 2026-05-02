@@ -101,6 +101,15 @@ class AppState:
     # tier to 0 — this only persists across the cleared-level seam.
     last_missile_levels: dict[int, int] = field(default_factory=dict)
 
+    # Lives count carried across cleared levels — kid playtest 2026-05-02
+    # found that P2 sat still through level after level and never went
+    # below 1 life. Root cause: every LevelScene.enter() called
+    # CoopSession.initial() which seeded both players' lives from
+    # options.starting_lives. Now we capture each slot's surviving lives
+    # at cleared exit and seed the next session from this dict. Empty ⇒
+    # use options.starting_lives (fresh campaign / first level).
+    last_lives: dict[int, int] = field(default_factory=dict)
+
     # Scratch flags for Boot → Title → Level transitions to know what to do.
     asset_loaded_levels: set[int] = field(default_factory=set)
 
@@ -143,6 +152,7 @@ class AppState:
         self.last_bombs = {}
         self.last_ship_speed_bonus = {}
         self.last_missile_levels = {}
+        self.last_lives = {}
         # Equippable inventories — kid expects a clean slate on a fresh
         # campaign, not whatever stockpile a prior wipeout left behind.
         self.shield_charges = _zero_per_slot()

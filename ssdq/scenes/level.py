@@ -480,6 +480,13 @@ class LevelScene(Scene):
         # so a fresh session sees zeros here.
         from ssdq.core.coop.scoring import ScoreLedger as _ScoreLedger
 
+        # Seed lives from the previous cleared level if we have it, else
+        # fall back to options.starting_lives (fresh campaign / first level).
+        # Kid playtest 2026-05-02: lives reset to 3 every level — P2 with
+        # no movement could never go below 1 because each level rebooted
+        # the lifecycle.
+        seeded_p1_lives = self.app.last_lives.get(P1.index)
+        seeded_p2_lives = self.app.last_lives.get(P2.index)
         self._session = CoopSession.initial(
             bundle.coop,
             self.app.options,
@@ -488,6 +495,8 @@ class LevelScene(Scene):
                 p1=self.app.last_p1_score,
                 p2=self.app.last_p2_score,
             ),
+            p1_lives=seeded_p1_lives,
+            p2_lives=seeded_p2_lives,
         )
         # Powerup state per slot — one ship type for the slice; tree name
         # is parsed off the primary weapon name (e.g. "pulse_lvl1" → "pulse").
@@ -607,6 +616,13 @@ class LevelScene(Scene):
             self.app.last_missile_levels = {
                 P1.index: self._powerup_states[P1].missile_level,
                 P2.index: self._powerup_states[P2].missile_level,
+            }
+            # Lives — kid playtest 2026-05-02: were silently resetting to
+            # starting_lives every level entry. Persist on clear so the
+            # tension actually carries through the campaign.
+            self.app.last_lives = {
+                P1.index: self._session.lifecycle(P1).lives,
+                P2.index: self._session.lifecycle(P2).lives,
             }
             # Re-stage live drones into drones_pending so the next level's
             # _spawn_pending_drones recreates them. The despawn sweep below
