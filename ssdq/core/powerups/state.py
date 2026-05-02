@@ -95,6 +95,11 @@ _NO_SHIELD = Shield(seconds_remaining=0.0)
 # moments", not a permanent god mode.
 SHIELD_CONSUME_DURATION: float = 3.0
 
+# Cap for missile_level. Each MISSILE pickup advances the tier by one;
+# the auto-fire pattern table in the level scene defines how many missiles
+# spawn per 2s tick at each tier (0 = silent, 5 = full barrage).
+MISSILE_LEVEL_CAP: int = 5
+
 
 @dataclass(frozen=True, slots=True)
 class PlayerPowerupState:
@@ -116,6 +121,7 @@ class PlayerPowerupState:
     shield: Shield = _NO_SHIELD
     ship_speed_bonus: float = 0.0  # additive bonus (e.g. 0.30 == +30%)
     fire_rate_boost: FireRateBoost = _NO_FIRE_RATE
+    missile_level: int = 0  # 0..MISSILE_LEVEL_CAP (auto-fire tier)
 
     def with_weapon(self, weapon: WeaponState) -> PlayerPowerupState:
         return replace(self, weapon=weapon)
@@ -139,6 +145,10 @@ class PlayerPowerupState:
 
     def with_fire_rate_boost(self, boost: FireRateBoost) -> PlayerPowerupState:
         return replace(self, fire_rate_boost=boost)
+
+    def with_missile_level(self, level: int) -> PlayerPowerupState:
+        clamped = max(0, min(MISSILE_LEVEL_CAP, level))
+        return replace(self, missile_level=clamped)
 
     def tick_speed_boost(self, dt: float) -> PlayerPowerupState:
         """Decay any active speed-boost timer by `dt`. No-op when inactive."""
@@ -191,6 +201,7 @@ class PlayerPowerupState:
             shield=_NO_SHIELD,
             ship_speed_bonus=self.ship_speed_bonus,
             fire_rate_boost=_NO_FIRE_RATE,
+            missile_level=0,
         )
 
 
