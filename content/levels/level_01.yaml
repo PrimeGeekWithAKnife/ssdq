@@ -31,29 +31,39 @@ length_seconds: 225
 
 waves:
   # ───────── Stage 1 — gentle introduction ─────────
-  - at: 2.0
+  # NEW (kid playtest 2026-05-02 #6): two single fighters arrive BEFORE
+  # the main drone swarm so the kid sees an actual fighting enemy
+  # ("a couple of single enemies come to fight the players before the
+  # main wave"). Slow_descent_centre is the easiest-to-read entry path
+  # so the duel reads clearly before the screen fills up.
+  - at: 1.0
+    stage: 1
+    spawn:
+      - { enemy: fighter, count: 2, formation: slow_descent_centre, spacing: 1.4 }
+
+  - at: 5.0
     stage: 1
     spawn:
       - { enemy: drone, count: 6, formation: arc_left_to_right, spacing: 0.4 }
 
-  # NEW: tiny mirror-peek so the kid sees the symmetry before the full mirror wave.
-  - at: 8.0
+  # Tiny mirror-peek so the kid sees the symmetry before the full mirror wave.
+  - at: 11.0
     stage: 1
     spawn:
       - { enemy: drone, count: 3, formation: mirror(arc_left_to_right), spacing: 0.5 }
 
-  - at: 14.0
+  - at: 17.0
     stage: 1
     spawn:
       - { enemy: drone, count: 6, formation: mirror(arc_left_to_right), spacing: 0.4 }
 
-  # NEW: wide-spaced straight line — easiest possible read, breather before stage 2.
-  - at: 22.0
+  # Wide-spaced straight line — easiest possible read, breather before stage 2.
+  - at: 24.0
     stage: 1
     spawn:
       - { enemy: drone, count: 4, formation: slow_descent_centre, spacing: 0.8 }
 
-  - at: 28.0
+  - at: 30.0
     stage: 1
     spawn:
       - { enemy: drone, count: 4, formation: slow_descent_centre, spacing: 0.6 }
@@ -88,19 +98,22 @@ waves:
       - { enemy: gunship, count: 3, formation: loop_left, spacing: 0.8, return_passes: 1 }
       - { enemy: gunship, count: 3, formation: mirror(loop_left), spacing: 0.8, delay: 1.5, return_passes: 1 }
 
-  # NEW: bomber preview — only 2, very wide spacing, so the spread_shot
-  # is a "look at that pattern" moment, not a wall of bullets.
-  - at: 76.0
+  # NEW (kid playtest 2026-05-02 #3): rapid-fire interceptor preview so
+  # the kid sees the rapid_aim weapon early in level 1 ("yet to spot a
+  # single enemy with rapid fire"). Two interceptors, well-spaced, on
+  # the same arc as fighters so the kid reads them as "fighter but
+  # faster + shoots more." Tightens the previously 12s gap to 8s.
+  - at: 72.0
+    stage: 2
+    spawn:
+      - { enemy: interceptor, count: 2, formation: arc_left_to_right, spacing: 0.7 }
+
+  # Bomber preview — only 2, very wide spacing, so the spread_shot is a
+  # "look at that pattern" moment, not a wall of bullets.
+  - at: 78.0
     stage: 2
     spawn:
       - { enemy: bomber, count: 2, formation: slow_descent_centre, spacing: 1.5 }
-
-  # Resupply ship #1 — kid playtest #8. Crosses the top of the screen
-  # during a quiet beat so the kid can prioritise it. 100% power-up drop.
-  - at: 88.0
-    stage: 2
-    spawn:
-      - { enemy: resupply_ship, count: 1, formation: resupply_cruise, spacing: 0.0 }
 
   - at: 84.0
     stage: 2
@@ -108,10 +121,17 @@ waves:
       - { enemy: fighter, count: 6, formation: arc_left_to_right, spacing: 0.35, return_passes: 1 }
       - { enemy: fighter, count: 6, formation: mirror(arc_left_to_right), spacing: 0.35, delay: 0.8, return_passes: 1 }
 
+  # Resupply ship #1 — kid playtest #8. Crosses the top of the screen
+  # during a quiet beat so the kid can prioritise it. 100% power-up drop.
+  - at: 91.0
+    stage: 2
+    spawn:
+      - { enemy: resupply_ship, count: 1, formation: resupply_cruise, spacing: 0.0 }
+
   # ───────── Stage 3 — density up ─────────
-  # NEW: combo intro — a familiar drone pattern overlaid with fighters
-  # on a different lane. Kid has seen both individually now.
-  - at: 96.0
+  # Pacing pass kid playtest 2026-05-02 #8 — every authored gap now
+  # ≤ 10 seconds. Previously 124→138 was 14s and 144→158 was 14s.
+  - at: 100.0
     stage: 3
     spawn:
       - { enemy: drone, count: 8, formation: figure_eight_centre, spacing: 0.25 }
@@ -122,8 +142,8 @@ waves:
     spawn:
       - { enemy: fighter, count: 12, formation: dive_then_strafe, spacing: 0.25 }
 
-  # NEW: flank wave — gunships from the left while drones arc overhead.
-  - at: 118.0
+  # Flank wave — gunships from the left while drones arc overhead.
+  - at: 116.0
     stage: 3
     spawn:
       - { enemy: gunship, count: 2, formation: loop_left, spacing: 1.0 }
@@ -135,46 +155,52 @@ waves:
       - { enemy: bomber, count: 4, formation: slow_descent_centre, spacing: 1.2 }
       - { enemy: drone, count: 10, formation: figure_eight_centre, spacing: 0.2, delay: 0.5 }
 
-  # NEW: mirror-strafe pressure — same pattern as the existing dive_then_strafe
-  # wave but flipped, so the kid has to scan the OTHER side of the screen.
-  - at: 138.0
+  # Mirror-strafe pressure — gap was 14s; now 9s.
+  - at: 133.0
     stage: 3
     spawn:
       - { enemy: fighter, count: 6, formation: mirror(dive_then_strafe), spacing: 0.3 }
 
-  - at: 144.0
+  - at: 140.0
     stage: 3
     spawn:
       - { enemy: gunship, count: 2, formation: loop_left, spacing: 1.0 }
       - { enemy: gunship, count: 2, formation: mirror(loop_left), spacing: 1.0, delay: 0.5 }
       - { enemy: fighter, count: 8, formation: dive_then_strafe, spacing: 0.3, delay: 2.0 }
 
-  # ───────── Stage 4 — pre-boss crescendo (NEW STAGE) ─────────
-  # NEW: heavy-units announcement — "the next bit is different".
-  - at: 158.0
+  # Mid-stage 3 interceptor wave — second taste of rapid fire.
+  - at: 148.0
+    stage: 3
+    spawn:
+      - { enemy: interceptor, count: 3, formation: dive_then_strafe, spacing: 0.5 }
+
+  # ───────── Stage 4 — pre-boss crescendo ─────────
+  - at: 156.0
     stage: 4
     spawn:
       - { enemy: bomber, count: 3, formation: slow_descent_centre, spacing: 1.0 }
       - { enemy: gunship, count: 2, formation: mirror(loop_left), spacing: 0.9, delay: 1.0 }
 
-  # Resupply ship #2 — kid playtest #8. Pre-boss top-up: a guaranteed
-  # power-up before the heavy stage-4 crescendo.
-  - at: 165.0
+  - at: 163.0
     stage: 4
     spawn:
       - { enemy: resupply_ship, count: 1, formation: resupply_cruise, spacing: 0.0 }
 
-  # NEW: symmetric strafe wall — left + right dive_then_strafe staggered
-  # so the kid can fall back to the bottom-centre safe lane.
-  - at: 172.0
+  - at: 170.0
     stage: 4
     spawn:
       - { enemy: fighter, count: 8, formation: dive_then_strafe, spacing: 0.25 }
       - { enemy: fighter, count: 8, formation: mirror(dive_then_strafe), spacing: 0.25, delay: 0.5 }
 
-  # NEW: final crescendo — gunship pincer + drone figure-eight overlay.
-  # Designed to look chaotic but every formation is one the kid has seen.
-  - at: 188.0
+  # Tightened: was 188 (16s gap), now 178 (8s).
+  - at: 178.0
+    stage: 4
+    spawn:
+      - { enemy: interceptor, count: 2, formation: mirror(arc_left_to_right), spacing: 0.6 }
+      - { enemy: drone, count: 6, formation: arc_left_to_right, spacing: 0.3, delay: 0.6 }
+
+  # Final crescendo — gunship pincer + drone figure-eight overlay.
+  - at: 186.0
     stage: 4
     spawn:
       - { enemy: gunship, count: 2, formation: loop_left, spacing: 0.8 }
@@ -182,6 +208,9 @@ waves:
       - { enemy: drone, count: 8, formation: figure_eight_centre, spacing: 0.2, delay: 1.5 }
 
   # ───────── Boss ─────────
-  - at: 210.0
+  # Pulled in from 210 → 196 (was 22s after final wave; now 10s) so the
+  # pre-boss lull doesn't break kid playtest #8 ("no more than 5-10s
+  # between waves").
+  - at: 196.0
     stage: boss
     boss: boss_01

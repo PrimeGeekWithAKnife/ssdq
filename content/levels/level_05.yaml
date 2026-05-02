@@ -36,9 +36,8 @@ background: bg_starfield_01
 length_seconds: 265
 
 waves:
-  # ───────── Stage 1 — straight into the fight ─────────
-  # No warm-up. Open with a fighter pincer + interceptor flit so the kid
-  # immediately knows this is the finale. Interceptors set the tempo.
+  # Pacing pass kid playtest 2026-05-02 #8 — every authored gap ≤ 10s.
+  # Stage 1 — straight into the fight.
   - at: 2.0
     stage: 1
     spawn:
@@ -51,118 +50,98 @@ waves:
       - { enemy: interceptor, count: 4, formation: dive_then_strafe, spacing: 0.3 }
       - { enemy: drone, count: 8, formation: figure_eight_centre, spacing: 0.25, delay: 1.0 }
 
-  - at: 24.0
+  - at: 22.0
     stage: 1
     spawn:
       - { enemy: gunship, count: 3, formation: loop_left, spacing: 0.7, return_passes: 1 }
       - { enemy: gunship, count: 3, formation: mirror(loop_left), spacing: 0.7, delay: 0.8, return_passes: 1 }
 
-  - at: 36.0
+  - at: 32.0
     stage: 1
     spawn:
       - { enemy: bomber, count: 3, formation: slow_descent_centre, spacing: 1.0 }
       - { enemy: interceptor, count: 5, formation: pincer_top, spacing: 0.3, delay: 1.2 }
 
-  - at: 48.0
+  - at: 42.0
     stage: 1
     spawn:
       - { enemy: kamikaze, count: 4, formation: kamikaze_dive_right, spacing: 0.5 }
       - { enemy: kamikaze, count: 4, formation: mirror(kamikaze_dive_right), spacing: 0.5, delay: 0.6 }
 
-  # NEW: heavy interceptor flank — gunship anchor + fast interceptor
-  # pincer overlay. Last beat of stage 1 before the sentinel debuts.
-  - at: 54.0
+  - at: 50.0
     stage: 1
     spawn:
       - { enemy: gunship, count: 2, formation: mirror(loop_left), spacing: 0.8 }
       - { enemy: interceptor, count: 5, formation: pincer_top, spacing: 0.3, delay: 1.0 }
 
-  # ───────── Stage 2 — the sentinel debuts ─────────
-  # SENTINEL PREVIEW: a single sentinel on a slow sweep so the kid sees
-  # the new silhouette and reads the wide twin-aim fan ONCE before the
-  # game starts pairing it with everything else. Drone screen overlaid
-  # so the kid still has chaff to shoot while learning.
+  # Stage 2 — sentinel debuts.
   - at: 60.0
     stage: 2
     spawn:
       - { enemy: sentinel, count: 1, formation: sweep_horizontal, spacing: 0.0 }
       - { enemy: drone, count: 8, formation: figure_eight_centre, spacing: 0.25, delay: 1.0 }
 
-  - at: 74.0
+  - at: 70.0
     stage: 2
     spawn:
       - { enemy: fighter, count: 8, formation: dive_then_strafe, spacing: 0.25 }
       - { enemy: fighter, count: 8, formation: mirror(dive_then_strafe), spacing: 0.25, delay: 0.4 }
 
-  - at: 86.0
+  - at: 80.0
     stage: 2
     spawn:
       - { enemy: bomber, count: 4, formation: slow_descent_centre, spacing: 0.9 }
       - { enemy: interceptor, count: 4, formation: pincer_top, spacing: 0.3, delay: 1.0 }
       - { enemy: drone, count: 6, formation: figure_eight_centre, spacing: 0.3, delay: 2.0 }
 
-  # SENTINEL #2 — now a PAIR sweeping in opposite directions so the kid
-  # has to think about which one to kill first. Gunships on the flank.
-  - at: 100.0
+  - at: 90.0
     stage: 2
     spawn:
       - { enemy: sentinel, count: 1, formation: sweep_horizontal, spacing: 0.0 }
       - { enemy: sentinel, count: 1, formation: mirror(sweep_horizontal), spacing: 0.0, delay: 1.0 }
       - { enemy: gunship, count: 2, formation: loop_left, spacing: 0.9, delay: 2.0 }
 
-  # Resupply ship #1 — mid-level top-up. Cruises during a deliberate
-  # quiet beat so the kid can prioritise the kill. 100% drop.
-  - at: 116.0
+  - at: 100.0
     stage: 2
     spawn:
       - { enemy: resupply_ship, count: 1, formation: resupply_cruise, spacing: 0.0 }
 
-  # ───────── Stage 3 — the stack tightens ─────────
-  # Now sentinels pair up with kamikaze dives — the kid is locked onto
-  # the slow heavy and the fast diver makes them flinch off the kill.
-  - at: 124.0
+  # Stage 3 — the stack tightens.
+  - at: 108.0
     stage: 3
     spawn:
       - { enemy: kamikaze, count: 5, formation: kamikaze_dive_right, spacing: 0.4 }
       - { enemy: kamikaze, count: 5, formation: mirror(kamikaze_dive_right), spacing: 0.4, delay: 0.6 }
       - { enemy: drone, count: 6, formation: figure_eight_centre, spacing: 0.3, delay: 1.5 }
 
-  - at: 138.0
+  - at: 118.0
     stage: 3
     spawn:
       - { enemy: interceptor, count: 6, formation: pincer_top, spacing: 0.25 }
       - { enemy: fighter, count: 6, formation: dive_then_strafe, spacing: 0.3, delay: 1.0 }
 
-  # SENTINEL #3 — paired with bombers. The bullet-wall + twin-fan combo
-  # means the kid CAN'T just sit centre-bottom; they have to sweep.
-  - at: 152.0
+  - at: 128.0
     stage: 3
     spawn:
       - { enemy: sentinel, count: 2, formation: sweep_horizontal, spacing: 1.5 }
       - { enemy: bomber, count: 3, formation: slow_descent_centre, spacing: 1.0, delay: 1.5 }
 
-  - at: 168.0
+  - at: 138.0
     stage: 3
     spawn:
       - { enemy: gunship, count: 3, formation: loop_left, spacing: 0.7, return_passes: 1 }
       - { enemy: gunship, count: 3, formation: mirror(loop_left), spacing: 0.7, delay: 0.5, return_passes: 1 }
       - { enemy: drone, count: 8, formation: figure_eight_centre, spacing: 0.2, delay: 1.5 }
 
-  # NEW: late-stage-3 fighter wall + bomber bullet rain — last "no
-  # sentinel" beat before stage 4 starts piling everything on.
-  - at: 178.0
+  - at: 148.0
     stage: 3
     spawn:
       - { enemy: fighter, count: 6, formation: arc_left_to_right, spacing: 0.3, return_passes: 1 }
       - { enemy: fighter, count: 6, formation: mirror(arc_left_to_right), spacing: 0.3, delay: 0.5, return_passes: 1 }
       - { enemy: bomber, count: 2, formation: slow_descent_centre, spacing: 1.2, delay: 1.5 }
 
-  # ───────── Stage 4 — everything, all at once ─────────
-  # Each wave layers AT LEAST 4 distinct enemy types. This is the
-  # graduation exam: the kid now sees sentinels + interceptors +
-  # bombers + kamikazes at the same time. If they survive this, the
-  # boss is "just" boss_05.
-  - at: 184.0
+  # Stage 4 — everything, all at once.
+  - at: 158.0
     stage: 4
     spawn:
       - { enemy: sentinel, count: 1, formation: sweep_horizontal, spacing: 0.0 }
@@ -170,14 +149,12 @@ waves:
       - { enemy: interceptor, count: 4, formation: pincer_top, spacing: 0.3, delay: 1.5 }
       - { enemy: kamikaze, count: 3, formation: kamikaze_dive_right, spacing: 0.5, delay: 2.5 }
 
-  # Resupply ship #2 — pre-boss top-up. The kid has just survived a
-  # 4-type stack; they need bombs and weapon level for the next one.
-  - at: 198.0
+  - at: 168.0
     stage: 4
     spawn:
       - { enemy: resupply_ship, count: 1, formation: resupply_cruise, spacing: 0.0 }
 
-  - at: 206.0
+  - at: 176.0
     stage: 4
     spawn:
       - { enemy: sentinel, count: 1, formation: mirror(sweep_horizontal), spacing: 0.0 }
@@ -185,7 +162,7 @@ waves:
       - { enemy: fighter, count: 6, formation: dive_then_strafe, spacing: 0.3, delay: 1.5 }
       - { enemy: drone, count: 6, formation: figure_eight_centre, spacing: 0.25, delay: 2.0 }
 
-  - at: 220.0
+  - at: 186.0
     stage: 4
     spawn:
       - { enemy: sentinel, count: 1, formation: sweep_horizontal, spacing: 0.0 }
@@ -194,10 +171,7 @@ waves:
       - { enemy: kamikaze, count: 4, formation: mirror(kamikaze_dive_right), spacing: 0.4, delay: 1.5 }
       - { enemy: bomber, count: 2, formation: slow_descent_centre, spacing: 1.2, delay: 2.0 }
 
-  # The big one — twin sentinels anchoring while EVERY other heavy
-  # threat type stacks on top. This is the chaos peak. Survive this
-  # and boss_05 is your reward.
-  - at: 236.0
+  - at: 196.0
     stage: 4
     spawn:
       - { enemy: sentinel, count: 1, formation: sweep_horizontal, spacing: 0.0 }
@@ -206,11 +180,7 @@ waves:
       - { enemy: interceptor, count: 5, formation: pincer_top, spacing: 0.25, delay: 2.0 }
       - { enemy: kamikaze, count: 3, formation: kamikaze_dive_right, spacing: 0.4, delay: 3.0 }
 
-  # Final pre-boss crescendo — every familiar formation overlaid.
-  # Sentinel anchor on the sweep, twin fighter walls, drone overlay,
-  # and a last interceptor pincer. The boss telegraph fires ~5s later
-  # so this wave bleeds straight into boss_05's intro.
-  - at: 250.0
+  - at: 206.0
     stage: 4
     spawn:
       - { enemy: sentinel, count: 1, formation: sweep_horizontal, spacing: 0.0 }
@@ -220,7 +190,8 @@ waves:
       - { enemy: interceptor, count: 3, formation: pincer_top, spacing: 0.3, delay: 2.0 }
 
   # ───────── Boss ─────────
-  # boss_05 is defined separately by the boss agent.
-  - at: 260.0
+  # Pulled in 260 → 216 (was 10s after final wave; same here, but the
+  # whole campaign now reaches the finale 44s sooner).
+  - at: 216.0
     stage: boss
     boss: boss_05

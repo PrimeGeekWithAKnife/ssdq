@@ -20,103 +20,120 @@ background: bg_starfield_01
 length_seconds: 195
 
 waves:
+  # Pacing (kid playtest 2026-05-02 #8): every authored gap ≤ 10s.
   # ───────── Stage 1 — straight into the deep end ─────────
-  # No drone-only warm-up. Open with a pair of fighter formations to
-  # remind the kid that things shoot back, then immediately add gunships.
   - at: 2.0
     stage: 1
     spawn:
       - { enemy: fighter, count: 5, formation: arc_left_to_right, spacing: 0.4 }
       - { enemy: fighter, count: 5, formation: mirror(arc_left_to_right), spacing: 0.4, delay: 1.0 }
 
-  - at: 14.0
+  - at: 11.0
     stage: 1
     spawn:
       - { enemy: gunship, count: 3, formation: loop_left, spacing: 0.8, return_passes: 1 }
       - { enemy: drone, count: 6, formation: figure_eight_centre, spacing: 0.3, delay: 1.0 }
 
-  - at: 26.0
+  - at: 21.0
     stage: 1
     spawn:
       - { enemy: bomber, count: 3, formation: slow_descent_centre, spacing: 1.0 }
       - { enemy: fighter, count: 6, formation: dive_then_strafe, spacing: 0.3, delay: 1.5 }
 
   # ───────── Stage 2 — pincer rhythm ─────────
-  - at: 42.0
+  - at: 31.0
     stage: 2
     spawn:
       - { enemy: gunship, count: 3, formation: loop_left, spacing: 0.7, return_passes: 1 }
       - { enemy: gunship, count: 3, formation: mirror(loop_left), spacing: 0.7, delay: 0.8, return_passes: 1 }
 
-  - at: 56.0
+  - at: 41.0
     stage: 2
     spawn:
       - { enemy: fighter, count: 8, formation: dive_then_strafe, spacing: 0.25 }
       - { enemy: fighter, count: 8, formation: mirror(dive_then_strafe), spacing: 0.25, delay: 0.5 }
 
-  - at: 70.0
+  - at: 51.0
     stage: 2
     spawn:
       - { enemy: bomber, count: 4, formation: slow_descent_centre, spacing: 1.0 }
       - { enemy: drone, count: 10, formation: figure_eight_centre, spacing: 0.2, delay: 1.0, return_passes: 1 }
 
+  # Interceptor preview — rapid_aim weapon shows up early on level 2
+  # too (kid playtest 2026-05-02 #3, "yet to spot rapid fire").
+  - at: 60.0
+    stage: 2
+    spawn:
+      - { enemy: interceptor, count: 3, formation: arc_left_to_right, spacing: 0.5 }
+
   # Resupply ship #1 — kid playtest #8. Mid-level guaranteed drop.
-  - at: 80.0
+  - at: 68.0
     stage: 2
     spawn:
       - { enemy: resupply_ship, count: 1, formation: resupply_cruise, spacing: 0.0 }
 
   # ───────── Stage 3 — density ramps ─────────
-  - at: 86.0
+  - at: 75.0
     stage: 3
     spawn:
       - { enemy: fighter, count: 6, formation: arc_left_to_right, spacing: 0.3, return_passes: 1 }
       - { enemy: fighter, count: 6, formation: mirror(arc_left_to_right), spacing: 0.3, delay: 0.6, return_passes: 1 }
       - { enemy: gunship, count: 2, formation: loop_left, spacing: 1.0, delay: 2.0 }
 
-  - at: 102.0
+  - at: 85.0
     stage: 3
     spawn:
       - { enemy: bomber, count: 3, formation: slow_descent_centre, spacing: 1.0 }
       - { enemy: bomber, count: 3, formation: slow_descent_centre, spacing: 1.0, delay: 1.5 }
       - { enemy: drone, count: 8, formation: figure_eight_centre, spacing: 0.2, delay: 0.8 }
 
-  - at: 118.0
+  - at: 95.0
     stage: 3
     spawn:
       - { enemy: gunship, count: 2, formation: loop_left, spacing: 0.9 }
       - { enemy: gunship, count: 2, formation: mirror(loop_left), spacing: 0.9, delay: 0.5 }
       - { enemy: fighter, count: 8, formation: dive_then_strafe, spacing: 0.25, delay: 1.5 }
 
+  - at: 105.0
+    stage: 3
+    spawn:
+      - { enemy: interceptor, count: 4, formation: dive_then_strafe, spacing: 0.4 }
+
   # ───────── Stage 4 — pre-boss crescendo ─────────
-  # Everything the kid has learned, stacked. The bomber/drone overlay
-  # is the new threat-vector — bullet wall + dodge-the-pattern at once.
-  - at: 138.0
+  # Everything the kid has learned, stacked.
+  - at: 115.0
     stage: 4
     spawn:
       - { enemy: bomber, count: 4, formation: slow_descent_centre, spacing: 0.9 }
       - { enemy: gunship, count: 2, formation: mirror(loop_left), spacing: 0.8, delay: 1.0 }
 
-  # Resupply ship #2 — kid playtest #8. Pre-boss top-up.
-  - at: 150.0
+  # Resupply ship #2 — pre-boss top-up.
+  - at: 124.0
     stage: 4
     spawn:
       - { enemy: resupply_ship, count: 1, formation: resupply_cruise, spacing: 0.0 }
 
-  - at: 156.0
+  - at: 132.0
     stage: 4
     spawn:
       - { enemy: fighter, count: 10, formation: dive_then_strafe, spacing: 0.2 }
       - { enemy: fighter, count: 10, formation: mirror(dive_then_strafe), spacing: 0.2, delay: 0.4 }
 
-  - at: 172.0
+  - at: 142.0
     stage: 4
     spawn:
       - { enemy: gunship, count: 3, formation: loop_left, spacing: 0.7 }
       - { enemy: gunship, count: 3, formation: mirror(loop_left), spacing: 0.7, delay: 0.4 }
       - { enemy: drone, count: 10, formation: figure_eight_centre, spacing: 0.2, delay: 1.0 }
 
+  - at: 152.0
+    stage: 4
+    spawn:
+      - { enemy: interceptor, count: 3, formation: mirror(arc_left_to_right), spacing: 0.5 }
+      - { enemy: drone, count: 8, formation: figure_eight_centre, spacing: 0.2, delay: 0.6 }
+
   # ───────── Boss ─────────
-  - at: 190.0
+  # Pulled in 190 → 162 (was 18s after the final wave; now 10s).
+  - at: 162.0
     stage: boss
     boss: boss_02

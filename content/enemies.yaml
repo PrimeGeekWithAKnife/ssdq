@@ -88,6 +88,12 @@ enemies:
     fire_beats: [1.4, 2.8, 4.2]
     score: 800
     drop_chance: 0.45
+    # Brief spawn-shield (kid playtest 2026-05-02 #3 — "yet to spot a
+    # single enemy with shields"). Gunship enters the playfield with a
+    # forcefield active for ~1.5s; the kid clearly sees the halo and
+    # learns "this enemy has shields." Long enough to register, short
+    # enough that the gunship is still meaningfully damaged on its run.
+    shield_on_spawn_seconds: 1.5
     drop_pool: [
       pickup_powerup, pickup_powerup, pickup_powerup, pickup_powerup,
       pickup_bomb, pickup_bomb, pickup_bomb, pickup_bomb,
@@ -139,8 +145,14 @@ enemies:
   resupply_ship:
     sprite: enemies/resupply_ship.png
     hitbox_radius: 36         # ~75% of visual half-width — forgiving target
-    hp: 12                    # 4x fighter (3hp), 1.5x gunship (8hp), well below boss (60hp)
-    speed_along_path: 50      # slow cruise — kid has time to spot and shoot
+    # HP tripled (12 → 36) per kid playtest 2026-05-02 #2: "supply ship
+    # needs triple the armour". Still well below the smallest boss phase
+    # pool, so the fight-vs-flight balance remains intact.
+    hp: 36                    # 12x fighter (3hp), ~3x gunship (8hp/12); well below boss
+    # Speed bumped 50 → 100 per same playtest item: "needs to be faster
+    # moving". Resupply_cruise duration is unchanged so the ship crosses
+    # the screen in half the wall-clock time it used to.
+    speed_along_path: 100     # was 50
     weapon: null
     score: 1500               # bigger reward than gunship (800), still under boss
     drop_chance: 1.0          # 100% drop — guaranteed power-up
@@ -309,6 +321,12 @@ bosses:
     hitbox_radius: 60
     score: 26000
     intro_telegraph_seconds: 2.0
+    # Kid playtest 2026-05-02 #15 — "Level 3 boss needs to have a
+    # temporary shield at 50% for 10 seconds". Phase 2 starts at the
+    # 50% HP boundary; this opens a 10s forcefield window the moment
+    # phase 2 begins so the kid sees the boss become invulnerable
+    # before the new attack pattern fires.
+    shield_on_phase_start_seconds: 10.0
     phases:
       # Phase 1: familiar aimed_triple at a tighter cadence. ~50% HP.
       # Beats sit roughly on a 0.55s grid across the 8s boss_phase_1
@@ -377,6 +395,11 @@ bosses:
     hitbox_radius: 60
     score: 35000
     intro_telegraph_seconds: 2.0
+    # Kid playtest 2026-05-02 #16 — "Level 4 & 5 bosses need a shield
+    # for 10 seconds every 20 seconds of fighting." Cycle is
+    # [vulnerable_secs, shielded_secs]; the boss starts vulnerable on
+    # phase 1 and toggles on the cycle until death.
+    shield_cycle_seconds: [20.0, 10.0]
     phases:
       # Phase 1 — "the wall". High-density burst_then_pause: TWO bursts
       # per loop, each burst is FOUR beats clustered ~0.15s apart, then a
@@ -461,6 +484,10 @@ bosses:
     hitbox_radius: 64                    # slightly chunkier than boss_01/02 (60) — finale silhouette
     score: 55000                         # campaign-final reward, dwarfs boss_02 (18000)
     intro_telegraph_seconds: 3.0         # extra beat of telegraph — kid needs to register "this is THE one"
+    # Same shield cycle as boss_04 (kid playtest #16) — campaign-final
+    # boss keeps the [20s vulnerable / 10s shielded] rhythm so the kid
+    # already knows the cadence by the time they reach the crescendo.
+    shield_cycle_seconds: [20.0, 10.0]
     phases:
       # Phase 1 — TEACH the new weapon. heavy_spread is a wide downward
       # fan with slower bullets; the kid learns the side-to-side dash
