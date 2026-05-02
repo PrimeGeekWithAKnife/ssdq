@@ -6,10 +6,12 @@ We materialise that snapshot once per render frame from the canonical
 session + powerup state, so the HUD doesn't reach into core internals.
 
 Task #9 added:
-  * ``shield_charges`` / ``missile_charges`` / ``drones`` on each player
-    panel — sourced from ``AppState`` inventory counters by the level
-    scene's ``_build_hud_state``. The HUD draws them only if non-zero so
-    the panel stays clean for fresh sessions.
+  * ``shield_charges`` / ``missile_level`` / ``drones`` on each player
+    panel — sourced by the level scene's ``_build_hud_state``. The HUD
+    draws them only if non-zero so the panel stays clean for fresh
+    sessions. ``missile_level`` was originally a charge count; the
+    2026-04-30 redesign changed missiles to tier-based auto-fire so the
+    HUD now shows the tier (1..MISSILE_LEVEL_CAP) instead.
 """
 
 from __future__ import annotations
@@ -25,7 +27,7 @@ class HudPlayerStats:
     score: int
     # Inventory counters (read by Hud panel).
     shield_charges: int = 0
-    missile_charges: int = 0
+    missile_level: int = 0  # 0 = no missiles; 1..5 = auto-fire tier
     # Active drone count (0..2) — task #10. Surfaced so the HUD can
     # render a small "Drones: N" line per player.
     drones: int = 0

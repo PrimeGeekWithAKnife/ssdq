@@ -59,7 +59,6 @@ class AppState:
     # downstream agents (DRONE, EQUIPPABLE) consume them once they
     # land. They survive across LevelScene boundaries within a session.
     drones_pending: dict[PlayerSlot, int] = field(default_factory=_zero_per_slot)
-    missile_charges: dict[PlayerSlot, int] = field(default_factory=_zero_per_slot)
     shield_charges: dict[PlayerSlot, int] = field(default_factory=_zero_per_slot)
 
     # One-shot shield charge bonus granted by DockingScene. Drained into
@@ -115,14 +114,8 @@ class AppState:
     def get_shield_charges(self, slot: PlayerSlot) -> int:
         return self.shield_charges.get(slot, 0)
 
-    def get_missile_charges(self, slot: PlayerSlot) -> int:
-        return self.missile_charges.get(slot, 0)
-
     def add_shield_charge(self, slot: PlayerSlot, n: int = 1) -> None:
         self.shield_charges[slot] = self.get_shield_charges(slot) + n
-
-    def add_missile_charge(self, slot: PlayerSlot, n: int = 1) -> None:
-        self.missile_charges[slot] = self.get_missile_charges(slot) + n
 
     def consume_shield_charge(self, slot: PlayerSlot) -> bool:
         """Decrement and return True if a charge was available."""
@@ -130,14 +123,6 @@ class AppState:
         if cur <= 0:
             return False
         self.shield_charges[slot] = cur - 1
-        return True
-
-    def consume_missile_charge(self, slot: PlayerSlot) -> bool:
-        """Decrement and return True if a charge was available."""
-        cur = self.get_missile_charges(slot)
-        if cur <= 0:
-            return False
-        self.missile_charges[slot] = cur - 1
         return True
 
     # ───────── progression carry-forward ─────────
@@ -161,6 +146,5 @@ class AppState:
         # Equippable inventories — kid expects a clean slate on a fresh
         # campaign, not whatever stockpile a prior wipeout left behind.
         self.shield_charges = _zero_per_slot()
-        self.missile_charges = _zero_per_slot()
         self.drones_pending = _zero_per_slot()
         self.drone_config = _zero_per_slot()

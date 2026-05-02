@@ -8,14 +8,14 @@ Behaviour summary (spec §8.1, §8.2):
 * First pad whose any-button is pressed binds to P1; second to P2.
 * Stick deadzone is radial 0.15, with the live region renormalised so 0.15..1.0
   maps to 0..1.0; magnitude is then clamped to 1.0.
-* Edge-triggered: bomb, pause, confirm, cancel, shield, missile, drone_cycle —
+* Edge-triggered: bomb, pause, confirm, cancel, shield, drone_cycle —
   true only on the tick the button transitions 0->1. Held: fire.
 * Disconnect detection is per bound pad, exposed via :attr:`disconnected` for
   the pause-overlay scene to consult.
 
 Button assignment is no longer hard-coded — each pad's mapping comes from a
 :class:`BindingsStore` keyed by SDL pad GUID. Defaults match the canonical
-Xbox-360 layout (FIRE=0, BOMB=2, SHIELD=4, MISSILE=5, DRONE_CYCLE=6, PAUSE=7,
+Xbox-360 layout (FIRE=0, BOMB=2, SHIELD=4, DRONE_CYCLE=6, PAUSE=7,
 CONFIRM=0, CANCEL=1) so working pads keep working without any setup.
 
 The kid playtest 2026-04-28 found two pads (Zikway HID, Gamesir T4n Lite)
@@ -26,7 +26,7 @@ reachable from Title and Pause lets the player rebind any action.
 from __future__ import annotations
 
 import math
-from typing import Callable
+from collections.abc import Callable
 
 import pygame
 
@@ -88,7 +88,6 @@ class _PadState:
         "prev_b",
         "prev_back",
         "prev_bomb",
-        "prev_missile",
         "prev_pause",
         "prev_shield",
     )
@@ -100,7 +99,6 @@ class _PadState:
         self.prev_bomb: bool = False
         self.prev_pause: bool = False
         self.prev_shield: bool = False
-        self.prev_missile: bool = False
 
 
 class GamepadProvider:
@@ -245,9 +243,6 @@ class GamepadProvider:
                     state.prev_shield = _safe_button(
                         pad, binding.button_for(BindingAction.SHIELD)
                     )
-                    state.prev_missile = _safe_button(
-                        pad, binding.button_for(BindingAction.MISSILE)
-                    )
                     state.prev_back = _safe_button(
                         pad, binding.button_for(BindingAction.DRONE_CYCLE)
                     )
@@ -273,7 +268,6 @@ class GamepadProvider:
         bomb_held = _safe_button(pad, binding.button_for(BindingAction.BOMB))
         pause_held = _safe_button(pad, binding.button_for(BindingAction.PAUSE))
         shield_held = _safe_button(pad, binding.button_for(BindingAction.SHIELD))
-        missile_held = _safe_button(pad, binding.button_for(BindingAction.MISSILE))
         back_held = _safe_button(pad, binding.button_for(BindingAction.DRONE_CYCLE))
 
         # Edge-triggered: true only on 0 -> 1 transition.
@@ -282,7 +276,6 @@ class GamepadProvider:
         confirm = confirm_held and not state.prev_a
         cancel = cancel_held and not state.prev_b
         shield = shield_held and not state.prev_shield
-        missile = missile_held and not state.prev_missile
         drone_cycle = back_held and not state.prev_back
 
         # Update prev-tick state for next poll.
@@ -291,7 +284,6 @@ class GamepadProvider:
         state.prev_bomb = bomb_held
         state.prev_pause = pause_held
         state.prev_shield = shield_held
-        state.prev_missile = missile_held
         state.prev_back = back_held
 
         return PlayerInput(
@@ -302,7 +294,6 @@ class GamepadProvider:
             confirm=confirm,
             cancel=cancel,
             shield=shield,
-            missile=missile,
             drone_cycle=drone_cycle,
         )
 

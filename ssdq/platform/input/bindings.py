@@ -25,7 +25,6 @@ class BindingAction(str, Enum):
     FIRE = "fire"
     BOMB = "bomb"
     SHIELD = "shield"
-    MISSILE = "missile"
     DRONE_CYCLE = "drone_cycle"
     PAUSE = "pause"
     CONFIRM = "confirm"
@@ -71,7 +70,6 @@ def default_binding() -> PadBinding:
             BindingAction.FIRE: 0,
             BindingAction.BOMB: 2,
             BindingAction.SHIELD: 4,
-            BindingAction.MISSILE: 5,
             BindingAction.DRONE_CYCLE: 6,
             BindingAction.PAUSE: 7,
             BindingAction.CONFIRM: 0,

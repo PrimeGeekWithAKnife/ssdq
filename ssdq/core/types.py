@@ -80,7 +80,6 @@ class PlayerInput:
     confirm: bool = False  # menu A, edge-triggered
     cancel: bool = False  # menu B, edge-triggered
     shield: bool = False  # edge-triggered — equippable forcefield charge
-    missile: bool = False  # edge-triggered — equippable heat-seeking missile
     # Drone-formation cycle: edge-triggered. Pads → BUTTON_BACK (6),
     # keyboard → F. The level scene advances the player's active drone
     # configuration (Tight → Spread → Trailing → Vanguard → loop) only

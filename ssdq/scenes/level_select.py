@@ -34,12 +34,12 @@ class LevelSelectScene(Scene):
 
     __slots__ = (
         "_app",
+        "_hint_font",
+        "_prev_y",
+        "_row_font",
+        "_title_font",
         "level_indices",
         "selected_index",
-        "_prev_y",
-        "_title_font",
-        "_row_font",
-        "_hint_font",
     )
 
     def __init__(self, app: AppState) -> None:

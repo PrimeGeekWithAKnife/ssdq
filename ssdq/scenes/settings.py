@@ -16,8 +16,9 @@ fixing.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 import pygame
 
@@ -48,19 +49,19 @@ class SettingsScene(Scene):
     """Action list + edit; pop on CANCEL."""
 
     __slots__ = (
+        "_actions",
         "_app",
+        "_capture_target",
+        "_hint_font",
+        "_nav",
+        "_on_exit",
+        "_pad_button_state",
         "_pad_guid",
         "_pad_name",
-        "_on_exit",
-        "_actions",
-        "selected_index",
-        "capturing",
-        "_capture_target",
-        "_nav",
-        "_title_font",
         "_row_font",
-        "_hint_font",
-        "_pad_button_state",
+        "_title_font",
+        "capturing",
+        "selected_index",
     )
 
     def __init__(

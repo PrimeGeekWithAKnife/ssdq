@@ -15,7 +15,8 @@ Selection rules (in order):
 from __future__ import annotations
 
 import os
-from typing import Callable, Protocol, runtime_checkable
+from collections.abc import Callable
+from typing import Protocol, runtime_checkable
 
 from ssdq.core.types import PlayerInput, PlayerSlot
 from ssdq.platform.input.bindings import BindingsStore

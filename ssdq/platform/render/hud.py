@@ -125,8 +125,8 @@ class Hud:
         # clean session doesn't clutter the panel with zeroed-out counters.
         if stats.shield_charges:
             lines.append((f"[S] Shield x{stats.shield_charges}", (140, 255, 240)))
-        if stats.missile_charges:
-            lines.append((f"[M] Missile x{stats.missile_charges}", (255, 180, 100)))
+        if stats.missile_level:
+            lines.append((f"Missile Lv {stats.missile_level}", (255, 180, 100)))
         if stats.drones:
             lines.append((f"Drones: {stats.drones}", _INVENTORY_COLOUR))
         # Score is always last so its position relative to the bottom
@@ -157,7 +157,7 @@ class _PlayerStats:
         "bombs",
         "drones",
         "lives",
-        "missile_charges",
+        "missile_level",
         "score",
         "shield_charges",
         "weapon_level",
@@ -171,7 +171,7 @@ class _PlayerStats:
         score: int,
         *,
         shield_charges: int = 0,
-        missile_charges: int = 0,
+        missile_level: int = 0,
         drones: int = 0,
     ) -> None:
         self.lives = lives
@@ -179,7 +179,7 @@ class _PlayerStats:
         self.weapon_level = weapon_level
         self.score = score
         self.shield_charges = shield_charges
-        self.missile_charges = missile_charges
+        self.missile_level = missile_level
         self.drones = drones
 
 
@@ -214,6 +214,6 @@ def _player_stats(state: Any, slot_attr: str) -> _PlayerStats:
         weapon_level=_attr_int(p, "weapon_level") or 1,
         score=_attr_int(p, "score"),
         shield_charges=_attr_int(p, "shield_charges"),
-        missile_charges=_attr_int(p, "missile_charges"),
+        missile_level=_attr_int(p, "missile_level"),
         drones=_attr_int(p, "drones"),
     )

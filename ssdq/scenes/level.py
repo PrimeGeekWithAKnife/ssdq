@@ -873,20 +873,10 @@ class LevelScene(Scene):
                 # Empty press — quiet chirp; never errors.
                 self.app.audio.play_sfx("hit", volume=0.15)
 
-        # Missile (equippable, heat-seeking). Consumes a charge from the
-        # AppState inventory and spawns a homing missile entity at the
-        # ship's position. Empty-press behaves like the shield button.
-        if inp.missile and lifecycle.state == LifecycleState.ALIVE:
-            if self.app.consume_missile_charge(slot):
-                self._fire_missile(world, slot, new_pos)
-                self.app.audio.play_sfx("missile", volume=0.6)
-            else:
-                self.app.audio.play_sfx("hit", volume=0.15)
-
-        # Tier-based missile auto-fire (post-2026-04-30 redesign). Lives
-        # alongside the equippable button-press path while the migration
-        # commits land; the strip-out commit will remove the inp.missile
-        # block above and leave only this dispatcher.
+        # Tier-based missile auto-fire (post-2026-04-30 redesign).
+        # Each MISSILE pickup bumps PlayerPowerupState.missile_level;
+        # the dispatcher fires _MISSILE_PATTERNS[level] missiles on a
+        # MISSILE_AUTOFIRE_TICKS cadence while the slot is alive.
         if lifecycle.state == LifecycleState.ALIVE:
             self._maybe_auto_fire_missiles(world, slot, new_pos, self._internal_tick)
 
@@ -1904,10 +1894,6 @@ class LevelScene(Scene):
         # downstream agent (DRONE / EQUIPPABLE) drains it.
         if result.drone_pickup:
             self.app.drones_pending[slot] = self.app.drones_pending.get(slot, 0) + 1
-        if result.missile_charges_added > 0:
-            self.app.missile_charges[slot] = (
-                self.app.missile_charges.get(slot, 0) + result.missile_charges_added
-            )
         if result.shield_charge_added:
             # Auto-shield (10s forcefield) is preserved by `apply_pickup`
             # so things still work pre-EQUIPPABLE merge — we ALSO bump
@@ -1955,8 +1941,8 @@ class LevelScene(Scene):
             return ("+1 LIFE", (255, 120, 180))
         if getattr(result, "shield_up", False):
             return ("SHIELD!", (80, 220, 255))
-        if getattr(result, "missile_charges_added", 0) > 0:
-            return ("+MISSILES", (255, 200, 100))
+        if getattr(result, "missile_tier_up", False):
+            return ("MISSILE+", (255, 200, 100))
         if getattr(result, "drone_pickup", False):
             return ("+DRONE", (180, 220, 255))
         return ("", (255, 255, 255))
@@ -2116,7 +2102,7 @@ class LevelScene(Scene):
                 weapon_level=p1.weapon.level + 1,
                 score=snap.p1,
                 shield_charges=self.app.get_shield_charges(P1),
-                missile_charges=self.app.get_missile_charges(P1),
+                missile_level=p1.missile_level,
                 drones=drones_p1,
             ),
             p2=HudPlayerStats(
@@ -2125,7 +2111,7 @@ class LevelScene(Scene):
                 weapon_level=p2.weapon.level + 1,
                 score=snap.p2,
                 shield_charges=self.app.get_shield_charges(P2),
-                missile_charges=self.app.get_missile_charges(P2),
+                missile_level=p2.missile_level,
                 drones=drones_p2,
             ),
         )

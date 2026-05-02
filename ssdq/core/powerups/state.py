@@ -223,11 +223,6 @@ class PickupResult:
     drone_pickup: bool = False  # queue +1 drone for the DRONE agent
     missile_tier_up: bool = False  # missile_level advanced (false at cap)
     shield_charge_added: bool = False  # +1 shield charge to inventory
-    # Legacy: missile pickups used to grant inventory charges. Kept at 0
-    # so the level-scene routing block stays a silent no-op until the
-    # button-press strip-out in the missile-redesign series removes both
-    # this field and the callsite. Do not re-introduce charge logic.
-    missile_charges_added: int = 0
 
 
 def apply_pickup(

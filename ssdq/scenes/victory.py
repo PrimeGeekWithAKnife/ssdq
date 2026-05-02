@@ -28,7 +28,7 @@ _HINT_COLOUR = (130, 150, 180)
 class VictoryScene(Scene):
     """End-of-campaign celebration screen."""
 
-    __slots__ = ("_app", "_title_font", "_body_font", "_hint_font")
+    __slots__ = ("_app", "_body_font", "_hint_font", "_title_font")
 
     def __init__(self, app: AppState) -> None:
         self._app = app
