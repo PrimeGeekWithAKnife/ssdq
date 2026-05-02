@@ -36,7 +36,9 @@ class PauseOverlay:
         # Pause menu options — kid playtest 2026-04-27 + 2026-04-28.
         resume = self._menu_font.render("START to resume", True, (220, 220, 220))
         settings = self._menu_font.render("FIRE to rebind pad", True, (220, 220, 180))
-        exit_lbl = self._menu_font.render("CANCEL (B / ESC) to quit", True, (220, 180, 180))
+        exit_lbl = self._menu_font.render(
+            "CANCEL (B / ESC) to return to title", True, (220, 180, 180)
+        )
         surface.blit(resume, resume.get_rect(center=(w // 2, h // 2 + 30)))
         surface.blit(settings, settings.get_rect(center=(w // 2, h // 2 + 70)))
         surface.blit(exit_lbl, exit_lbl.get_rect(center=(w // 2, h // 2 + 110)))

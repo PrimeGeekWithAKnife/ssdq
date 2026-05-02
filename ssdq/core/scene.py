@@ -76,10 +76,10 @@ class SceneStack:
     screen and draw a pause banner).
 
     `app` is an optional back-reference to the session-scope ``AppState`` so
-    pause-time shortcuts (CONFIRM → SettingsScene; CANCEL → quit) can build
-    their target scenes without coupling the stack to a specific scene class.
-    main.py wires it; tests that don't exercise the pause shortcut leave it
-    ``None``.
+    pause-time shortcuts (CONFIRM → SettingsScene; CANCEL → return-to-title)
+    can build their target scenes without coupling the stack to a specific
+    scene class. main.py wires it; tests that don't exercise the pause
+    shortcut leave it ``None``.
     """
 
     __slots__ = ("_paused", "_quit_requested", "_stack", "_world", "app")
@@ -141,9 +141,23 @@ class SceneStack:
             self.toggle_pause()
             return
         if self._paused:
-            # Pause menu (kid playtest 2026-04-27): cancel button quits.
+            # Pause menu CANCEL: kid playtest 2026-05-02 #2 — "return to
+            # main." Replaces the prior quit behaviour, which closed the
+            # whole app and was not what the kid wanted. We clear
+            # progression (same fresh-start treatment as Title→PLAY) and
+            # swap the stack top for TitleScene.
             if inputs[0].cancel or inputs[1].cancel:
-                self._quit_requested = True
+                if self.app is not None:
+                    from ssdq.scenes.title import TitleScene
+
+                    if hasattr(self.app, "clear_progression"):
+                        self.app.clear_progression()
+                    self._paused = False
+                    self.replace(TitleScene(app=self.app))
+                else:
+                    # Stack with no app reference can't build TitleScene —
+                    # fall back to legacy quit so non-app test paths work.
+                    self._quit_requested = True
                 return
             # CONFIRM (edge-triggered, A button on default mapping) opens the
             # gamepad rebind scene without leaving pause from the player's
