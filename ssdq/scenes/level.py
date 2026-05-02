@@ -34,6 +34,7 @@ from ssdq.core.components import (
     CircleHitbox,
     Damage,
     Drone,
+    EnemyShield,
     Faction,
     FactionTag,
     FloatingText,
@@ -88,6 +89,22 @@ logger = logging.getLogger(__name__)
 
 PLAY_W = 1280.0
 PLAY_H = 720.0
+
+
+def _input_is_active(inp: PlayerInput) -> bool:
+    """True if the input differs from the neutral default — i.e. the
+    player has actually pressed or moved something this tick.
+
+    Used to gate the LevelScene's auto-continue loop so an idle slot
+    (e.g. an un-bound P2) is never auto-resurrected (kid playtest
+    2026-05-02 #9).
+    """
+    if inp.fire or inp.bomb or inp.pause or inp.confirm or inp.cancel:
+        return True
+    if inp.shield or inp.drone_cycle:
+        return True
+    # Stick movement above a tiny noise floor counts as engagement.
+    return abs(inp.move.x) > 0.05 or abs(inp.move.y) > 0.05
 _PLAYER_SPAWN_Y = PLAY_H - 80.0
 _OFF_SCREEN_MARGIN = 80.0  # cull entities this far past the play boundary
 _BOSS_INTRO_TELEGRAPH_RADIUS = 80.0
@@ -430,6 +447,20 @@ class BossState:
     path_t0: float
     intro_remaining: float
     settled: bool = False
+    # Wall-clock sim_time at which the boss intro completed — used by
+    # the time-based bonus on death (kid playtest 2026-05-02 #12).
+    fight_started_at: float = 0.0
+    # Shield window state (kid playtest #15/#16). seconds_remaining > 0
+    # means the boss is currently invulnerable. cycle_phase is "vuln"
+    # or "shield" or "off"; cycle_t accumulates inside the active phase
+    # so we can flip when the configured phase duration elapses.
+    shield_remaining: float = 0.0
+    cycle_phase: str = "off"  # "off" | "vuln" | "shield"
+    cycle_t: float = 0.0
+    # Total damage taken so far across all phases — kid playtest #13.
+    # Replaces the old per-phase HP refill model: bar reads
+    # (max_total - damage_taken) / max_total which decreases monotonically.
+    damage_taken: int = 0
 
 
 # ───────── Level scene ─────────
@@ -453,7 +484,6 @@ class LevelScene(Scene):
     _grid: SpatialGrid = field(init=False)
     _sim_time: float = field(default=0.0, init=False)
     _internal_tick: int = field(default=0, init=False)
-    _enter_tick: int = field(default=-1, init=False)
     _boss: BossState | None = field(default=None, init=False)
     _boss_dispatched: bool = field(default=False, init=False)
     _level_completed: bool = field(default=False, init=False)
@@ -462,6 +492,12 @@ class LevelScene(Scene):
     # Track which (wave_idx, spawn_idx, member_idx) tuples have had a
     # warning telegraph spawned, so we don't double-up.
     _telegraphed: set[tuple[int, int, int]] = field(default_factory=set, init=False)
+    # Slots that have given any real input this level — used to gate
+    # auto-continue (kid playtest 2026-05-02 #9). An idle P2 with no
+    # plays should NEVER spend continues to come back from death; the
+    # auto-spend was the cause of "P2's life count went 1 → 3 after
+    # they died again." Populated lazily in _apply_player_input.
+    _engaged: set[PlayerSlot] = field(default_factory=set, init=False)
 
     def __init__(self, app: AppState, level_index: int = 1) -> None:
         self.app = app
@@ -559,6 +595,7 @@ class LevelScene(Scene):
         self._level_complete_grace = 0.0
         self._music_playing = None
         self._telegraphed = set()
+        self._engaged = set()
 
         # Spawn both player ships immediately (slice has no ship-select).
         self._spawn_player(world, P1, self._player_positions[P1])
@@ -671,20 +708,41 @@ class LevelScene(Scene):
         tick: TickIndex,
         inputs: tuple[PlayerInput, PlayerInput],
     ) -> SceneTransition | None:
-        if self._enter_tick < 0:
-            self._enter_tick = int(tick)
-        self._internal_tick = int(tick) - self._enter_tick
+        # Kid playtest 2026-05-02 #10/#17: drive _internal_tick from the
+        # scene's own counter rather than deriving from the global clock.
+        # The SceneStack returns early while paused, so global `tick`
+        # keeps counting up but we DO NOT — _sim_time stays consistent
+        # across the pause and the wave scheduler isn't fast-forwarded
+        # into the boss spawn on unpause.
+        # _internal_tick == 0 on the first scene tick (matches the
+        # previous semantics so existing pinned-time tests still pass).
         dt = TICK_DT
-        # Rebuild from tick count each step to avoid float-accumulator drift.
         self._sim_time = self._internal_tick * dt
+
+        # Track which slots have actually engaged with the game this
+        # level — required for the auto-continue gate below (kid
+        # playtest 2026-05-02 #9). A slot is engaged the first time it
+        # produces non-default input (any movement, fire, bomb, etc.).
+        for slot, inp in ((P1, inputs[0]), (P2, inputs[1])):
+            if slot in self._engaged:
+                continue
+            if _input_is_active(inp):
+                self._engaged.add(slot)
 
         # 1. coop session timers (lifecycle, plus any pending continues)
         self._session.tick(dt)
-        # Auto-spend continues (slice has no continue prompt UI; either
-        # player going OUT immediately spends a continue if available).
+        # Auto-spend continues — but ONLY for slots that have actually
+        # played. An idle P2 (kid playtest 2026-05-02 #9) sat at OUT
+        # and was repeatedly resurrected by this loop, with their life
+        # count snapping back to options.starting_lives every time.
+        # Engaged-only gate keeps solo play sane: an unbound P2 stays
+        # OUT forever and the solo player still has continues for P1.
         for slot in (P1, P2):
-            if self._session.lifecycle(slot).state == LifecycleState.OUT:
-                self._session.try_consume_continue(slot)
+            if self._session.lifecycle(slot).state != LifecycleState.OUT:
+                continue
+            if slot not in self._engaged:
+                continue
+            self._session.try_consume_continue(slot)
 
         # 2. Speed-boost + shield + fire-rate decay; sync ShieldHalo on
         # player ships. The fire-rate boost is the WEAPON_SPEED pickup's
@@ -714,6 +772,11 @@ class LevelScene(Scene):
 
         # 5. Advance enemies along formations + emit fire beats
         self._advance_enemies(world)
+
+        # 5a. Decay per-enemy spawn-shield timers; remove ShieldHalo on
+        # expiry. Bosses use a separate state machine on BossState
+        # (advanced inside _advance_boss).
+        self._tick_enemy_shields(world, dt)
 
         # 6a. Heat-seeking missile homing — adjust velocities BEFORE the
         # motion integrator so the new headings take effect this tick.
@@ -750,6 +813,11 @@ class LevelScene(Scene):
                 self._switch_music(boss_name)
 
         # 13. Win/loss transitions
+        # Advance the local tick counter at the end of the step so the
+        # NEXT call's _sim_time reflects "one more tick" — keeps the
+        # first scene tick at sim_time=0 (matches the previous semantics
+        # before the global-clock derivation was removed).
+        self._internal_tick += 1
         if self._level_completed:
             self._level_complete_grace += dt
             if self._level_complete_grace >= 1.5:
@@ -1318,6 +1386,14 @@ class LevelScene(Scene):
         )
         if enemy.weapon and enemy.fire_beats:
             world.add(eid, EnemyShooterRef(shooter=EnemyShooter(beats=enemy.fire_beats)))
+        # Spawn-shield (kid playtest 2026-05-02 #3). Attach an
+        # EnemyShield + ShieldHalo so the kid clearly sees the
+        # forcefield. The halo radius is generous so the visual reads
+        # as "wraps the whole enemy".
+        if enemy.shield_on_spawn_seconds > 0.0:
+            halo_radius = max(28.0, enemy.hitbox_radius + 14.0)
+            world.add(eid, EnemyShield(seconds_remaining=enemy.shield_on_spawn_seconds))
+            world.add(eid, ShieldHalo(base_radius=halo_radius))
 
     def _maybe_spawn_boss(self, world: World) -> None:
         if self._boss is not None or self._boss_dispatched:
@@ -1335,15 +1411,18 @@ class LevelScene(Scene):
             return
         # Spawn boss above screen; it'll slide into formation as t advances.
         sample = evaluate_path(formation, 0.0)
-        # Boss MaxHealth: total of all phase pools, so the bar shows
-        # cumulative progress across the whole fight (per-phase chunks
-        # rendered with dividers).
+        # Health = total HP across ALL phases; MaxHealth is the same.
+        # Kid playtest 2026-05-02 #13: previously Health = phases[0].hp
+        # and was REFILLED on each phase transition, so the boss bar
+        # pegged at ~50% across a 2-phase fight. Now Health monotonically
+        # decreases from total_max → 0 and phase transitions fire when
+        # HP drops below the cumulative remaining-phase total.
         total_max = sum(p.hp for p in boss.phases)
         eid = world.spawn(
             Position(sample.pos),
             CircleHitbox(radius=boss.hitbox_radius),
             FactionTag(Faction.ENEMY),
-            Health(hp=boss.phases[0].hp),
+            Health(hp=total_max),
             MaxHealth(hp=total_max),
             Sprite(path=boss.sprite, layer=7),
             ScoreValue(points=boss.score),
@@ -1376,6 +1455,8 @@ class LevelScene(Scene):
             shooter=EnemyShooter(beats=boss.phases[0].fire_beats),
             path_t0=self._sim_time + boss.intro_telegraph_seconds,
             intro_remaining=boss.intro_telegraph_seconds,
+            fight_started_at=self._sim_time + boss.intro_telegraph_seconds,
+            cycle_phase="vuln" if boss.shield_cycle_seconds is not None else "off",
         )
         self._scheduler.consume_boss_event(be)
         self._boss_dispatched = True
@@ -1469,24 +1550,25 @@ class LevelScene(Scene):
         path_dt = self._sim_time - boss_state.path_t0
         if path_dt < 0.0:
             return
-        # Boss formations are always loop=true.
-        t_norm = path_dt / formation.duration
+        # Boss formations are always loop=true. Use modulo wrap so the
+        # path naturally cycles without snapping path_t0 — kid playtest
+        # 2026-05-02 #14 reported "boss teleports left" because the old
+        # path_t0 reset on shooter exhaust collapsed t_norm back to 0
+        # mid-flight.
+        t_norm = (path_dt % formation.duration) / formation.duration
         sample = evaluate_path(formation, t_norm)
         world.replace(boss_state.entity, Position(sample.pos))
 
-        # Boss fire — beats loop with the formation
+        # Boss fire — beats loop with the formation. We do NOT reset
+        # path_t0 on shooter exhaust any more; we only reset the shooter
+        # itself and feed it the wrapped path-time.
         weapon_def = bundle.enemy_weapons.get(phase_def.weapon)
         if weapon_def is not None:
-            # We re-feed the shooter on each loop by shifting beats with
-            # path time mod formation duration. EnemyShooter exhausts
-            # its beat list once, then we reset() and shift t0.
             if boss_state.shooter.remaining == 0:
                 boss_state.shooter.reset()
-                boss_state.path_t0 = self._sim_time
-                path_dt = 0.0
             target = self._nearest_alive_player_pos(sample.pos)
             events = boss_state.shooter.advance(
-                path_dt,
+                path_dt % formation.duration,
                 enemy_entity=int(boss_state.entity),
                 enemy_pos=sample.pos,
                 target_pos=target,
@@ -1498,45 +1580,145 @@ class LevelScene(Scene):
             for ev in events:
                 self._spawn_enemy_bullets(world, weapon_def, ev.aim.fire_pos, target)
 
-        # Phase transition: each phase has its own HP pool. When the
-        # current pool hits 0, either advance to the next phase (reset HP
-        # to that phase's pool) or — if no phases remain — kill the boss.
+        # Boss shield mechanics (kid playtest #15/#16). Run after the
+        # fire-step so shield activation never delays the first volley.
+        self._tick_boss_shield(world, boss_state)
+
+        # Phase transition: cumulative HP model (kid playtest #13).
+        # Health monotonically decreases from MaxHealth (total) to 0;
+        # we trigger a phase transition whenever HP drops below the
+        # cumulative HP of the REMAINING phases (i.e. the player has
+        # consumed the current phase's pool).
         hp = world.must_get(boss_state.entity, Health).hp
-        boss_state.phase_hp_remaining = hp
-        if hp <= 0:
-            if boss_state.phase_index + 1 < len(boss_state.boss.phases):
-                self._transition_boss_phase(world, boss_state)
-            else:
-                world.despawn(boss_state.entity)
-                self._session.scores.award(P1, boss_state.boss.score, multiplier=1.0)
-                self._boss = None
-                self._level_completed = True
-                self.app.audio.play_sfx("explosion")
+        remaining_phases_after = boss_state.boss.phases[boss_state.phase_index + 1 :]
+        threshold = sum(p.hp for p in remaining_phases_after)
+        boss_state.phase_hp_remaining = max(0, hp - threshold)
+        if hp <= threshold and boss_state.phase_index + 1 < len(boss_state.boss.phases):
+            self._transition_boss_phase(world, boss_state)
+        elif hp <= 0:
+            self._kill_boss(world, boss_state)
+
+    def _tick_boss_shield(self, world: World, boss_state: BossState) -> None:
+        """Advance the boss shield timers + cycle. Adds/removes a
+        ShieldHalo on the boss entity to match the active state.
+
+        Two modes:
+        * `shield_remaining > 0`: a one-shot or in-progress shield
+          window. Decay by dt; on expiry, transition the cycle to
+          "vuln" (if cycling) or "off".
+        * `cycle_phase == "vuln" / "shield"` with a configured
+          `shield_cycle_seconds`: accumulate in `cycle_t`; when the
+          phase duration elapses, flip and (for "shield") seed
+          `shield_remaining` with the shielded duration.
+        """
+        boss_def = boss_state.boss
+        # Shield timer decay first.
+        if boss_state.shield_remaining > 0.0:
+            boss_state.shield_remaining = max(0.0, boss_state.shield_remaining - TICK_DT)
+            if boss_state.shield_remaining == 0.0 and boss_def.shield_cycle_seconds is not None:
+                # End of a cycled shield window → start vulnerable phase.
+                boss_state.cycle_phase = "vuln"
+                boss_state.cycle_t = 0.0
+
+        # Cycle accumulator (only when configured + not currently in a
+        # one-shot shield burst).
+        cycle = boss_def.shield_cycle_seconds
+        if cycle is not None and boss_state.shield_remaining == 0.0:
+            vuln_secs, shield_secs = cycle
+            boss_state.cycle_t += TICK_DT
+            if boss_state.cycle_phase == "vuln" and boss_state.cycle_t >= vuln_secs:
+                boss_state.cycle_phase = "shield"
+                boss_state.cycle_t = 0.0
+                boss_state.shield_remaining = shield_secs
+
+        # Sync the boss's ShieldHalo to its actual state. Re-using the
+        # player's halo component keeps the renderer code paths shared.
+        eid = boss_state.entity
+        active = boss_state.shield_remaining > 0.0
+        has_halo = world.has(eid, ShieldHalo)
+        if active and not has_halo:
+            world.add(eid, ShieldHalo(base_radius=boss_def.hitbox_radius + 24.0))
+        elif not active and has_halo:
+            world.remove(eid, ShieldHalo)
+
+    def _kill_boss(self, world: World, boss_state: BossState) -> None:
+        """Boss-death routing — explosion fanfare, time-based bonus,
+        sfx, level-completed flag. Kid playtest 2026-05-02 #12.
+        """
+        boss_pos = world.get(boss_state.entity, Position)
+        if boss_pos is not None:
+            # Big explosion (scale=4 is the largest rung, much chunkier
+            # than the regular kill VFX). This is the "boss is dead"
+            # punctuation the kid wanted.
+            self._spawn_explosion(world, boss_pos.pos, scale=4)
+            # Time bonus — full boss score reduces linearly to zero
+            # over a 60-second target. Quick kill = full bonus,
+            # 60s+ fight = no bonus.
+            elapsed = max(0.0, self._sim_time - boss_state.fight_started_at)
+            bonus_factor = max(0.0, min(1.0, 1.0 - elapsed / 60.0))
+            bonus = max(0, int(boss_state.boss.score * bonus_factor))
+            if bonus > 0:
+                # Award to whichever player is closer to the boss
+                # corpse — falls back to P1 if neither is alive.
+                slot = self._nearest_alive_player_slot(boss_pos.pos) or P1
+                self._session.scores.award(slot, bonus, multiplier=1.0)
+                world.spawn(
+                    Position(boss_pos.pos),
+                    Velocity(Vec2(0.0, -40.0)),
+                    FloatingText(
+                        text=f"+{bonus} TIME BONUS",
+                        colour=(255, 220, 80),
+                        ticks_remaining=120,
+                    ),
+                    TimeToLive(ticks=120),
+                )
+        world.despawn(boss_state.entity)
+        self._session.scores.award(P1, boss_state.boss.score, multiplier=1.0)
+        self._boss = None
+        self._level_completed = True
+        self.app.audio.play_sfx("explosion")
 
     def _transition_boss_phase(self, world: World, boss_state: BossState) -> None:
-        # Visual: spawn explosions at BOTH the old and new positions so the
-        # boss reads as "warping" rather than teleporting silently
-        # (kid playtest #4: "boss disappear and reappear at end of screen").
+        # Warp visual: explosions at both the old AND new positions so
+        # the boss reads as "warping" rather than teleporting silently.
+        # Kid playtest 2026-05-02 #14 wants L4 + L5 bosses to "have a
+        # quick animation when they teleport" — we beef up the visual
+        # for those levels (bigger telegraph + brief alpha fade on the
+        # boss sprite). Earlier-level bosses use the original idiom.
         bundle = self.app.content
         old_pos = world.must_get(boss_state.entity, Position).pos
         new_phase: BossPhaseDef = boss_state.boss.phases[boss_state.phase_index + 1]
         new_formation = bundle.formations.get(new_phase.formation)
+        is_late_boss = self.level_index >= 4
         if new_formation is not None:
             new_pos = evaluate_path(new_formation, 0.0).pos
-            self._spawn_explosion(world, old_pos, scale=2)
-            self._spawn_explosion(world, new_pos, scale=2)
-            # Telegraph at the new position so the player sees where to look.
+            warp_scale = 3 if is_late_boss else 2
+            self._spawn_explosion(world, old_pos, scale=warp_scale)
+            self._spawn_explosion(world, new_pos, scale=warp_scale)
+            telegraph_radius = 96.0 if is_late_boss else 72.0
+            telegraph_ticks = 45 if is_late_boss else 30
             world.spawn(
-                BossTelegraph(pos=new_pos, radius=72.0, colour=(255, 200, 60)),
-                TimeToLive(ticks=30),
+                BossTelegraph(pos=new_pos, radius=telegraph_radius, colour=(255, 200, 60)),
+                TimeToLive(ticks=telegraph_ticks),
             )
+            # L4/L5 quick warp animation — alpha pulse on the boss
+            # sprite for ~30 ticks so the kid sees the "blink out and
+            # in" rather than a hard cut.
+            if is_late_boss:
+                world.add(boss_state.entity, InvulnerabilityBlink(ticks_remaining=30))
             self.app.audio.play_sfx("explosion", volume=0.6)
         boss_state.phase_index += 1
         boss_state.shooter = EnemyShooter(beats=new_phase.fire_beats)
         boss_state.path_t0 = self._sim_time
         boss_state.phase_hp_remaining = new_phase.hp
-        # Refill the boss's Health pool so phase 2 has its full allocation.
-        world.replace(boss_state.entity, Health(hp=new_phase.hp))
+        # NOTE: Health is NOT refilled — it represents total remaining
+        # HP across all phases now (kid playtest #13). The boss bar
+        # decreases monotonically.
+
+        # Open the one-shot phase-start shield window if the boss
+        # configures one (kid playtest #15 — boss_03 phase 2).
+        if boss_state.boss.shield_on_phase_start_seconds > 0.0:
+            boss_state.shield_remaining = boss_state.boss.shield_on_phase_start_seconds
 
     def _spawn_enemy_bullets(
         self,
@@ -1626,6 +1808,17 @@ class LevelScene(Scene):
                 if not circles_overlap(bomb.pos, bomb.aoe_radius, e_pos.pos, 0.0):
                     continue
                 bomb._hit.add(int(enemy_eid))
+                # Shield gate (kid playtest 2026-05-02 #15/#16): bombs
+                # bounce off shielded bosses too. Per-enemy spawn-shields
+                # (gunship, etc.) are NOT in the shielded set here — bombs
+                # remain decisive against light enemies. ``_target_is_shielded``
+                # only returns True for the active boss-shield window.
+                if (
+                    self._boss is not None
+                    and enemy_eid == self._boss.entity
+                    and self._boss.shield_remaining > 0.0
+                ):
+                    continue
                 # Boss-aware damage: 20% of current HP, floor at base.
                 max_hp = world.get(enemy_eid, MaxHealth)
                 if max_hp is not None and max_hp.hp >= 50:
@@ -1786,6 +1979,13 @@ class LevelScene(Scene):
         hlth = world.get(enemy_eid, Health)
         if damage is None or hlth is None:
             return
+        # Boss + enemy shield gates (kid playtest 2026-05-02 #3/#15/#16):
+        # if the target is shielded, the bullet is absorbed — despawn it
+        # but don't apply damage. The kid sees the shielded ring around
+        # the enemy and learns "wait for the shield to drop."
+        if self._target_is_shielded(world, enemy_eid):
+            world.despawn(bullet_eid)
+            return
         new_hp = hlth.hp - damage.amount
         world.replace(enemy_eid, Health(hp=new_hp))
         # Capture credit before despawning the bullet.
@@ -1798,6 +1998,32 @@ class LevelScene(Scene):
         else:
             pos = world.must_get(enemy_eid, Position).pos
             self._on_enemy_killed(world, enemy_eid, pos, killer_slot=killer_slot)
+
+    def _target_is_shielded(self, world: World, enemy_eid: Entity) -> bool:
+        """True if the entity has an active shield (per-enemy or boss).
+
+        Per-enemy: an `EnemyShield` component with seconds_remaining > 0.
+        Boss: the entity belongs to the active BossState and the BossState's
+        shield window is open.
+        """
+        es = world.get(enemy_eid, EnemyShield)
+        if es is not None and es.active:
+            return True
+        if self._boss is not None and enemy_eid == self._boss.entity:
+            return self._boss.shield_remaining > 0.0
+        return False
+
+    def _tick_enemy_shields(self, world: World, dt: float) -> None:
+        """Decay each EnemyShield. Remove the ShieldHalo + component on
+        expiry so the visual + collision-gate snap off together."""
+        for eid, shield in list(world.query1(EnemyShield)):
+            new_remaining = shield.seconds_remaining - dt
+            if new_remaining <= 0.0:
+                world.remove(eid, EnemyShield)
+                if world.has(eid, ShieldHalo):
+                    world.remove(eid, ShieldHalo)
+            else:
+                world.replace(eid, EnemyShield(seconds_remaining=new_remaining))
 
     def _on_enemy_killed(
         self,
@@ -1930,6 +2156,9 @@ class LevelScene(Scene):
             # the inventory counter that the EQUIPPABLE agent will read.
             self.app.shield_charges[slot] = self.app.shield_charges.get(slot, 0) + 1
         # Floating-text feedback so the player knows what they got.
+        # Pass the resulting state in so the weapon/missile labels can
+        # show the actual NEW tier (kid playtest 2026-05-02 #19 —
+        # generic "WEAPON UP!" left the kid wondering "up to what?").
         pickup_pos = world.must_get(pickup_eid, Position).pos
         text, colour = self._floating_text_for_result(result)
         if text:
@@ -1954,11 +2183,23 @@ class LevelScene(Scene):
 
     @staticmethod
     def _floating_text_for_result(result: object) -> tuple[str, tuple[int, int, int]]:
-        """Map a PickupResult to (label, colour) for the floating text."""
+        """Map a PickupResult to (label, colour) for the floating text.
+
+        Weapon and missile labels now show the resulting tier explicitly
+        (kid playtest 2026-05-02 #19 — "supply ship says weapon level X
+        but I started at level 1"). The kid sees the new tier on every
+        pickup so the HUD's `Weapon Lv N` reading is never a surprise.
+        """
         # `result` is a PickupResult — duck-typed read to avoid a circular
         # import here.
+        new_state = getattr(result, "new_state", None)
         if getattr(result, "upgraded_weapon", False):
-            return ("WEAPON UP!", (255, 220, 80))
+            tier = (
+                int(getattr(new_state.weapon, "level", 0)) + 1
+                if new_state is not None
+                else 0
+            )
+            return (f"WEAPON Lv {tier}!", (255, 220, 80))
         if getattr(result, "weapon_speed_up", False):
             return ("RAPID FIRE!", (255, 220, 120))
         if getattr(result, "speed_up", False):
@@ -1972,7 +2213,8 @@ class LevelScene(Scene):
         if getattr(result, "shield_up", False):
             return ("SHIELD!", (80, 220, 255))
         if getattr(result, "missile_tier_up", False):
-            return ("MISSILE+", (255, 200, 100))
+            tier = int(getattr(new_state, "missile_level", 0)) if new_state is not None else 0
+            return (f"MISSILE Lv {tier}!", (255, 200, 100))
         if getattr(result, "drone_pickup", False):
             return ("+DRONE", (180, 220, 255))
         return ("", (255, 255, 255))
@@ -2082,13 +2324,28 @@ class LevelScene(Scene):
     def _spawn_explosion(self, world: World, pos: Vec2, *, scale: int = 1) -> None:
         """Spawn a one-shot explosion animation at `pos`.
 
-        scale=1 for regular enemies; pass 2 for boss / large craft.
+        scale=1 for regular enemies; 2 for large craft / boss phase
+        warps; 4 for boss death (kid playtest 2026-05-02 #12 — "killing
+        a boss should result in an explosion animation"). The numeric
+        ``scale`` is mapped onto the ``AnimatedSprite.scale`` so the
+        explosion sprite is visibly chunkier on screen.
         """
         frames = tuple(f"particles/explosion_{i:02d}.png" for i in range(4))
+        # Render scale: larger explosions also linger longer on screen
+        # (frame_ticks bumps with scale) so the bigger silhouette has
+        # time to read at TV-viewing distance.
+        sprite_scale = float(scale)
+        frame_ticks = 4 if scale <= 2 else 6
         # The animation auto-despawns on its last frame via _advance_animations.
         world.spawn(
             Position(pos),
-            AnimatedSprite(frames=frames, frame_ticks=4, loop=False, layer=9),
+            AnimatedSprite(
+                frames=frames,
+                frame_ticks=frame_ticks,
+                loop=False,
+                layer=9,
+                scale=sprite_scale,
+            ),
         )
 
     def _cull_entities(self, world: World) -> None:

@@ -80,6 +80,12 @@ class EnemyDef:
     score: int
     drop_chance: float
     drop_pool: tuple[str, ...]
+    # Optional spawn-shield window (kid playtest 2026-05-02 #3 — "I've yet
+    # to spot a single enemy with shields"). When > 0, the enemy spawns
+    # with a forcefield active for that many seconds; player bullets
+    # bounce / are absorbed during the window. Bombs still penetrate
+    # (a screen-clear should always read as decisive).
+    shield_on_spawn_seconds: float = 0.0
 
 
 class PickupEffect(Enum):
@@ -129,6 +135,17 @@ class BossDef:
     score: int
     intro_telegraph_seconds: float
     phases: tuple[BossPhaseDef, ...]
+    # Boss shield mechanics (kid playtest 2026-05-02 #15 + #16). Both
+    # default to "no shield" so existing bosses are unaffected.
+    #
+    # `shield_on_phase_start_seconds`: when phase 2 starts, open a shield
+    # window of this many seconds (boss_03 — "shield at 50% HP for 10s").
+    # `shield_cycle_seconds`: tuple (vulnerable, shielded). Once the boss
+    # leaves the intro telegraph it cycles between the two — vulnerable
+    # for `vulnerable` seconds, then shielded for `shielded` seconds,
+    # repeating (boss_04/05 — "shield for 10s every 20s of fighting").
+    shield_on_phase_start_seconds: float = 0.0
+    shield_cycle_seconds: tuple[float, float] | None = None
 
 
 # ───────── formations ─────────

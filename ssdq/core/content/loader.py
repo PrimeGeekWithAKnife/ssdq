@@ -184,6 +184,7 @@ def _load_enemies(
             score=int(_require(e, "score", f"{where}:enemies.{name}")),
             drop_chance=float(e.get("drop_chance", 0.0)),
             drop_pool=tuple(e.get("drop_pool") or []),
+            shield_on_spawn_seconds=float(e.get("shield_on_spawn_seconds", 0.0)),
         )
 
     pickups: dict[str, PickupDef] = {}
@@ -226,6 +227,15 @@ def _load_enemies(
         )
         if len(phases) < 1:
             raise ContentError(f"{where}:bosses.{name}: must have ≥ 1 phase")
+        cycle_raw = b.get("shield_cycle_seconds")
+        if cycle_raw is None:
+            cycle: tuple[float, float] | None = None
+        else:
+            if not isinstance(cycle_raw, list) or len(cycle_raw) != 2:
+                raise ContentError(
+                    f"{where}:bosses.{name}: shield_cycle_seconds must be a 2-element list"
+                )
+            cycle = (float(cycle_raw[0]), float(cycle_raw[1]))
         bosses[name] = BossDef(
             name=name,
             sprite=_require(b, "sprite", f"{where}:bosses.{name}"),
@@ -233,6 +243,8 @@ def _load_enemies(
             score=int(_require(b, "score", f"{where}:bosses.{name}")),
             intro_telegraph_seconds=float(b.get("intro_telegraph_seconds", 2.0)),
             phases=phases,
+            shield_on_phase_start_seconds=float(b.get("shield_on_phase_start_seconds", 0.0)),
+            shield_cycle_seconds=cycle,
         )
 
     return enemies, bosses, enemy_weapons, pickups

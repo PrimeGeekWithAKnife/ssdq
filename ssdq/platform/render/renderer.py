@@ -203,7 +203,9 @@ class Renderer:
             if not anim.frames:
                 continue
             idx = min(anim.current_index, len(anim.frames) - 1)
-            synthetic = Sprite(path=anim.frames[idx], layer=anim.layer)
+            synthetic = Sprite(
+                path=anim.frames[idx], layer=anim.layer, scale=anim.scale
+            )
             items.append(_DrawItem(layer=anim.layer, eid_index=int(eid), pos=pos, sprite=synthetic))
         items.sort(key=lambda i: (i.layer, i.eid_index))
         return items

@@ -130,10 +130,30 @@ class ShieldHalo:
     player ship while ``PlayerPowerupState.shield`` is active and
     removes it on expiry. Colour is cyan by convention; the renderer
     reads ``base_radius`` and pulses the ring radius + alpha.
+    Also used by the enemy-shield mechanic (`EnemyShield`) so shielded
+    foes pulse the same forcefield idiom — the kid recognises both
+    "I am protected" and "this enemy is protected" with one visual.
     """
 
     base_radius: float
     colour: tuple[int, int, int] = (80, 220, 255)
+
+
+@dataclass(frozen=True, slots=True)
+class EnemyShield:
+    """Per-enemy shield state. Counts down to 0; while active, player
+    bullets bounce / are absorbed against the target. Bombs still
+    penetrate — a screen-clear should always read as decisive.
+
+    Kid playtest 2026-05-02 #3: "yet to spot a single enemy with
+    shields" — gunship + boss_03/04/05 use this.
+    """
+
+    seconds_remaining: float
+
+    @property
+    def active(self) -> bool:
+        return self.seconds_remaining > 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,6 +179,10 @@ class AnimatedSprite:
 
     `loop=False` means the AnimationSystem despawns the entity on the
     final frame; `loop=True` cycles indefinitely.
+
+    `scale` (kid playtest 2026-05-02 #12) lets a one-shot animation
+    render at a non-1x size — used for the boss-death explosion which
+    wants a chunkier silhouette than a regular kill.
     """
 
     frames: tuple[str, ...]
@@ -167,6 +191,7 @@ class AnimatedSprite:
     elapsed_ticks: int = 0
     loop: bool = False
     layer: int = 0
+    scale: float = 1.0
 
 
 @dataclass(frozen=True, slots=True)
