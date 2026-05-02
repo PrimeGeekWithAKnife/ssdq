@@ -65,6 +65,7 @@ from ssdq.core.coop import (
 )
 from ssdq.core.ecs import World
 from ssdq.core.powerups import (
+    MISSILE_LEVEL_CAP,
     SHIELD_CONSUME_DURATION,
     PlayerPowerupState,
     Shield,
@@ -491,18 +492,22 @@ class LevelScene(Scene):
         p2_bombs = max(self.app.last_bombs.get(P2.index, 0), ship.starting_bombs) + bomb_bonus
         p1_speed_bonus = self.app.last_ship_speed_bonus.get(P1.index, 0.0)
         p2_speed_bonus = self.app.last_ship_speed_bonus.get(P2.index, 0.0)
+        p1_missile_level = self._seeded_missile_level(P1)
+        p2_missile_level = self._seeded_missile_level(P2)
         self._powerup_states = {
             P1: PlayerPowerupState(
                 weapon=WeaponState(tree=tree, level=p1_tier),
                 bombs=p1_bombs,
                 lives=self.app.options.starting_lives,
                 ship_speed_bonus=p1_speed_bonus,
+                missile_level=p1_missile_level,
             ),
             P2: PlayerPowerupState(
                 weapon=WeaponState(tree=tree, level=p2_tier),
                 bombs=p2_bombs,
                 lives=self.app.options.starting_lives,
                 ship_speed_bonus=p2_speed_bonus,
+                missile_level=p2_missile_level,
             ),
         }
         self._player_entities = {P1: None, P2: None}
@@ -572,6 +577,11 @@ class LevelScene(Scene):
                 P1.index: self._powerup_states[P1].ship_speed_bonus,
                 P2.index: self._powerup_states[P2].ship_speed_bonus,
             }
+            # Missile auto-fire tier — same persist-on-clear rule.
+            self.app.last_missile_levels = {
+                P1.index: self._powerup_states[P1].missile_level,
+                P2.index: self._powerup_states[P2].missile_level,
+            }
             # Re-stage live drones into drones_pending so the next level's
             # _spawn_pending_drones recreates them. The despawn sweep below
             # would otherwise destroy them with no path back. Kid playtest
@@ -600,6 +610,16 @@ class LevelScene(Scene):
         """
         prior = self.app.last_weapon_tiers.get(slot.index, 0)
         return max(0, min(prior, max_tree_level))
+
+    def _seeded_missile_level(self, slot: PlayerSlot) -> int:
+        """Resolve the starting missile auto-fire tier for a slot on enter.
+
+        Mirrors ``_seeded_tier`` for ``app.last_missile_levels``. Clamps
+        to ``MISSILE_LEVEL_CAP`` so a stale entry can't push the player
+        past the highest pattern.
+        """
+        prior = self.app.last_missile_levels.get(slot.index, 0)
+        return max(0, min(prior, MISSILE_LEVEL_CAP))
 
     # ───────── per-tick ─────────
 
