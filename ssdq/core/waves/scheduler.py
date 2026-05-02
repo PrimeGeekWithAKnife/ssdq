@@ -145,6 +145,38 @@ class WaveScheduler:
         self._elapsed = new_elapsed
         return out
 
+    def cue_next_wave_if_idle(
+        self,
+        have_live_enemies: bool,
+        *,
+        max_gap: float = 5.0,
+    ) -> None:
+        """Fast-forward elapsed time so the next pending spawn fires
+        within ``max_gap`` seconds, but only when the level is genuinely
+        idle (no live enemies AND a pending spawn currently > ``max_gap``
+        away). Caller passes ``have_live_enemies`` because the scheduler
+        is content-only and doesn't see the ECS world.
+
+        No-ops when:
+        * the player still has enemies to clear (``have_live_enemies``);
+        * the pending list is empty (boss waves still arrive on their own
+          schedule via ``pending_boss_events``);
+        * the next spawn is already within ``max_gap`` (would otherwise
+          rewind elapsed time, which is wrong).
+
+        Kid playtest 2026-05-02 #6: "if a wave finishes quickly cue the
+        next wave within 5 seconds." Replay determinism is broken by this
+        mid-level clock advance — there are no shipped saves so the
+        trade-off is acceptable; flagged in the commit message.
+        """
+        if have_live_enemies or not self._pending:
+            return
+        next_fire = self._pending[0].fire_at
+        target_elapsed = next_fire - max_gap
+        if target_elapsed <= self._elapsed:
+            return  # already close enough; never rewind
+        self._elapsed = target_elapsed
+
     def pending_boss_events(self, before_sim_time: float) -> list[BossEvent]:
         """Boss events whose wave.at ≤ before_sim_time. Returned in
         order; caller is responsible for consuming them via

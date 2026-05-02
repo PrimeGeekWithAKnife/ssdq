@@ -1226,6 +1226,18 @@ class LevelScene(Scene):
         events = self._scheduler.tick(TICK_DT)
         for ev in events:
             self._spawn_enemy(world, ev)
+        # If the kid cleared the current wave fast, fast-forward toward
+        # the next wave so the gap never exceeds 5 seconds. Kid playtest
+        # 2026-05-02 #6 — "if a wave finishes quickly cue the next wave
+        # within 5 seconds."
+        self._scheduler.cue_next_wave_if_idle(
+            have_live_enemies=self._has_live_enemies(world)
+        )
+
+    def _has_live_enemies(self, world: World) -> bool:
+        return any(
+            ftag.faction == Faction.ENEMY for _eid, ftag in world.query1(FactionTag)
+        )
 
     def _spawn_telegraphs(self, world: World) -> None:
         bundle = self.app.content
