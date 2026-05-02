@@ -968,7 +968,9 @@ class LevelScene(Scene):
             return
         for dx in pattern:
             self._fire_missile(world, slot, Vec2(ship_pos.x + dx, ship_pos.y))
-        self.app.audio.play_sfx("missile", volume=0.6)
+        # 0.42 = 0.6 × 0.7 — kid playtest 2026-05-02 asked for missile SFX
+        # 30% quieter (an L5 barrage was drowning out the laser).
+        self.app.audio.play_sfx("missile", volume=0.42)
 
     def _maybe_auto_fire_missiles(
         self,
