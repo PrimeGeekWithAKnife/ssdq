@@ -95,6 +95,13 @@ class AppState:
     # boundaries used to drop it. Same persist-on-clear semantics.
     last_ship_speed_bonus: dict[int, float] = field(default_factory=dict)
 
+    # Missile auto-fire tier carried across cleared levels (post-2026-04-30
+    # missile redesign). Mirrors ``last_weapon_tiers``: captured on the
+    # cleared level's exit, seeded into PlayerPowerupState.missile_level
+    # on next LevelScene.enter. Death inside a level still resets the
+    # tier to 0 — this only persists across the cleared-level seam.
+    last_missile_levels: dict[int, int] = field(default_factory=dict)
+
     # Scratch flags for Boot → Title → Level transitions to know what to do.
     asset_loaded_levels: set[int] = field(default_factory=set)
 
@@ -150,6 +157,7 @@ class AppState:
         self.last_weapon_tiers = {}
         self.last_bombs = {}
         self.last_ship_speed_bonus = {}
+        self.last_missile_levels = {}
         # Equippable inventories — kid expects a clean slate on a fresh
         # campaign, not whatever stockpile a prior wipeout left behind.
         self.shield_charges = _zero_per_slot()
