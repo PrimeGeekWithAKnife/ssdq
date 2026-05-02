@@ -221,8 +221,13 @@ class PickupResult:
     ship_speed_up: bool = False  # permanent ship-speed bump
     weapon_speed_up: bool = False  # timed rate-of-fire boost
     drone_pickup: bool = False  # queue +1 drone for the DRONE agent
-    missile_charges_added: int = 0  # how many missile charges granted (0 if N/A)
+    missile_tier_up: bool = False  # missile_level advanced (false at cap)
     shield_charge_added: bool = False  # +1 shield charge to inventory
+    # Legacy: missile pickups used to grant inventory charges. Kept at 0
+    # so the level-scene routing block stays a silent no-op until the
+    # button-press strip-out in the missile-redesign series removes both
+    # this field and the callsite. Do not re-introduce charge logic.
+    missile_charges_added: int = 0
 
 
 def apply_pickup(
@@ -294,10 +299,15 @@ def apply_pickup(
         # the queue so the agent can drain it on its first integration.
         return PickupResult(new_state=state, drone_pickup=True)
     if pickup.effect == PickupEffect.MISSILE:
-        # Inventory-only — same pattern as DRONE; charges live on
-        # AppState.missile_charges so the EQUIPPABLE agent can read them.
+        # Post-2026-04-30 redesign: missiles are tier-based auto-fire,
+        # not stockpiled charges. Each pickup advances the tier by one
+        # (capped at MISSILE_LEVEL_CAP). The level scene reads
+        # ``missile_level`` directly to drive the per-tier auto-fire
+        # spawn pattern; ``missile_count`` on PickupDef is no longer
+        # meaningful and is ignored.
+        bumped = state.with_missile_level(state.missile_level + 1)
         return PickupResult(
-            new_state=state,
-            missile_charges_added=max(0, pickup.missile_count),
+            new_state=bumped,
+            missile_tier_up=bumped.missile_level != state.missile_level,
         )
     raise ValueError(f"unknown pickup effect: {pickup.effect}")
