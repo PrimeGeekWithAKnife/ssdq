@@ -103,21 +103,28 @@ class ParallaxStarfield:
 # Base ground colour (mid grey) — drawn over the renderer's clear before
 # any craters land on top.
 _MOON_GROUND_COLOUR = (78, 78, 86)
-# Highlight specks (regolith glints).
-_MOON_SPECK_COLOUR = (200, 200, 210)
 
-# Two crater layers — distant (small, dim, slow) and near (bigger, more
-# contrast, faster). Each layer entry is
-# (count, scroll_speed_px_per_sec, base_radius, radius_jitter, fill_colour, rim_colour).
+# Single shared scroll speed across all crater layers. Kid playtest
+# 2026-05-02 #11: previously two layers scrolled at 22 and 60 px/s and
+# the kid read this as "bubbles moving at different speeds" — wanted
+# craters to all move together. Visual depth comes from size + tone
+# variation per layer, not parallax.
+_MOON_SCROLL_SPEED = 36.0
+
+# Two crater size/colour layers — distant (small, dim) and near (bigger,
+# more contrast). Both scroll at the same speed (see comment above).
+# Radii bumped per kid playtest 2026-05-02 #7 ("perhaps some larger
+# craters"): base/jitter doubled so the surface reads as proper craters
+# rather than dots.
+# Each layer entry is (count, base_radius, radius_jitter, fill, rim).
 _MOON_CRATER_LAYERS: tuple[
-    tuple[int, float, int, int, tuple[int, int, int], tuple[int, int, int]], ...
+    tuple[int, int, int, tuple[int, int, int], tuple[int, int, int]], ...
 ] = (
-    (28, 22.0, 8, 6, (52, 52, 60), (110, 110, 118)),
-    (12, 60.0, 22, 14, (38, 38, 46), (130, 130, 140)),
+    (24, 18, 10, (52, 52, 60), (110, 110, 118)),   # was 28 small @ r8±6
+    (10, 38, 18, (38, 38, 46), (130, 130, 140)),   # was 12 mid   @ r22±14
 )
-# Specks scroll at the mid layer's speed and exist purely as texture.
-_MOON_SPECK_COUNT = 60
-_MOON_SPECK_SPEED = 40.0
+# Specks (light-grey dots) removed — kid read them as "stars in the
+# background" on the moon surface level (kid playtest 2026-05-02 #7).
 
 
 class MoonSurfaceBackground:
@@ -131,38 +138,31 @@ class MoonSurfaceBackground:
     ``MoonSurfaceBackground(width, height)`` then ``draw(surface, tick)``.
     """
 
-    # _craters: tuple of (x, y_base, radius, scroll_speed_px_s, fill, rim)
-    # _specks:  tuple of (x, y_base)
-    __slots__ = ("_craters", "_height", "_specks", "_width")
+    # _craters: tuple of (x, y_base, radius, fill, rim) — all craters
+    # scroll at the shared _MOON_SCROLL_SPEED so they move as one.
+    __slots__ = ("_craters", "_height", "_width")
 
     def __init__(self, width: int, height: int) -> None:
         self._width = width
         self._height = height
 
         craters: list[
-            tuple[float, float, int, float, tuple[int, int, int], tuple[int, int, int]]
+            tuple[float, float, int, tuple[int, int, int], tuple[int, int, int]]
         ] = []
         crater_id = 0
-        for count, speed, base_r, jitter, fill, rim in _MOON_CRATER_LAYERS:
+        for count, base_r, jitter, fill, rim in _MOON_CRATER_LAYERS:
             for _ in range(count):
-                # Distinct channels per crater so the layers feel
+                # Distinct channels per crater so positions feel
                 # uncorrelated yet entirely deterministic.
                 x = tick_unit(0, channel=30_000 + crater_id) * width
                 y = tick_unit(0, channel=40_000 + crater_id) * height
                 rj = int(tick_unit(0, channel=50_000 + crater_id) * jitter)
                 radius = base_r + rj
-                craters.append((x, y, radius, speed, fill, rim))
+                craters.append((x, y, radius, fill, rim))
                 crater_id += 1
         self._craters: tuple[
-            tuple[float, float, int, float, tuple[int, int, int], tuple[int, int, int]], ...
+            tuple[float, float, int, tuple[int, int, int], tuple[int, int, int]], ...
         ] = tuple(craters)
-
-        specks: list[tuple[float, float]] = []
-        for sid in range(_MOON_SPECK_COUNT):
-            sx = tick_unit(0, channel=60_000 + sid) * width
-            sy = tick_unit(0, channel=70_000 + sid) * height
-            specks.append((sx, sy))
-        self._specks: tuple[tuple[float, float], ...] = tuple(specks)
 
     @property
     def width(self) -> int:
@@ -182,19 +182,18 @@ class MoonSurfaceBackground:
         # see Moon, not deep space, before any craters land.
         surface.fill(_MOON_GROUND_COLOUR)
 
-        # Far → near so the near layer overdraws the far. The Y axis
-        # scrolls top-to-bottom because the player is moving "up" the
-        # screen; ground beneath them appears to move downward.
-        for cx, cy_base, radius, speed, fill, rim in self._craters:
-            cy = (cy_base + speed * elapsed) % h
+        # All craters share the same scroll speed (kid playtest #11) so
+        # the surface reads as a single sliding ground plane rather than
+        # a multi-speed parallax. Sort order is insertion order so
+        # bigger/darker craters in layer 2 still overdraw the smaller
+        # layer-1 ones.
+        scroll = _MOON_SCROLL_SPEED * elapsed
+        for cx, cy_base, radius, fill, rim in self._craters:
+            cy = (cy_base + scroll) % h
             ix = int(cx) % w
             iy = int(cy)
             pygame.draw.circle(surface, fill, (ix, iy), radius)
-            pygame.draw.circle(surface, rim, (ix, iy), radius, width=1)
-
-        for sx, sy_base in self._specks:
-            y = (sy_base + _MOON_SPECK_SPEED * elapsed) % h
-            surface.set_at((int(sx) % w, int(y)), _MOON_SPECK_COLOUR)
+            pygame.draw.circle(surface, rim, (ix, iy), radius, width=2)
 
 
 # ───────── Earth horizon (level 4) ─────────
@@ -211,7 +210,11 @@ class MoonSurfaceBackground:
 # some kind of Earth in the background would be good".
 
 _EARTH_OCEAN = (28, 70, 140)
-_EARTH_LAND = (60, 130, 80)
+_EARTH_OCEAN_DEEP = (18, 50, 110)
+_EARTH_LAND = (66, 130, 78)
+_EARTH_LAND_DARK = (44, 100, 56)
+_EARTH_LAND_SAND = (170, 150, 100)
+_EARTH_ICE = (220, 230, 235)
 _EARTH_HORIZON_GLOW = (140, 200, 255)
 _EARTH_CLOUD = (220, 230, 240)
 # Earth's centre sits well below the screen bottom so only its upper
@@ -220,6 +223,64 @@ _EARTH_CENTRE_BELOW_FRAC = 0.6
 _EARTH_RADIUS_FRAC = 1.4  # × screen height
 _EARTH_CLOUD_COUNT = 8
 _EARTH_CLOUD_SPEED = 18.0
+
+# Hand-tuned blob clusters per landmass. Each entry is a list of
+# (rel_x, rel_y, radius_px) circles painted on top of the ocean disc;
+# overlapping circles merge into an organic landmass silhouette
+# rather than the previous three obvious vector circles. Coords are
+# fractions of the Earth radius from the disc centre — only the upper
+# limb is visible, so all rel_y values are negative.
+# Kid playtest 2026-05-02 #18: "Earth looks weird with circular
+# continents". The painterly title backdrop already does this, but at
+# build time via PIL — we replicate the technique using pygame
+# primitives so it stays cheap on the per-frame draw path.
+_EARTH_LANDMASSES: tuple[tuple[tuple[float, float, int, tuple[int, int, int]], ...], ...] = (
+    # Africa — large central landmass spanning the day-side limb.
+    (
+        (-0.18, -0.32, 60, _EARTH_LAND),
+        (-0.10, -0.26, 70, _EARTH_LAND),
+        (-0.05, -0.20, 55, _EARTH_LAND),
+        (-0.22, -0.42, 50, _EARTH_LAND),
+        (-0.15, -0.50, 45, _EARTH_LAND_DARK),
+        # Sahara band on the upper half of Africa.
+        (-0.18, -0.55, 55, _EARTH_LAND_SAND),
+        (-0.10, -0.58, 40, _EARTH_LAND_SAND),
+    ),
+    # Europe + UK — a small cluster top-left of Africa.
+    (
+        (-0.30, -0.78, 24, _EARTH_LAND),
+        (-0.22, -0.75, 18, _EARTH_LAND),
+        (-0.36, -0.82, 14, _EARTH_LAND),  # UK suggestion
+        (-0.40, -0.85, 10, _EARTH_LAND),
+    ),
+    # Arabia — wedge to the right of Africa.
+    (
+        (+0.12, -0.50, 36, _EARTH_LAND_SAND),
+        (+0.20, -0.45, 30, _EARTH_LAND_SAND),
+        (+0.18, -0.55, 24, _EARTH_LAND),
+    ),
+    # Madagascar — small offshore dot.
+    (
+        (+0.10, -0.16, 14, _EARTH_LAND),
+    ),
+    # South America's eastern coast peeking at the day-side edge.
+    (
+        (-0.65, -0.30, 32, _EARTH_LAND),
+        (-0.70, -0.40, 26, _EARTH_LAND_DARK),
+        (-0.62, -0.22, 24, _EARTH_LAND),
+    ),
+    # Greenland / arctic ice cap — bright white near the top edge.
+    (
+        (-0.40, -0.92, 22, _EARTH_ICE),
+        (-0.32, -0.95, 16, _EARTH_ICE),
+    ),
+    # India / SE-Asia hint to the far right.
+    (
+        (+0.42, -0.55, 26, _EARTH_LAND),
+        (+0.50, -0.50, 22, _EARTH_LAND),
+        (+0.48, -0.62, 16, _EARTH_LAND_DARK),
+    ),
+)
 
 
 class EarthHorizonBackground:
@@ -286,17 +347,25 @@ class EarthHorizonBackground:
         cy_offset = int(h * _EARTH_CENTRE_BELOW_FRAC)
         radius = int(h * _EARTH_RADIUS_FRAC)
         cy = h + cy_offset
-        # Soft horizon glow ring just above the planet edge.
-        pygame.draw.circle(surface, _EARTH_HORIZON_GLOW, (cx, cy), radius + 6)
+        # Soft multi-ring horizon glow above the planet edge — gentler
+        # falloff than a single thick ring.
+        for ring in range(4):
+            ring_r = radius + 4 + ring * 5
+            pygame.draw.circle(surface, _EARTH_HORIZON_GLOW, (cx, cy), ring_r, width=2)
+        # Ocean disc — solid base; the deep-ocean tone overlaps slightly
+        # above the day-side terminator to suggest depth without a full
+        # day/night gradient (which would be costly per frame).
         pygame.draw.circle(surface, _EARTH_OCEAN, (cx, cy), radius)
-        # A couple of land masses — circles offset toward the visible top edge.
-        for lid, (lx_frac, ly_frac, lr) in enumerate(
-            ((0.30, 0.05, 80), (0.65, 0.02, 70), (0.42, 0.08, 50))
-        ):
-            lx = int(w * lx_frac)
-            # Place land near the visible top of Earth (y close to h - radius).
-            ly = h - int((1.0 - ly_frac) * (h - cy + radius))
-            pygame.draw.circle(surface, _EARTH_LAND, (lx, ly), lr)
+        pygame.draw.circle(surface, _EARTH_OCEAN_DEEP, (cx + radius // 4, cy), radius // 2)
+
+        # Painterly landmasses — overlapping coloured circles per
+        # _EARTH_LANDMASSES so each continent reads as an organic blob,
+        # not three vector circles. Per kid playtest #18.
+        for blobs in _EARTH_LANDMASSES:
+            for rel_x, rel_y, br, fill in blobs:
+                bx = cx + int(rel_x * radius)
+                by = cy + int(rel_y * radius)
+                pygame.draw.circle(surface, fill, (bx, by), br)
 
         # Clouds drift across the limb.
         for x_base, y, cw, ch in self._clouds:
