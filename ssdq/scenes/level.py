@@ -692,9 +692,16 @@ class LevelScene(Scene):
         Reads ``app.last_weapon_tiers`` (set by the previous level's
         exit) and clamps to the current tree's max. Falls back to 0
         when no prior tier exists.
+
+        Kid playtest 2026-05-03 #5 — docking weapon-tier floor: a
+        player arriving at level N is floored to tier ``N - 1`` so a
+        player who's been struggling still has a fighting chance at
+        each new level. Never downgrades a higher prior tier. Level 1
+        has no floor (fresh start).
         """
         prior = self.app.last_weapon_tiers.get(slot.index, 0)
-        return max(0, min(prior, max_tree_level))
+        floor = max(0, self.level_index - 1)
+        return max(0, min(max(prior, floor), max_tree_level))
 
     def _seeded_missile_level(self, slot: PlayerSlot) -> int:
         """Resolve the starting missile auto-fire tier for a slot on enter.
