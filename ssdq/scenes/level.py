@@ -461,6 +461,12 @@ class BossState:
     # Replaces the old per-phase HP refill model: bar reads
     # (max_total - damage_taken) / max_total which decreases monotonically.
     damage_taken: int = 0
+    # Previous wrapped path-time, used by _advance_boss to detect a
+    # formation cycle boundary and reset the shooter exactly once per
+    # loop. Naive reset-on-shooter-exhaust caused carpet-of-projectiles
+    # firing between the last beat and the cycle wrap (kid playtest
+    # 2026-05-03).
+    last_path_t_wrap: float = 0.0
 
 
 # ───────── Level scene ─────────
@@ -1560,15 +1566,22 @@ class LevelScene(Scene):
         world.replace(boss_state.entity, Position(sample.pos))
 
         # Boss fire — beats loop with the formation. We do NOT reset
-        # path_t0 on shooter exhaust any more; we only reset the shooter
-        # itself and feed it the wrapped path-time.
+        # path_t0 on shooter exhaust any more; we reset the shooter at
+        # the formation cycle boundary (detected by the wrapped path-
+        # time going backwards) and feed it the wrapped path-time.
+        wrapped_t = path_dt % formation.duration
         weapon_def = bundle.enemy_weapons.get(phase_def.weapon)
         if weapon_def is not None:
-            if boss_state.shooter.remaining == 0:
+            # Cycle boundary: wrapped_t went backwards → formation
+            # looped, so re-arm the shooter exactly once. Resetting on
+            # `remaining == 0` instead would re-fire every beat on
+            # every tick between the last beat and the wrap (kid
+            # playtest 2026-05-03 — boss spat carpets of projectiles).
+            if wrapped_t < boss_state.last_path_t_wrap:
                 boss_state.shooter.reset()
             target = self._nearest_alive_player_pos(sample.pos)
             events = boss_state.shooter.advance(
-                path_dt % formation.duration,
+                wrapped_t,
                 enemy_entity=int(boss_state.entity),
                 enemy_pos=sample.pos,
                 target_pos=target,
@@ -1579,6 +1592,7 @@ class LevelScene(Scene):
             )
             for ev in events:
                 self._spawn_enemy_bullets(world, weapon_def, ev.aim.fire_pos, target)
+        boss_state.last_path_t_wrap = wrapped_t
 
         # Boss shield mechanics (kid playtest #15/#16). Run after the
         # fire-step so shield activation never delays the first volley.
@@ -1710,6 +1724,7 @@ class LevelScene(Scene):
         boss_state.phase_index += 1
         boss_state.shooter = EnemyShooter(beats=new_phase.fire_beats)
         boss_state.path_t0 = self._sim_time
+        boss_state.last_path_t_wrap = 0.0
         boss_state.phase_hp_remaining = new_phase.hp
         # NOTE: Health is NOT refilled — it represents total remaining
         # HP across all phases now (kid playtest #13). The boss bar
