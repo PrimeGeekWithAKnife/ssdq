@@ -95,8 +95,8 @@ waves:
   - at: 64.0
     stage: 2
     spawn:
-      - { enemy: gunship, count: 3, formation: loop_left, spacing: 0.8, return_passes: 1 }
-      - { enemy: gunship, count: 3, formation: mirror(loop_left), spacing: 0.8, delay: 1.5, return_passes: 1 }
+      - { enemy: fighter, count: 3, formation: loop_left, spacing: 0.8, return_passes: 1 }
+      - { enemy: fighter, count: 3, formation: mirror(loop_left), spacing: 0.8, delay: 1.5, return_passes: 1 }
 
   # NEW (kid playtest 2026-05-02 #3): rapid-fire interceptor preview so
   # the kid sees the rapid_aim weapon early in level 1 ("yet to spot a
@@ -142,11 +142,11 @@ waves:
     spawn:
       - { enemy: fighter, count: 12, formation: dive_then_strafe, spacing: 0.25 }
 
-  # Flank wave — gunships from the left while drones arc overhead.
+  # Flank wave — fighters from the left while drones arc overhead.
   - at: 116.0
     stage: 3
     spawn:
-      - { enemy: gunship, count: 2, formation: loop_left, spacing: 1.0 }
+      - { enemy: fighter, count: 2, formation: loop_left, spacing: 1.0 }
       - { enemy: drone, count: 6, formation: arc_left_to_right, spacing: 0.3, delay: 0.5 }
 
   - at: 124.0
@@ -164,8 +164,8 @@ waves:
   - at: 140.0
     stage: 3
     spawn:
-      - { enemy: gunship, count: 2, formation: loop_left, spacing: 1.0 }
-      - { enemy: gunship, count: 2, formation: mirror(loop_left), spacing: 1.0, delay: 0.5 }
+      - { enemy: fighter, count: 2, formation: loop_left, spacing: 1.0 }
+      - { enemy: fighter, count: 2, formation: mirror(loop_left), spacing: 1.0, delay: 0.5 }
       - { enemy: fighter, count: 8, formation: dive_then_strafe, spacing: 0.3, delay: 2.0 }
 
   # Mid-stage 3 interceptor wave — second taste of rapid fire.
@@ -179,7 +179,7 @@ waves:
     stage: 4
     spawn:
       - { enemy: bomber, count: 3, formation: slow_descent_centre, spacing: 1.0 }
-      - { enemy: gunship, count: 2, formation: mirror(loop_left), spacing: 0.9, delay: 1.0 }
+      - { enemy: fighter, count: 2, formation: mirror(loop_left), spacing: 0.9, delay: 1.0 }
 
   - at: 163.0
     stage: 4
@@ -199,12 +199,12 @@ waves:
       - { enemy: interceptor, count: 2, formation: mirror(arc_left_to_right), spacing: 0.6 }
       - { enemy: drone, count: 6, formation: arc_left_to_right, spacing: 0.3, delay: 0.6 }
 
-  # Final crescendo — gunship pincer + drone figure-eight overlay.
+  # Final crescendo — fighter pincer + drone figure-eight overlay.
   - at: 186.0
     stage: 4
     spawn:
-      - { enemy: gunship, count: 2, formation: loop_left, spacing: 0.8 }
-      - { enemy: gunship, count: 2, formation: mirror(loop_left), spacing: 0.8, delay: 0.4 }
+      - { enemy: fighter, count: 2, formation: loop_left, spacing: 0.8 }
+      - { enemy: fighter, count: 2, formation: mirror(loop_left), spacing: 0.8, delay: 0.4 }
       - { enemy: drone, count: 8, formation: figure_eight_centre, spacing: 0.2, delay: 1.5 }
 
   # ───────── Boss ─────────

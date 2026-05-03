@@ -6,7 +6,7 @@
 # level 1 for now — a dedicated "intense space" track is backlogged.
 #
 # Difficulty curve note: level 2 starts where level 1 ended (mid-tier
-# fighter+gunship combos, no easy drone-only ramp) and ends with
+# fighter combos, no easy drone-only ramp) and ends with
 # boss_02 — visibly red/orange variant of boss_01, ~50% more HP and
 # tighter beat patterns. The pre-boss crescendo deliberately layers
 # every learned formation at once so the kid feels the step up.
@@ -31,7 +31,7 @@ waves:
   - at: 11.0
     stage: 1
     spawn:
-      - { enemy: gunship, count: 3, formation: loop_left, spacing: 0.8, return_passes: 1 }
+      - { enemy: fighter, count: 3, formation: loop_left, spacing: 0.8, return_passes: 1 }
       - { enemy: drone, count: 6, formation: figure_eight_centre, spacing: 0.3, delay: 1.0 }
 
   - at: 21.0
@@ -44,8 +44,8 @@ waves:
   - at: 31.0
     stage: 2
     spawn:
-      - { enemy: gunship, count: 3, formation: loop_left, spacing: 0.7, return_passes: 1 }
-      - { enemy: gunship, count: 3, formation: mirror(loop_left), spacing: 0.7, delay: 0.8, return_passes: 1 }
+      - { enemy: fighter, count: 3, formation: loop_left, spacing: 0.7, return_passes: 1 }
+      - { enemy: fighter, count: 3, formation: mirror(loop_left), spacing: 0.7, delay: 0.8, return_passes: 1 }
 
   - at: 41.0
     stage: 2
@@ -78,7 +78,7 @@ waves:
     spawn:
       - { enemy: fighter, count: 6, formation: arc_left_to_right, spacing: 0.3, return_passes: 1 }
       - { enemy: fighter, count: 6, formation: mirror(arc_left_to_right), spacing: 0.3, delay: 0.6, return_passes: 1 }
-      - { enemy: gunship, count: 2, formation: loop_left, spacing: 1.0, delay: 2.0 }
+      - { enemy: fighter, count: 2, formation: loop_left, spacing: 1.0, delay: 2.0 }
 
   - at: 85.0
     stage: 3
@@ -90,8 +90,8 @@ waves:
   - at: 95.0
     stage: 3
     spawn:
-      - { enemy: gunship, count: 2, formation: loop_left, spacing: 0.9 }
-      - { enemy: gunship, count: 2, formation: mirror(loop_left), spacing: 0.9, delay: 0.5 }
+      - { enemy: fighter, count: 2, formation: loop_left, spacing: 0.9 }
+      - { enemy: fighter, count: 2, formation: mirror(loop_left), spacing: 0.9, delay: 0.5 }
       - { enemy: fighter, count: 8, formation: dive_then_strafe, spacing: 0.25, delay: 1.5 }
 
   - at: 105.0
@@ -105,7 +105,7 @@ waves:
     stage: 4
     spawn:
       - { enemy: bomber, count: 4, formation: slow_descent_centre, spacing: 0.9 }
-      - { enemy: gunship, count: 2, formation: mirror(loop_left), spacing: 0.8, delay: 1.0 }
+      - { enemy: fighter, count: 2, formation: mirror(loop_left), spacing: 0.8, delay: 1.0 }
 
   # Resupply ship #2 — pre-boss top-up.
   - at: 124.0
@@ -122,8 +122,8 @@ waves:
   - at: 142.0
     stage: 4
     spawn:
-      - { enemy: gunship, count: 3, formation: loop_left, spacing: 0.7 }
-      - { enemy: gunship, count: 3, formation: mirror(loop_left), spacing: 0.7, delay: 0.4 }
+      - { enemy: fighter, count: 3, formation: loop_left, spacing: 0.7 }
+      - { enemy: fighter, count: 3, formation: mirror(loop_left), spacing: 0.7, delay: 0.4 }
       - { enemy: drone, count: 10, formation: figure_eight_centre, spacing: 0.2, delay: 1.0 }
 
   - at: 152.0
