@@ -93,6 +93,14 @@ class EnemyDef:
     # hits zero. Distinct from `return_passes` so we don't have to
     # litter every wave spec with a sentinel.
     passes_unlimited: bool = False
+    # Kid playtest 2026-05-03 #9 + #2: shields-on-first-hit. The enemy
+    # spawns dormant; the FIRST damaging player bullet triggers a
+    # forcefield that absorbs further fire for this many seconds, then
+    # decays. One-shot — does not regenerate. Distinct from
+    # ``shield_on_spawn_seconds`` (always-on at spawn): this one rewards
+    # the kid for engaging at all without the spawn-shield's "you can't
+    # touch me yet" frustration.
+    shield_on_first_hit_seconds: float = 0.0
 
 
 class PickupEffect(Enum):

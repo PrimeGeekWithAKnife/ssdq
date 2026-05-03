@@ -186,6 +186,7 @@ def _load_enemies(
             drop_pool=tuple(e.get("drop_pool") or []),
             shield_on_spawn_seconds=float(e.get("shield_on_spawn_seconds", 0.0)),
             passes_unlimited=bool(e.get("passes_unlimited", False)),
+            shield_on_first_hit_seconds=float(e.get("shield_on_first_hit_seconds", 0.0)),
         )
 
     pickups: dict[str, PickupDef] = {}

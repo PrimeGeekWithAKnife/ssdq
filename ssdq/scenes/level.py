@@ -47,6 +47,8 @@ from ssdq.core.components import (
     Position,
     ScoreValue,
     ShieldHalo,
+    ShieldOnHitConfig,
+    ShieldOnHitConsumed,
     Sprite,
     TimeToLive,
     Velocity,
@@ -1407,6 +1409,12 @@ class LevelScene(Scene):
             halo_radius = max(28.0, enemy.hitbox_radius + 14.0)
             world.add(eid, EnemyShield(seconds_remaining=enemy.shield_on_spawn_seconds))
             world.add(eid, ShieldHalo(base_radius=halo_radius))
+        # Shield-on-first-hit (kid playtest 2026-05-03 #2 + #9). Dormant
+        # at spawn — the bubble pops up only after the first damaging
+        # bullet, and is one-shot (ShieldOnHitConsumed prevents
+        # re-activation after the shield expires).
+        if enemy.shield_on_first_hit_seconds > 0.0:
+            world.add(eid, ShieldOnHitConfig(seconds=enemy.shield_on_first_hit_seconds))
 
     def _maybe_spawn_boss(self, world: World) -> None:
         if self._boss is not None or self._boss_dispatched:
@@ -2012,6 +2020,22 @@ class LevelScene(Scene):
             if x < 0.0 or x > PLAY_W or y < 0.0 or y > PLAY_H:
                 world.despawn(bullet_eid)
                 return
+        # Shield-on-first-hit (kid playtest 2026-05-03 #2 + #9). If the
+        # enemy was configured to bubble up on first hit, this is that
+        # hit — pop the shield, attach the halo + Consumed marker, and
+        # absorb the bullet. Subsequent hits during the window are
+        # caught by the shielded-target gate below.
+        cfg = world.get(enemy_eid, ShieldOnHitConfig)
+        if cfg is not None and not world.has(enemy_eid, ShieldOnHitConsumed):
+            hit_radius = world.get(enemy_eid, CircleHitbox)
+            base_radius = hit_radius.radius + 14.0 if hit_radius is not None else 28.0
+            halo_radius = max(28.0, base_radius)
+            world.add(enemy_eid, EnemyShield(seconds_remaining=cfg.seconds))
+            world.add(enemy_eid, ShieldHalo(base_radius=halo_radius))
+            world.add(enemy_eid, ShieldOnHitConsumed())
+            world.remove(enemy_eid, ShieldOnHitConfig)
+            world.despawn(bullet_eid)
+            return
         # Boss + enemy shield gates (kid playtest 2026-05-02 #3/#15/#16):
         # if the target is shielded, the bullet is absorbed — despawn it
         # but don't apply damage. The kid sees the shielded ring around

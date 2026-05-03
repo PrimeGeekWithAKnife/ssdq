@@ -88,12 +88,14 @@ enemies:
     fire_beats: [1.4, 2.8, 4.2]
     score: 800
     drop_chance: 0.45
-    # Brief spawn-shield (kid playtest 2026-05-02 #3 — "yet to spot a
-    # single enemy with shields"). Gunship enters the playfield with a
-    # forcefield active for ~1.5s; the kid clearly sees the halo and
-    # learns "this enemy has shields." Long enough to register, short
-    # enough that the gunship is still meaningfully damaged on its run.
-    shield_on_spawn_seconds: 1.5
+    # Shield-on-first-hit (kid playtest 2026-05-03 #9 — "shielded
+    # enemies should not activate before they are even being shot at").
+    # Pre-2026-05-03 gunship had ``shield_on_spawn_seconds: 1.5`` which
+    # popped a shield the kid couldn't engage with; switching to the
+    # on-hit variant rewards the kid for shooting AT the enemy and
+    # then teaches "now you wait for the shield to drop". Same 1.5s
+    # absorption window; one-shot per spawn (no regenerating shields).
+    shield_on_first_hit_seconds: 1.5
     drop_pool: [
       pickup_powerup, pickup_powerup, pickup_powerup, pickup_powerup,
       pickup_bomb, pickup_bomb, pickup_bomb, pickup_bomb,

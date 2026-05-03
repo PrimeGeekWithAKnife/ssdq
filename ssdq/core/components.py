@@ -157,6 +157,30 @@ class EnemyShield:
 
 
 @dataclass(frozen=True, slots=True)
+class ShieldOnHitConfig:
+    """Marker: enemy will activate a shield on its first damaging hit.
+
+    Attached at spawn iff ``EnemyDef.shield_on_first_hit_seconds > 0``.
+    The shield is dormant until the first incoming bullet — at that
+    point ``_handle_enemy_hit`` swaps this for ``EnemyShield`` +
+    ``ShieldHalo`` + ``ShieldOnHitConsumed`` so the bubble pops up
+    visibly and absorbs subsequent fire for the configured window.
+    Kid playtest 2026-05-03 #2 + #9 (sentinel + L3+ shielded enemies).
+    """
+
+    seconds: float
+
+
+@dataclass(frozen=True, slots=True)
+class ShieldOnHitConsumed:
+    """Tag: enemy's shield-on-first-hit has already been triggered.
+
+    Prevents re-activation on later hits once the initial bubble
+    expires — the shield is one-shot, not regenerating.
+    """
+
+
+@dataclass(frozen=True, slots=True)
 class FloatingText:
     """A short-lived text label that drifts upward and fades out.
 
