@@ -147,18 +147,25 @@ enemies:
   resupply_ship:
     sprite: enemies/resupply_ship.png
     hitbox_radius: 36         # ~75% of visual half-width — forgiving target
-    # HP tripled (12 → 36) per kid playtest 2026-05-02 #2: "supply ship
-    # needs triple the armour". Still well below the smallest boss phase
-    # pool, so the fight-vs-flight balance remains intact.
-    hp: 36                    # 12x fighter (3hp), ~3x gunship (8hp/12); well below boss
-    # Speed bumped 50 → 100 per same playtest item: "needs to be faster
-    # moving". Resupply_cruise duration is unchanged so the ship crosses
-    # the screen in half the wall-clock time it used to.
+    # HP doubled again (36 → 72) per kid playtest 2026-05-03 #1:
+    # "Supply ships need to drop two power ups of some kind and need
+    # to have double the armour." Still under the smallest boss phase
+    # pool, so fight-vs-flight balance is intact.
+    hp: 72                    # was 36 (was 12 originally); kid-playtest progressive
+    # Speed bumped 50 → 100 per kid playtest 2026-05-02 #2: "needs to
+    # be faster moving". Resupply_cruise duration is unchanged so the
+    # ship crosses the screen in half the wall-clock time it used to.
     speed_along_path: 100     # was 50
     weapon: null
     score: 1500               # bigger reward than gunship (800), still under boss
     drop_chance: 1.0          # 100% drop — guaranteed power-up
     drop_pool: [pickup_powerup, pickup_speed, pickup_bomb, pickup_health, pickup_shield]
+    # Guaranteed missile drop in addition to the random roll (kid
+    # playtest 2026-05-03 #4 — "There needs to be more missile power
+    # up drops. Likely ideal for a fixed supply ship drop + 1
+    # random"). Net result: every supply ship pops 2 pickups — one
+    # missile (always) and one drop_pool roll.
+    guaranteed_drops: [pickup_missile]
 
   # ───────── Levels 3-5 introductions ─────────
   # New enemy palette to ramp difficulty across the back half of the

@@ -187,6 +187,7 @@ def _load_enemies(
             shield_on_spawn_seconds=float(e.get("shield_on_spawn_seconds", 0.0)),
             passes_unlimited=bool(e.get("passes_unlimited", False)),
             shield_on_first_hit_seconds=float(e.get("shield_on_first_hit_seconds", 0.0)),
+            guaranteed_drops=tuple(e.get("guaranteed_drops") or []),
         )
 
     pickups: dict[str, PickupDef] = {}
@@ -208,12 +209,18 @@ def _load_enemies(
             missile_count=int(p.get("missile_count", 3)),
         )
 
-    # Cross-check: enemies' drop_pool entries resolve to known pickups.
+    # Cross-check: enemies' drop_pool + guaranteed_drops entries resolve
+    # to known pickups.
     for enemy in enemies.values():
         for d in enemy.drop_pool:
             if d not in pickups:
                 raise ContentError(
                     f"{where}:enemies.{enemy.name}: drop_pool references unknown pickup '{d}'"
+                )
+        for d in enemy.guaranteed_drops:
+            if d not in pickups:
+                raise ContentError(
+                    f"{where}:enemies.{enemy.name}: guaranteed_drops references unknown pickup '{d}'"
                 )
 
     bosses: dict[str, BossDef] = {}

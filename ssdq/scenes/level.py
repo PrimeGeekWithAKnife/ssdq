@@ -269,6 +269,10 @@ class FormationFollower:
     drop_chance: float
     drop_pool: tuple[str, ...]
     passes_remaining: int = 0
+    # Pickups always dropped on death in addition to the standard
+    # roll_drop result (kid playtest 2026-05-03 #1 + #4 — supply ship
+    # drops 1 guaranteed missile + 1 random).
+    guaranteed_drops: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -1396,6 +1400,7 @@ class LevelScene(Scene):
                 drop_chance=enemy.drop_chance,
                 drop_pool=enemy.drop_pool,
                 passes_remaining=10_000 if enemy.passes_unlimited else ev.return_passes,
+                guaranteed_drops=enemy.guaranteed_drops,
             ),
             ScoreValue(points=enemy.score),
         )
@@ -2133,6 +2138,17 @@ class LevelScene(Scene):
             pickup_name = roll_drop(slim, tick=self._internal_tick, channel=int(enemy_eid))
             if pickup_name is not None and pickup_name in bundle.pickups:
                 self._spawn_pickup(world, pickup_name, pos)
+        # Guaranteed drops on top of the random roll (kid playtest
+        # 2026-05-03 #1 + #4 — supply ship gives 1 missile + 1 random).
+        # Spawned with a small horizontal offset per pickup so they
+        # don't stack into a single visible halo.
+        if follower is not None and follower.guaranteed_drops:
+            offset_step = 24.0
+            for i, name in enumerate(follower.guaranteed_drops):
+                if name not in self.app.content.pickups:
+                    continue
+                offset = (i + 1) * offset_step
+                self._spawn_pickup(world, name, Vec2(pos.x + offset, pos.y))
         # Visual feedback: explosion at the enemy's position.
         scale = 2 if follower is not None and follower.score >= 600 else 1
         self._spawn_explosion(world, pos, scale=scale)

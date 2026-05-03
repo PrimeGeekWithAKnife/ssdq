@@ -101,6 +101,11 @@ class EnemyDef:
     # the kid for engaging at all without the spawn-shield's "you can't
     # touch me yet" frustration.
     shield_on_first_hit_seconds: float = 0.0
+    # Pickups always dropped on death, in addition to the random
+    # `roll_drop` result. Used by the resupply ship (kid playtest
+    # 2026-05-03 #1 + #4) to guarantee a missile drop on top of the
+    # standard random pickup.
+    guaranteed_drops: tuple[str, ...] = ()
 
 
 class PickupEffect(Enum):
