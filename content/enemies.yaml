@@ -208,6 +208,9 @@ enemies:
       pickup_weapon_speed,
       pickup_speed,
     ]
+    # Kid playtest 2026-05-03 #8: kamikaze that misses on its dive
+    # comes back and tries again until it kills the player or dies.
+    passes_unlimited: true
 
   # Level 5 introduction — heavy turret. Slow, fat, fires a wide twin-aim
   # fan on a steady beat. Acts as the "anchor" enemy in late waves: the

@@ -1386,7 +1386,7 @@ class LevelScene(Scene):
                 score=enemy.score,
                 drop_chance=enemy.drop_chance,
                 drop_pool=enemy.drop_pool,
-                passes_remaining=ev.return_passes,
+                passes_remaining=10_000 if enemy.passes_unlimited else ev.return_passes,
             ),
             ScoreValue(points=enemy.score),
         )

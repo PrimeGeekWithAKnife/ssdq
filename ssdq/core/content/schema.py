@@ -86,6 +86,13 @@ class EnemyDef:
     # bounce / are absorbed during the window. Bombs still penetrate
     # (a screen-clear should always read as decisive).
     shield_on_spawn_seconds: float = 0.0
+    # Kid playtest 2026-05-03 #8: red kamikaze ships should "come back
+    # and try again until they get the player or are destroyed".
+    # Setting this overrides the per-spawn `return_passes` field with
+    # a large value so survivors keep looping the formation until HP
+    # hits zero. Distinct from `return_passes` so we don't have to
+    # litter every wave spec with a sentinel.
+    passes_unlimited: bool = False
 
 
 class PickupEffect(Enum):
