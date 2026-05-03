@@ -1994,6 +1994,17 @@ class LevelScene(Scene):
         hlth = world.get(enemy_eid, Health)
         if damage is None or hlth is None:
             return
+        # Off-screen damage gate (kid playtest 2026-05-03 #6 — "Enemies
+        # should not take fire when they are off screen. Sometimes I
+        # just see power ups 'drop' as the enemies died before being
+        # hit.") Despawn the bullet but don't apply damage; the enemy
+        # is invisible so any drop would look like spontaneous loot.
+        enemy_pos = world.get(enemy_eid, Position)
+        if enemy_pos is not None:
+            x, y = enemy_pos.pos.x, enemy_pos.pos.y
+            if x < 0.0 or x > PLAY_W or y < 0.0 or y > PLAY_H:
+                world.despawn(bullet_eid)
+                return
         # Boss + enemy shield gates (kid playtest 2026-05-02 #3/#15/#16):
         # if the target is shielded, the bullet is absorbed — despawn it
         # but don't apply damage. The kid sees the shielded ring around
