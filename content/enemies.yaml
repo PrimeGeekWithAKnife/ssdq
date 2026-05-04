@@ -532,6 +532,13 @@ bosses:
     # boss keeps the [20s vulnerable / 10s shielded] rhythm so the kid
     # already knows the cadence by the time they reach the crescendo.
     shield_cycle_seconds: [20.0, 10.0]
+    # Homing-missile salvo (kid playtest 2026-05-03 #3 — final boss
+    # gets player-style missiles "to ensure all those shields
+    # collected earlier get used"). Two missiles every 4 seconds —
+    # modest cadence, but heat-seeking, so the kid HAS to spend
+    # shields/dodge instead of camping a corner.
+    homing_missile_rate_seconds: 4.0
+    homing_missile_salvo: 2
     phases:
       # Phase 1 — TEACH the new weapon. heavy_spread is a wide downward
       # fan with slower bullets; the kid learns the side-to-side dash

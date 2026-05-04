@@ -172,6 +172,14 @@ class BossDef:
     # repeating (boss_04/05 — "shield for 10s every 20s of fighting").
     shield_on_phase_start_seconds: float = 0.0
     shield_cycle_seconds: tuple[float, float] | None = None
+    # Homing-missile salvo (kid playtest 2026-05-03 #3 — final boss
+    # gets player-style missiles "to ensure all those shields
+    # collected earlier get used"). Both default to off; setting both
+    # to non-zero arms the boss to fire ``salvo`` heat-seekers every
+    # ``rate_seconds`` aimed at the nearest live player. Reuses the
+    # existing Missile component + _tick_missiles homing system.
+    homing_missile_rate_seconds: float = 0.0
+    homing_missile_salvo: int = 0
 
 
 # ───────── formations ─────────

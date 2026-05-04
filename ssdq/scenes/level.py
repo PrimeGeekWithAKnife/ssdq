@@ -476,6 +476,10 @@ class BossState:
     # firing between the last beat and the cycle wrap (kid playtest
     # 2026-05-03).
     last_path_t_wrap: float = 0.0
+    # Homing-missile salvo cadence (kid playtest 2026-05-03 #3 —
+    # final boss). Accumulates per tick post-intro; on crossing the
+    # configured rate, fires `homing_missile_salvo` missiles.
+    missile_clock: float = 0.0
 
 
 # ───────── Level scene ─────────
@@ -1744,6 +1748,19 @@ class LevelScene(Scene):
                 self._spawn_enemy_bullets(world, weapon_def, ev.aim.fire_pos, target)
         boss_state.last_path_t_wrap = wrapped_t
 
+        # Homing-missile salvo (kid playtest 2026-05-03 #3 — final
+        # boss). Accumulate the missile clock; on crossing the rate
+        # boundary fire a salvo aimed at the nearest live player.
+        # Missiles use the same Missile component + _tick_missiles
+        # homing as the player's tier-N missiles; only the faction tag
+        # (ENEMY_BULLET) differs.
+        boss_def = boss_state.boss
+        if boss_def.homing_missile_rate_seconds > 0.0 and boss_def.homing_missile_salvo > 0:
+            boss_state.missile_clock += TICK_DT
+            if boss_state.missile_clock >= boss_def.homing_missile_rate_seconds:
+                boss_state.missile_clock = 0.0
+                self._fire_boss_missile_salvo(world, sample.pos, boss_def.homing_missile_salvo)
+
         # Boss shield mechanics (kid playtest #15/#16). Run after the
         # fire-step so shield activation never delays the first volley.
         self._tick_boss_shield(world, boss_state)
@@ -1761,6 +1778,66 @@ class LevelScene(Scene):
             self._transition_boss_phase(world, boss_state)
         elif hp <= 0:
             self._kill_boss(world, boss_state)
+
+    def _closest_alive_player_entity(self, world: World, from_pos: Vec2) -> Entity | None:
+        """Return the entity id of the closest live player (or None if both
+        slots are dead). Used by enemy homing missiles to pick a target."""
+        best: tuple[float, Entity] | None = None
+        for slot in (P1, P2):
+            eid = self._player_entities.get(slot)
+            if eid is None or not world.is_alive(eid):
+                continue
+            ppos = world.get(eid, Position)
+            if ppos is None:
+                continue
+            d2 = (ppos.pos.x - from_pos.x) ** 2 + (ppos.pos.y - from_pos.y) ** 2
+            if best is None or d2 < best[0]:
+                best = (d2, eid)
+        return best[1] if best else None
+
+    def _fire_boss_missile_salvo(self, world: World, origin: Vec2, count: int) -> None:
+        """Spawn `count` heat-seeking missiles tagged ENEMY_BULLET that
+        latch onto the nearest live player. Mirrors `_fire_missile`
+        (player path) but with reversed faction + a fan of x-offsets so
+        the salvo doesn't all stack at one point."""
+        target = self._closest_alive_player_entity(world, origin)
+        # Even spread across the salvo: -28, -10, 10, 28 etc.
+        offsets: list[float] = []
+        if count == 1:
+            offsets = [0.0]
+        else:
+            step = 36.0
+            half = (count - 1) * step / 2.0
+            offsets = [(-half + i * step) for i in range(count)]
+        for dx in offsets:
+            spawn_pos = Vec2(origin.x + dx, origin.y + 20.0)
+            if target is not None:
+                tpos = world.get(target, Position)
+                if tpos is not None:
+                    tdx = tpos.pos.x - spawn_pos.x
+                    tdy = tpos.pos.y - spawn_pos.y
+                    heading = math.atan2(tdx, -tdy)
+                else:
+                    heading = math.pi  # fallback: straight down
+            else:
+                heading = math.pi
+            vx = math.sin(heading) * MISSILE_INITIAL_SPEED
+            vy = -math.cos(heading) * MISSILE_INITIAL_SPEED
+            world.spawn(
+                Position(spawn_pos),
+                Velocity(Vec2(vx, vy)),
+                CircleHitbox(radius=MISSILE_HITBOX_RADIUS),
+                FactionTag(Faction.ENEMY_BULLET),
+                Sprite(path=MISSILE_SPRITE, layer=8, scale=1.0),
+                Damage(amount=MISSILE_DAMAGE),
+                TimeToLive(ticks=int(MISSILE_LIFETIME * 60)),
+                Missile(
+                    target=target,
+                    speed=MISSILE_INITIAL_SPEED,
+                    heading=heading,
+                ),
+            )
+        self.app.audio.play_sfx("missile", volume=0.42)
 
     def _tick_boss_shield(self, world: World, boss_state: BossState) -> None:
         """Advance the boss shield timers + cycle. Adds/removes a
