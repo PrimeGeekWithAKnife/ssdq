@@ -172,6 +172,14 @@ class BossDef:
     # repeating (boss_04/05 — "shield for 10s every 20s of fighting").
     shield_on_phase_start_seconds: float = 0.0
     shield_cycle_seconds: tuple[float, float] | None = None
+    # Initial-spawn shield window (kid playtest 2026-05-04: boss_05
+    # too easy — "needs to start with a shield for 20 seconds. Then
+    # have a shield for 5 seconds every 10 seconds"). Seeds
+    # BossState.shield_remaining at fight-start; once it expires the
+    # existing cycle handler takes over (vuln → shield → vuln…).
+    # Distinct from `shield_on_phase_start_seconds` which fires on
+    # phase transitions (boss_03's 50%-HP bubble).
+    shield_initial_seconds: float = 0.0
     # Homing-missile salvo (kid playtest 2026-05-03 #3 — final boss
     # gets player-style missiles "to ensure all those shields
     # collected earlier get used"). Both default to off; setting both

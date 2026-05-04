@@ -282,6 +282,7 @@ def _load_enemies(
             phases=phases,
             shield_on_phase_start_seconds=float(b.get("shield_on_phase_start_seconds", 0.0)),
             shield_cycle_seconds=cycle,
+            shield_initial_seconds=float(b.get("shield_initial_seconds", 0.0)),
             homing_missile_rate_seconds=float(b.get("homing_missile_rate_seconds", 0.0)),
             homing_missile_salvo=int(b.get("homing_missile_salvo", 0)),
         )

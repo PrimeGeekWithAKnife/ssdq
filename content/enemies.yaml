@@ -540,10 +540,14 @@ bosses:
     hitbox_radius: 64                    # slightly chunkier than boss_01/02 (60) — finale silhouette
     score: 55000                         # campaign-final reward, dwarfs boss_02 (18000)
     intro_telegraph_seconds: 3.0         # extra beat of telegraph — kid needs to register "this is THE one"
-    # Same shield cycle as boss_04 (kid playtest #16) — campaign-final
-    # boss keeps the [20s vulnerable / 10s shielded] rhythm so the kid
-    # already knows the cadence by the time they reach the crescendo.
-    shield_cycle_seconds: [20.0, 10.0]
+    # Kid playtest 2026-05-04: "Level 5 boss far too easy. Needs to
+    # start with a shield for 20 seconds. Then have a shield for 5
+    # seconds every 10 seconds." The 20s opening window forces the
+    # kid to dodge (shields are absorbed) before they can start
+    # chipping HP. Cycle [10s vuln / 5s shielded] is tighter than
+    # boss_04's [20/10] so phase-2 onwards is genuinely punishing.
+    shield_initial_seconds: 20.0
+    shield_cycle_seconds: [10.0, 5.0]
     # Homing-missile salvo (kid playtest 2026-05-03 #3 — final boss
     # gets player-style missiles "to ensure all those shields
     # collected earlier get used"). Two missiles every 4 seconds —

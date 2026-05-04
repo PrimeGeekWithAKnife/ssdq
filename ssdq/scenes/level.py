@@ -1513,6 +1513,11 @@ class LevelScene(Scene):
             intro_remaining=boss.intro_telegraph_seconds,
             fight_started_at=self._sim_time + boss.intro_telegraph_seconds,
             cycle_phase="vuln" if boss.shield_cycle_seconds is not None else "off",
+            # Kid playtest 2026-05-04: initial-spawn shield window for
+            # boss_05. Seeded into shield_remaining; the existing decay
+            # + cycle handler in _tick_boss_shield takes over once it
+            # hits zero.
+            shield_remaining=boss.shield_initial_seconds,
         )
         self._scheduler.consume_boss_event(be)
         self._boss_dispatched = True
