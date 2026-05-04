@@ -221,15 +221,22 @@ enemies:
     # comes back and tries again until it kills the player or dies.
     passes_unlimited: true
 
-  # Level 5 introduction — heavy turret. Slow, fat, fires a wide twin-aim
-  # fan on a steady beat. Acts as the "anchor" enemy in late waves: the
-  # kid must commit to killing it because it sits in the playfield long
-  # enough to actually dictate positioning. Drops from the heavy pool.
+  # Sentinel — heavy turret reworked into a free-roam mini-threat
+  # (kid playtest 2026-05-03 #2: "they need to be smaller, move
+  # faster, have double the armour they have now and need to have
+  # shields (that activate only after first hit) they should persist
+  # on the screen and move around until either the player is dead or
+  # they are dead").
+  # Pre-2026-05-03 it was a slow sweep_horizontal turret on L5 only.
+  # Post-rework: 55×50 sprite (was 110×100), hp 30 (was 15), free-
+  # roam at 130 px/s (faster than the marauder at 80 — lighter hull
+  # by design), shield-on-first-hit so the kid sees the bubble pop
+  # exactly when they engage. Persists until destroyed.
   sentinel:
     sprite: enemies/sentinel.png
-    hitbox_radius: 36
-    hp: 15
-    speed_along_path: 40
+    hitbox_radius: 22                    # was 36 — smaller hull
+    hp: 30                                # was 15; doubled per #2
+    speed_along_path: 130                 # entry-formation speed; free-roam uses its own
     weapon: twin_aim
     fire_beats: [1.0, 2.2, 3.4, 4.6]
     score: 1200
@@ -245,6 +252,11 @@ enemies:
       pickup_health,
       pickup_speed,
     ]
+    shield_on_first_hit_seconds: 2.0      # bubble pops on first hit, lasts 2s
+    free_roam:
+      speed: 130                          # faster than marauder (80) — lighter hull
+      dodge_aggression: 0.5
+      zone: [60, 320]                     # upper play zone (slightly higher than marauder)
 
   # Mini-boss enemy (kid playtest 2026-05-03 #10). Enters via a short
   # entry formation, then transitions to FreeRoamAI — drifts inside

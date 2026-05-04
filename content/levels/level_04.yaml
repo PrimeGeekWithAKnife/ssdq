@@ -131,6 +131,15 @@ waves:
       - { enemy: bomber, count: 4, formation: slow_descent_centre, spacing: 0.9 }
       - { enemy: drone, count: 8, formation: figure_eight_centre, spacing: 0.2, delay: 1.0 }
 
+  # Sentinel debut at L4 (kid playtest 2026-05-03: "sentinel should
+  # appear at L4 & L5"). Free-roam mini-threat — appears, drifts in
+  # the upper play zone with shield-on-first-hit, dodges incoming
+  # fire. Kid sees the new mechanic before L5 piles them on.
+  - at: 112.0
+    stage: 3
+    spawn:
+      - { enemy: sentinel, count: 1, formation: marauder_entry, spacing: 0.0 }
+
   # Marauder squadron of 3 (kid playtest 2026-05-03 #10) — three
   # marauders enter staggered (left/centre/right via mirror) and
   # transition to free-roam after their entry. The kid has to manage
@@ -182,6 +191,7 @@ waves:
       - { enemy: kamikaze, count: 5, formation: kamikaze_dive_right, spacing: 0.25 }
       - { enemy: kamikaze, count: 5, formation: mirror(kamikaze_dive_right), spacing: 0.25, delay: 0.4 }
       - { enemy: bomber, count: 3, formation: slow_descent_centre, spacing: 1.0, delay: 0.8 }
+      - { enemy: sentinel, count: 1, formation: mirror(marauder_entry), spacing: 0.0, delay: 1.5 }
 
   - at: 167.0
     stage: 4

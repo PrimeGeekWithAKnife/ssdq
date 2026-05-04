@@ -85,7 +85,7 @@ waves:
   - at: 60.0
     stage: 2
     spawn:
-      - { enemy: sentinel, count: 1, formation: sweep_horizontal, spacing: 0.0 }
+      - { enemy: sentinel, count: 1, formation: marauder_entry, spacing: 0.0 }
       - { enemy: drone, count: 8, formation: figure_eight_centre, spacing: 0.25, delay: 1.0 }
 
   - at: 70.0
@@ -104,8 +104,8 @@ waves:
   - at: 90.0
     stage: 2
     spawn:
-      - { enemy: sentinel, count: 1, formation: sweep_horizontal, spacing: 0.0 }
-      - { enemy: sentinel, count: 1, formation: mirror(sweep_horizontal), spacing: 0.0, delay: 1.0 }
+      - { enemy: sentinel, count: 1, formation: marauder_entry, spacing: 0.0 }
+      - { enemy: sentinel, count: 1, formation: mirror(marauder_entry), spacing: 0.0, delay: 1.0 }
       - { enemy: gunship, count: 2, formation: loop_left, spacing: 0.9, delay: 2.0 }
 
   - at: 100.0
@@ -139,7 +139,7 @@ waves:
   - at: 128.0
     stage: 3
     spawn:
-      - { enemy: sentinel, count: 2, formation: sweep_horizontal, spacing: 1.5 }
+      - { enemy: sentinel, count: 2, formation: marauder_entry, spacing: 1.5 }
       - { enemy: bomber, count: 3, formation: slow_descent_centre, spacing: 1.0, delay: 1.5 }
 
   - at: 138.0
@@ -166,7 +166,7 @@ waves:
   - at: 158.0
     stage: 4
     spawn:
-      - { enemy: sentinel, count: 1, formation: sweep_horizontal, spacing: 0.0 }
+      - { enemy: sentinel, count: 1, formation: marauder_entry, spacing: 0.0 }
       - { enemy: bomber, count: 3, formation: slow_descent_centre, spacing: 1.0, delay: 1.0 }
       - { enemy: interceptor, count: 4, formation: pincer_top, spacing: 0.3, delay: 1.5 }
       - { enemy: kamikaze, count: 3, formation: kamikaze_dive_right, spacing: 0.5, delay: 2.5 }
@@ -179,7 +179,7 @@ waves:
   - at: 176.0
     stage: 4
     spawn:
-      - { enemy: sentinel, count: 1, formation: mirror(sweep_horizontal), spacing: 0.0 }
+      - { enemy: sentinel, count: 1, formation: mirror(marauder_entry), spacing: 0.0 }
       - { enemy: gunship, count: 2, formation: loop_left, spacing: 0.8, delay: 1.0 }
       - { enemy: fighter, count: 6, formation: dive_then_strafe, spacing: 0.3, delay: 1.5 }
       - { enemy: drone, count: 6, formation: figure_eight_centre, spacing: 0.25, delay: 2.0 }
@@ -196,7 +196,7 @@ waves:
   - at: 186.0
     stage: 4
     spawn:
-      - { enemy: sentinel, count: 1, formation: sweep_horizontal, spacing: 0.0 }
+      - { enemy: sentinel, count: 1, formation: marauder_entry, spacing: 0.0 }
       - { enemy: interceptor, count: 6, formation: pincer_top, spacing: 0.25, delay: 0.5 }
       - { enemy: kamikaze, count: 4, formation: kamikaze_dive_right, spacing: 0.4, delay: 1.0 }
       - { enemy: kamikaze, count: 4, formation: mirror(kamikaze_dive_right), spacing: 0.4, delay: 1.5 }
@@ -205,8 +205,8 @@ waves:
   - at: 196.0
     stage: 4
     spawn:
-      - { enemy: sentinel, count: 1, formation: sweep_horizontal, spacing: 0.0 }
-      - { enemy: sentinel, count: 1, formation: mirror(sweep_horizontal), spacing: 0.0, delay: 0.8 }
+      - { enemy: sentinel, count: 1, formation: marauder_entry, spacing: 0.0 }
+      - { enemy: sentinel, count: 1, formation: mirror(marauder_entry), spacing: 0.0, delay: 0.8 }
       - { enemy: bomber, count: 3, formation: slow_descent_centre, spacing: 0.9, delay: 1.5 }
       - { enemy: interceptor, count: 5, formation: pincer_top, spacing: 0.25, delay: 2.0 }
       - { enemy: kamikaze, count: 3, formation: kamikaze_dive_right, spacing: 0.4, delay: 3.0 }
@@ -221,7 +221,7 @@ waves:
   - at: 206.0
     stage: 4
     spawn:
-      - { enemy: sentinel, count: 1, formation: sweep_horizontal, spacing: 0.0 }
+      - { enemy: sentinel, count: 1, formation: marauder_entry, spacing: 0.0 }
       - { enemy: fighter, count: 6, formation: dive_then_strafe, spacing: 0.3, delay: 0.5 }
       - { enemy: fighter, count: 6, formation: mirror(dive_then_strafe), spacing: 0.3, delay: 0.9 }
       - { enemy: drone, count: 6, formation: figure_eight_centre, spacing: 0.25, delay: 1.5 }
