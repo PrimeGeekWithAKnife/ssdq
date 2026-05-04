@@ -162,3 +162,19 @@ formations:
       - [ 640, 320]
       - [ 640, 480]
       - [ 640, 800]
+
+  # Marauder entry: dives in from above and SETTLES inside the upper
+  # play zone (y ≈ 200) instead of crossing the screen. The free-roam
+  # AI takes over at formation-end (kid playtest 2026-05-03 #10) so
+  # the ship hovers + dodges instead of leaving. Loop=false; the
+  # PendingFreeRoam → FreeRoamAI swap fires when t_norm hits 1.0.
+  # Three control points enter at varying x so left/right deployments
+  # can use mirror() to flip horizontal entry side.
+  marauder_entry:
+    type: catmull_rom
+    duration: 4.5
+    control_points:
+      - [ 320, -100]
+      - [ 360,   60]
+      - [ 420,  140]
+      - [ 460,  200]

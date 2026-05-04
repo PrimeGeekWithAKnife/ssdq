@@ -94,6 +94,15 @@ waves:
       - { enemy: fighter, count: 2, formation: mirror(loop_left), spacing: 0.9, delay: 0.5 }
       - { enemy: fighter, count: 8, formation: dive_then_strafe, spacing: 0.25, delay: 1.5 }
 
+  # Marauder mini-boss debut (kid playtest 2026-05-03 #10). One ship,
+  # mid-stage-3 surprise. Free-roam AI takes over once the entry
+  # formation completes — the ship hovers + dodges in the upper play
+  # zone until killed.
+  - at: 102.0
+    stage: 3
+    spawn:
+      - { enemy: marauder, count: 1, formation: marauder_entry, spacing: 0.0 }
+
   - at: 105.0
     stage: 3
     spawn:

@@ -181,6 +181,51 @@ class ShieldOnHitConsumed:
 
 
 @dataclass(frozen=True, slots=True)
+class PendingFreeRoam:
+    """Marker carried alongside FormationFollower for free-roam-capable
+    enemies. When the formation ends (t_norm >= 1.0), the spawn → formation
+    pipeline removes both FormationFollower and PendingFreeRoam and
+    attaches a fresh ``FreeRoamAI`` so the enemy starts roaming from
+    its current position.
+    """
+
+    speed: float
+    dodge_aggression: float
+    zone_top: float
+    zone_bottom: float
+    fire_loop_seconds: float
+
+
+@dataclass(slots=True)
+class FreeRoamAI:
+    """Per-enemy free-roam AI runtime state.
+
+    Mutable (not frozen) — the wander-target + age + fire_clock are
+    advanced every tick. Static config (speed, zone, dodge_aggression)
+    is captured at spawn from the EnemyDef.free_roam block. Used by
+    sentinel + marauder (kid playtest 2026-05-03 #2 + #10).
+
+    ``fire_loop_seconds`` is the period of the fire-beat cycle for this
+    enemy. The shooter is fed ``fire_clock``, reset and wrapped each
+    cycle so beats keep firing while the enemy persists. Free-roam
+    enemies have no formation, so we can't use the
+    formation-duration trick from _advance_enemies.
+
+    See ``ssdq/core/ai/free_roam.py`` for the drift + dodge algorithm.
+    """
+
+    speed: float
+    dodge_aggression: float
+    zone_top: float
+    zone_bottom: float
+    target_x: float
+    target_y: float
+    target_age: float = 0.0
+    fire_clock: float = 0.0
+    fire_loop_seconds: float = 0.0
+
+
+@dataclass(frozen=True, slots=True)
 class FloatingText:
     """A short-lived text label that drifts upward and fades out.
 

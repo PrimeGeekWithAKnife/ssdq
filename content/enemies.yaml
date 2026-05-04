@@ -246,6 +246,38 @@ enemies:
       pickup_speed,
     ]
 
+  # Mini-boss enemy (kid playtest 2026-05-03 #10). Enters via a short
+  # entry formation, then transitions to FreeRoamAI — drifts inside
+  # the upper play zone (y 80..320), dodges incoming player bullets,
+  # and persists until destroyed. Twin-cannon rapid burst weapon
+  # (`rapid_dual_line`) emulates the player's tier-2 feel rather than
+  # the bright/slow alien orbs the kid associates with mooks. Heavy
+  # armour (60 hp) takes a few hits — the kid registers it as a
+  # standalone threat, not a swarm member.
+  marauder:
+    sprite: enemies/marauder.png
+    hitbox_radius: 30
+    hp: 60
+    speed_along_path: 100     # entry formation speed; free-roam uses its own
+    weapon: rapid_dual_line
+    # 6 beats clustered into a tight burst, then the fire-loop period
+    # (~max beat + 0.5 = 1.85s) gives a clear rearm gap.
+    fire_beats: [0.0, 0.15, 0.3, 0.7, 0.85, 1.0]
+    score: 3000
+    drop_chance: 0.75         # mini-boss reward
+    drop_pool: [
+      pickup_powerup, pickup_powerup,
+      pickup_bomb, pickup_bomb,
+      pickup_missile,
+      pickup_shield,
+      pickup_health,
+      pickup_weapon_speed,
+    ]
+    free_roam:
+      speed: 80               # slower than sentinel by design (heavier hull)
+      dodge_aggression: 0.4
+      zone: [80, 320]         # upper play zone — kid still has space below
+
 # Boss definition. Phase inside the Level scene, not a separate scene
 # (per spec §4.4). Two phases per spec §2 DOD #4.
 bosses:
@@ -627,6 +659,20 @@ enemy_weapons:
     pattern: aimed_fan
     bullets_per_beat: 3
     fan_arc_deg: 28
+
+  # Used by `marauder` (kid playtest 2026-05-03 #10). Two near-parallel
+  # streams of fast bullets fired in tight clusters — the enemy
+  # equivalent of the player's tier-2 weapon ("rapid like the level 2
+  # player weapon"). 6 beats clustered ~0.15s apart for a clear "burst"
+  # feel, then the fire-loop period gives a noticeable rearm gap so
+  # the kid can read the rhythm and dodge between volleys.
+  rapid_dual_line:
+    sprite: projectiles/enemy_orb.png
+    damage: 1
+    speed: 360
+    pattern: fan          # symmetric downward fan
+    bullets_per_beat: 2
+    fan_arc_deg: 6        # near-parallel — reads as twin streams
 
   # Used by boss_05 phase 1 — heavy spread that demands the kid commit
   # to one side of the screen for each beat. Wide downward fan, slower

@@ -123,6 +123,17 @@ waves:
       - { enemy: bomber, count: 4, formation: slow_descent_centre, spacing: 0.9 }
       - { enemy: drone, count: 8, formation: figure_eight_centre, spacing: 0.2, delay: 1.0 }
 
+  # Marauder squadron of 3 (kid playtest 2026-05-03 #10) — three
+  # marauders enter staggered (left/centre/right via mirror) and
+  # transition to free-roam after their entry. The kid has to manage
+  # three persistent threats simultaneously.
+  - at: 115.0
+    stage: 3
+    spawn:
+      - { enemy: marauder, count: 1, formation: marauder_entry, spacing: 0.0 }
+      - { enemy: marauder, count: 1, formation: mirror(marauder_entry), spacing: 0.0, delay: 0.6 }
+      - { enemy: marauder, count: 1, formation: marauder_entry, spacing: 0.0, delay: 1.2 }
+
   - at: 118.0
     stage: 3
     spawn:

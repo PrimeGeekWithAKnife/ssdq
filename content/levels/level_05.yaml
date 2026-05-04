@@ -120,6 +120,15 @@ waves:
       - { enemy: interceptor, count: 6, formation: pincer_top, spacing: 0.25 }
       - { enemy: fighter, count: 6, formation: dive_then_strafe, spacing: 0.3, delay: 1.0 }
 
+  # Marauder squadron #1 (of 2) — kid playtest 2026-05-03 #10. Three
+  # ships enter staggered then free-roam in the upper play zone.
+  - at: 126.0
+    stage: 3
+    spawn:
+      - { enemy: marauder, count: 1, formation: marauder_entry, spacing: 0.0 }
+      - { enemy: marauder, count: 1, formation: mirror(marauder_entry), spacing: 0.0, delay: 0.6 }
+      - { enemy: marauder, count: 1, formation: marauder_entry, spacing: 0.0, delay: 1.2 }
+
   - at: 128.0
     stage: 3
     spawn:
@@ -161,6 +170,15 @@ waves:
       - { enemy: gunship, count: 2, formation: loop_left, spacing: 0.8, delay: 1.0 }
       - { enemy: fighter, count: 6, formation: dive_then_strafe, spacing: 0.3, delay: 1.5 }
       - { enemy: drone, count: 6, formation: figure_eight_centre, spacing: 0.25, delay: 2.0 }
+
+  # Marauder squadron #2 — pre-boss "you've earned this" wall of three
+  # mini-bosses. Kid playtest 2026-05-03 #10.
+  - at: 184.0
+    stage: 4
+    spawn:
+      - { enemy: marauder, count: 1, formation: marauder_entry, spacing: 0.0 }
+      - { enemy: marauder, count: 1, formation: mirror(marauder_entry), spacing: 0.0, delay: 0.6 }
+      - { enemy: marauder, count: 1, formation: marauder_entry, spacing: 0.0, delay: 1.2 }
 
   - at: 186.0
     stage: 4

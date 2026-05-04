@@ -50,6 +50,33 @@ def _as_tuple(seq: Any) -> tuple[Any, ...]:
     return tuple(seq)
 
 
+def _parse_free_roam(
+    raw: Any, where: str, enemy_name: str
+) -> tuple[float, float, float, float] | None:
+    """Parse the EnemyDef.free_roam block.
+
+    YAML shape:
+        free_roam:
+          speed: 80
+          dodge_aggression: 0.4
+          zone: [80, 320]
+    """
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ContentError(
+            f"{where}:enemies.{enemy_name}.free_roam must be a mapping, got {type(raw).__name__}"
+        )
+    speed = float(_require(raw, "speed", f"{where}:enemies.{enemy_name}.free_roam"))
+    dodge = float(_require(raw, "dodge_aggression", f"{where}:enemies.{enemy_name}.free_roam"))
+    zone = raw.get("zone")
+    if not isinstance(zone, list) or len(zone) != 2:
+        raise ContentError(
+            f"{where}:enemies.{enemy_name}.free_roam.zone must be [top, bottom]"
+        )
+    return (speed, dodge, float(zone[0]), float(zone[1]))
+
+
 # ───────── ships.yaml ─────────
 
 
@@ -188,6 +215,7 @@ def _load_enemies(
             passes_unlimited=bool(e.get("passes_unlimited", False)),
             shield_on_first_hit_seconds=float(e.get("shield_on_first_hit_seconds", 0.0)),
             guaranteed_drops=tuple(e.get("guaranteed_drops") or []),
+            free_roam=_parse_free_roam(e.get("free_roam"), where, name),
         )
 
     pickups: dict[str, PickupDef] = {}

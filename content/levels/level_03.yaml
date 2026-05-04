@@ -112,6 +112,14 @@ waves:
       - { enemy: gunship, count: 2, formation: mirror(loop_left), spacing: 0.9, delay: 0.5 }
       - { enemy: interceptor, count: 4, formation: sweep_horizontal, spacing: 0.5, delay: 1.5 }
 
+  # Marauder mini-boss x2 (kid playtest 2026-05-03 #10). First at L3
+  # stage 3, second at L3 stage 4 ~15s later — kid sees the new
+  # threat type more than once but never two on screen at once.
+  - at: 113.0
+    stage: 3
+    spawn:
+      - { enemy: marauder, count: 1, formation: marauder_entry, spacing: 0.0 }
+
   - at: 118.0
     stage: 3
     spawn:
@@ -137,6 +145,12 @@ waves:
       - { enemy: interceptor, count: 5, formation: kamikaze_dive_right, spacing: 0.35 }
       - { enemy: interceptor, count: 5, formation: mirror(kamikaze_dive_right), spacing: 0.35, delay: 0.4 }
       - { enemy: interceptor, count: 4, formation: sweep_horizontal, spacing: 0.5, delay: 1.5 }
+
+  # Marauder #2 — second appearance, mirror entry from the right side.
+  - at: 152.0
+    stage: 4
+    spawn:
+      - { enemy: marauder, count: 1, formation: mirror(marauder_entry), spacing: 0.0 }
 
   - at: 155.0
     stage: 4

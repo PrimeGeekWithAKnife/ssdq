@@ -27,6 +27,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Any
 
+from ssdq.core.ai import FreeRoamConfig, free_roam_step
 from ssdq.core.clock import TICK_DT
 from ssdq.core.collision import SpatialGrid, circles_overlap
 from ssdq.core.components import (
@@ -38,10 +39,12 @@ from ssdq.core.components import (
     Faction,
     FactionTag,
     FloatingText,
+    FreeRoamAI,
     Health,
     HitFlash,
     InvulnerabilityBlink,
     MaxHealth,
+    PendingFreeRoam,
     PickupHalo,
     PlayerOwned,
     Position,
@@ -792,6 +795,11 @@ class LevelScene(Scene):
         # 5. Advance enemies along formations + emit fire beats
         self._advance_enemies(world)
 
+        # 5z. Advance free-roam enemies (sentinel/marauder) — drift +
+        # dodge logic; replaces formation following once an entry
+        # formation has completed.
+        self._advance_free_roam(world)
+
         # 5a. Decay per-enemy spawn-shield timers; remove ShieldHalo on
         # expiry. Bosses use a separate state machine on BossState
         # (advanced inside _advance_boss).
@@ -1420,6 +1428,24 @@ class LevelScene(Scene):
         # re-activation after the shield expires).
         if enemy.shield_on_first_hit_seconds > 0.0:
             world.add(eid, ShieldOnHitConfig(seconds=enemy.shield_on_first_hit_seconds))
+        # Free-roam capability (kid playtest 2026-05-03 #2 + #10). Marker
+        # the formation-end branch reads to know "swap to FreeRoamAI
+        # instead of despawning" once the entry formation completes. We
+        # also seed an initial Velocity so the motion integrator picks
+        # the entity up after the swap (FreeRoamAI replaces Velocity
+        # each tick anyway).
+        if enemy.free_roam is not None:
+            speed, dodge, zt, zb = enemy.free_roam
+            # Fire-loop period: longest beat + 0.5s buffer so the next
+            # cycle has a clear "rearm gap" the kid can read as rhythm.
+            fire_loop = (max(enemy.fire_beats) if enemy.fire_beats else 0.0) + 0.5
+            world.add(eid, PendingFreeRoam(
+                speed=speed,
+                dodge_aggression=dodge,
+                zone_top=zt,
+                zone_bottom=zb,
+                fire_loop_seconds=fire_loop,
+            ))
 
     def _maybe_spawn_boss(self, world: World) -> None:
         if self._boss is not None or self._boss_dispatched:
@@ -1505,8 +1531,31 @@ class LevelScene(Scene):
             speed_mult = follower.speed / 100.0
             t_norm = (path_dt * speed_mult) / formation.duration
             if not formation.loop and t_norm >= 1.0:
-                # End of pass: either despawn (no return passes left) or
-                # restart the formation from t=0 for a survivor return.
+                # End of pass: either transition to free-roam, despawn
+                # (no return passes left, no free-roam), or restart the
+                # formation from t=0 for a survivor return.
+                pending = world.get(eid, PendingFreeRoam)
+                if pending is not None:
+                    # Hand-off to FreeRoamAI from the current position;
+                    # initial wander target = current pos so the AI's
+                    # first step picks a fresh target deterministically.
+                    cur_pos = world.must_get(eid, Position).pos
+                    world.remove(eid, FormationFollower)
+                    world.remove(eid, PendingFreeRoam)
+                    world.add(eid, FreeRoamAI(
+                        speed=pending.speed,
+                        dodge_aggression=pending.dodge_aggression,
+                        zone_top=pending.zone_top,
+                        zone_bottom=pending.zone_bottom,
+                        target_x=cur_pos.x,
+                        target_y=cur_pos.y,
+                        target_age=999.0,  # forces refresh on first step
+                        fire_clock=0.0,
+                        fire_loop_seconds=pending.fire_loop_seconds,
+                    ))
+                    # Seed Velocity so the integrator picks it up.
+                    world.add(eid, Velocity(Vec2(0.0, 0.0)))
+                    continue
                 if follower.passes_remaining <= 0:
                     world.despawn(eid)
                     continue
@@ -1556,6 +1605,87 @@ class LevelScene(Scene):
         # Boss
         if self._boss is not None:
             self._advance_boss(world)
+
+    def _advance_free_roam(self, world: World) -> None:
+        """Drift + dodge + fire tick for FreeRoamAI enemies.
+
+        Each free-roam enemy heads toward a wander target inside its
+        configured Y zone, refreshing the target on reach or after a
+        timeout. Player bullets within 96px nudge it perpendicular to
+        the bullet's path. Fire beats are looped via a per-enemy
+        fire_clock that resets every fire_loop_seconds.
+        """
+        # Snapshot incoming player bullets once per tick.
+        bullets: list[tuple[Vec2, Vec2]] = []
+        for _bid, bftag in world.query1(FactionTag):
+            if bftag.faction != Faction.PLAYER_BULLET:
+                continue
+            bp = world.get(_bid, Position)
+            bv = world.get(_bid, Velocity)
+            if bp is not None and bv is not None:
+                bullets.append((bp.pos, bv.vel))
+
+        bundle = self.app.content
+        for eid, ai in list(world.query1(FreeRoamAI)):
+            pos = world.must_get(eid, Position).pos
+            vel_comp = world.get(eid, Velocity)
+            cur_vel = vel_comp.vel if vel_comp is not None else Vec2(0.0, 0.0)
+            cfg = FreeRoamConfig(
+                speed=ai.speed,
+                dodge_aggression=ai.dodge_aggression,
+                zone_top=ai.zone_top,
+                zone_bottom=ai.zone_bottom,
+            )
+            new_vel, new_target, new_age = free_roam_step(
+                pos=pos,
+                velocity=cur_vel,
+                cfg=cfg,
+                target=Vec2(ai.target_x, ai.target_y),
+                target_age=ai.target_age,
+                incoming_bullets=bullets,
+                sim_time=self._sim_time,
+                entity_id=int(eid),
+                play_w=PLAY_W,
+                dt=TICK_DT,
+            )
+            ai.target_x = new_target.x
+            ai.target_y = new_target.y
+            ai.target_age = new_age
+            world.replace(eid, Velocity(new_vel))
+
+            # Fire-clock: monotonically advance, reset on loop boundary.
+            shooter_ref = world.get(eid, EnemyShooterRef)
+            if shooter_ref is None or ai.fire_loop_seconds <= 0.0:
+                continue
+            ai.fire_clock += TICK_DT
+            if ai.fire_clock >= ai.fire_loop_seconds:
+                ai.fire_clock -= ai.fire_loop_seconds
+                shooter_ref.shooter.reset()
+            # Resolve weapon name via sprite → enemy. Free-roam set is
+            # small (1-3 enemies) so the linear scan is cheap.
+            spr = world.get(eid, Sprite)
+            if spr is None:
+                continue
+            weapon_def: EnemyWeaponDef | None = None
+            for edef in bundle.enemies.values():
+                if edef.sprite == spr.path and edef.weapon:
+                    weapon_def = bundle.enemy_weapons.get(edef.weapon)
+                    break
+            if weapon_def is None:
+                continue
+            target_pos = self._nearest_alive_player_pos(pos)
+            events = shooter_ref.shooter.advance(
+                ai.fire_clock,
+                enemy_entity=int(eid),
+                enemy_pos=pos,
+                target_pos=target_pos,
+                weapon_name=weapon_def.name,
+                pattern=weapon_def.pattern,
+                bullets_per_beat=weapon_def.bullets_per_beat,
+                fan_arc_deg=weapon_def.fan_arc_deg,
+            )
+            for ev in events:
+                self._spawn_enemy_bullets(world, weapon_def, ev.aim.fire_pos, target_pos)
 
     def _advance_boss(self, world: World) -> None:
         boss_state = self._boss

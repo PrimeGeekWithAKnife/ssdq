@@ -106,6 +106,12 @@ class EnemyDef:
     # 2026-05-03 #1 + #4) to guarantee a missile drop on top of the
     # standard random pickup.
     guaranteed_drops: tuple[str, ...] = ()
+    # Free-roam AI config (kid playtest 2026-05-03 #2 + #10). When
+    # set, the enemy enters via the configured intro formation, and
+    # on formation-end it transitions to FreeRoamAI instead of
+    # despawning. Tuple is (speed, dodge_aggression, zone_top, zone_bottom);
+    # None means "no free-roam" (formation despawn-on-exit, default).
+    free_roam: tuple[float, float, float, float] | None = None
 
 
 class PickupEffect(Enum):
