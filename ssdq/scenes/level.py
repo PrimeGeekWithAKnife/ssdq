@@ -32,6 +32,7 @@ from ssdq.core.clock import TICK_DT
 from ssdq.core.collision import SpatialGrid, circles_overlap
 from ssdq.core.components import (
     AnimatedSprite,
+    BossTag,
     CircleHitbox,
     Damage,
     Drone,
@@ -1482,6 +1483,7 @@ class LevelScene(Scene):
             MaxHealth(hp=total_max),
             Sprite(path=boss.sprite, layer=7),
             ScoreValue(points=boss.score),
+            BossTag(),
         )
         # Telegraph entity — auto-cull after intro_telegraph_seconds via TTL.
         intro_ticks = int(boss.intro_telegraph_seconds * 60)

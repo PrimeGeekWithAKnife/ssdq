@@ -28,6 +28,7 @@ import pygame
 
 from ssdq.core.components import (
     AnimatedSprite,
+    BossTag,
     Faction,
     FactionTag,
     FloatingText,
@@ -341,15 +342,17 @@ class Renderer:
     def _draw_boss_health_bar(self, world: World, surface: pygame.Surface) -> None:
         """Wide bar across the top of the playfield showing boss HP.
 
-        Boss identified as the entity with `MaxHealth.hp >= 50` (level-1
-        non-boss enemies cap at 12).
+        Boss identified by the `BossTag` marker component, attached only
+        to the actual BossDef-derived boss entity in _maybe_spawn_boss.
+        Pre-2026-05-04 used a `MaxHealth.hp >= 50` heuristic which
+        mis-fired on the resupply ship (hp 72) and marauder (hp 60) —
+        kid playtest "Supply ship shouldn't use a boss health meter."
         """
-        for boss_eid, max_hp in world.query1(MaxHealth):
-            if max_hp.hp < 50:
-                continue
+        for boss_eid, _tag in world.query1(BossTag):
+            max_hp = world.get(boss_eid, MaxHealth)
             hp = world.get(boss_eid, Health)
             ftag = world.get(boss_eid, FactionTag)
-            if hp is None or ftag is None or ftag.faction != Faction.ENEMY:
+            if max_hp is None or hp is None or ftag is None or ftag.faction != Faction.ENEMY:
                 continue
             w, _h = surface.get_size()
             bar_w = w - 240

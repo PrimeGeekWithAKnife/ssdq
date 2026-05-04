@@ -181,6 +181,16 @@ class ShieldOnHitConsumed:
 
 
 @dataclass(frozen=True, slots=True)
+class BossTag:
+    """Marker: this entity is THE active boss. Renderer uses this to
+    draw the wide boss health bar, replacing the previous MaxHealth >= 50
+    heuristic which mis-fired on resupply ships (hp 72) and marauders
+    (hp 60). Kid playtest 2026-05-04: "Supply ship shouldn't use a boss
+    health meter."
+    """
+
+
+@dataclass(frozen=True, slots=True)
 class PendingFreeRoam:
     """Marker carried alongside FormationFollower for free-roam-capable
     enemies. When the formation ends (t_norm >= 1.0), the spawn → formation
