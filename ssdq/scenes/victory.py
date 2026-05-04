@@ -53,14 +53,51 @@ class VictoryScene(Scene):
             inputs[0].confirm or inputs[1].confirm or inputs[0].fire or inputs[1].fire
         ):
             return None
-        from ssdq.scenes.title import TitleScene
+        from ssdq.core.leaderboard import add_entry, load, qualifies, save
+        from ssdq.scenes.initials import InitialsScene
+        from ssdq.scenes.leaderboard import LeaderboardScene
 
+        team_score = self._app.last_team_score
         # Reset campaign state so a fresh run after the credits begins
         # at level 1 with no carry-forward stockpile or score.
         self._app.clear_progression()
         self._app.current_level = 1
         self._app.completed_level = False
-        return Replace(scene=TitleScene(self._app))
+
+        entries = load()
+        if qualifies(entries, team_score):
+            # Capture the score before the closure; clear_progression
+            # already ran above so we don't reference last_team_score
+            # which is now zeroed.
+            captured_score = team_score
+
+            def _on_initials_submit(initials: str) -> SceneTransition:
+                new_entries = add_entry(load(), initials, captured_score)
+                save(new_entries)
+                # Highlight the just-added row by matching on initials
+                # AND ts — the saved row's ts is set inside add_entry.
+                added = next(
+                    (e for e in new_entries if e.initials == initials), None
+                )
+                ts = added.ts if added is not None else None
+                return Replace(
+                    scene=LeaderboardScene(
+                        self._app,
+                        highlight_initials=initials,
+                        highlight_ts=ts,
+                    )
+                )
+
+            return Replace(
+                scene=InitialsScene(
+                    self._app,
+                    score=team_score,
+                    on_submit=_on_initials_submit,
+                )
+            )
+        # Score didn't qualify — show the leaderboard anyway so the kid
+        # sees how close they were.
+        return Replace(scene=LeaderboardScene(self._app))
 
     def render(self, world: World, surface: Any, alpha: float) -> None:
         if not isinstance(surface, pygame.Surface):

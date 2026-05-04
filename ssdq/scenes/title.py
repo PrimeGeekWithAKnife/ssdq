@@ -29,8 +29,14 @@ _NAV_THRESHOLD = 0.5
 
 _OPTION_PLAY = "PLAY"
 _OPTION_LEVELS = "LEVELS"
+_OPTION_SCORES = "HIGH SCORES"
 _OPTION_SETTINGS = "SETTINGS"
-_OPTIONS: tuple[str, ...] = (_OPTION_PLAY, _OPTION_LEVELS, _OPTION_SETTINGS)
+_OPTIONS: tuple[str, ...] = (
+    _OPTION_PLAY,
+    _OPTION_LEVELS,
+    _OPTION_SCORES,
+    _OPTION_SETTINGS,
+)
 
 
 class TitleScene(Scene):
@@ -141,6 +147,10 @@ class TitleScene(Scene):
             from ssdq.scenes.level_select import LevelSelectScene
 
             return Push(scene=LevelSelectScene(app=self._app))
+        if chosen == _OPTION_SCORES:
+            from ssdq.scenes.leaderboard import LeaderboardScene
+
+            return Push(scene=LeaderboardScene(self._app))
         if chosen == _OPTION_SETTINGS:
             from ssdq.scenes.settings import SettingsScene
 
