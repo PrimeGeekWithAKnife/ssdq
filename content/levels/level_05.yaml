@@ -74,6 +74,13 @@ waves:
       - { enemy: gunship, count: 2, formation: mirror(loop_left), spacing: 0.8 }
       - { enemy: interceptor, count: 5, formation: pincer_top, spacing: 0.3, delay: 1.0 }
 
+  # Surprise wave #1 of 3 (kid playtest 2026-05-03 #7) — kamikazes
+  # rise up the left flank.
+  - at: 56.0
+    stage: 1
+    spawn:
+      - { enemy: kamikaze, count: 5, formation: from_below_left, spacing: 0.35 }
+
   # Stage 2 — sentinel debuts.
   - at: 60.0
     stage: 2
@@ -140,6 +147,12 @@ waves:
     spawn:
       - { enemy: gunship, count: 3, formation: loop_left, spacing: 0.7, return_passes: 1 }
       - { enemy: gunship, count: 3, formation: mirror(loop_left), spacing: 0.7, delay: 0.5, return_passes: 1 }
+
+  # Surprise wave #2 of 3 — interceptors come up the right flank.
+  - at: 144.0
+    stage: 3
+    spawn:
+      - { enemy: interceptor, count: 4, formation: from_below_right, spacing: 0.4 }
       - { enemy: drone, count: 8, formation: figure_eight_centre, spacing: 0.2, delay: 1.5 }
 
   - at: 148.0
@@ -197,6 +210,13 @@ waves:
       - { enemy: bomber, count: 3, formation: slow_descent_centre, spacing: 0.9, delay: 1.5 }
       - { enemy: interceptor, count: 5, formation: pincer_top, spacing: 0.25, delay: 2.0 }
       - { enemy: kamikaze, count: 3, formation: kamikaze_dive_right, spacing: 0.4, delay: 3.0 }
+
+  # Surprise wave #3 of 3 — final-stage kamikazes from directly behind
+  # the player. The boss-room before the boss.
+  - at: 202.0
+    stage: 4
+    spawn:
+      - { enemy: kamikaze, count: 4, formation: from_behind_centre, spacing: 0.4 }
 
   - at: 206.0
     stage: 4

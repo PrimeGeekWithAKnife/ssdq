@@ -90,6 +90,14 @@ waves:
     spawn:
       - { enemy: resupply_ship, count: 1, formation: resupply_cruise, spacing: 0.0 }
 
+  # Surprise wave (kid playtest 2026-05-03 #7) — kamikazes rise from
+  # below-left, catching the kid from their flank instead of falling
+  # from above. L3 gets 1 surprise wave.
+  - at: 86.0
+    stage: 3
+    spawn:
+      - { enemy: kamikaze, count: 4, formation: from_below_left, spacing: 0.4 }
+
   # Stage 3 — full palette mix.
   - at: 88.0
     stage: 3

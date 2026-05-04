@@ -178,3 +178,49 @@ formations:
       - [ 360,   60]
       - [ 420,  140]
       - [ 460,  200]
+
+  # ───────── Surprise waves (kid playtest 2026-05-03 #7) ─────────
+  # "Enemies still do not really appear from the lower part of the
+  # screen left or right or from near the player or behind." All three
+  # of these formations enter from BELOW the playfield (y > 720) so the
+  # kid sees them rise into view from their flank or directly behind
+  # their ship rather than falling from above.
+
+  # Rises from below-left, arcs up past the player's lower-left flank,
+  # crosses the centre toward the upper-right, and exits top-right.
+  from_below_left:
+    type: catmull_rom
+    duration: 5.5
+    control_points:
+      - [-80,  800]
+      - [120,  680]
+      - [320,  500]
+      - [560,  280]
+      - [880,  120]
+      - [1200, -80]
+
+  # Mirror of from_below_left — comes up the right flank.
+  from_below_right:
+    type: catmull_rom
+    duration: 5.5
+    control_points:
+      - [1360, 800]
+      - [1160, 680]
+      - [960,  500]
+      - [720,  280]
+      - [400,  120]
+      - [80,  -80]
+
+  # Rises directly behind the player (centre-bottom), shoots up the
+  # middle, then bows out to the upper-right so the kid has to twist
+  # round to engage.
+  from_behind_centre:
+    type: catmull_rom
+    duration: 4.0
+    control_points:
+      - [640,  850]
+      - [620,  600]
+      - [600,  360]
+      - [580,  200]
+      - [620,  100]
+      - [800, -80]

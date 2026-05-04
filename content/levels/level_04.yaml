@@ -98,6 +98,14 @@ waves:
     spawn:
       - { enemy: resupply_ship, count: 1, formation: resupply_cruise, spacing: 0.0 }
 
+  # Surprise wave #1 (kid playtest 2026-05-03 #7) — kamikazes rise
+  # from below-right; the kid is now dodging on both flanks. L4 gets
+  # 2 surprise waves total.
+  - at: 75.0
+    stage: 2
+    spawn:
+      - { enemy: kamikaze, count: 4, formation: from_below_right, spacing: 0.4 }
+
   - at: 78.0
     stage: 2
     spawn:
@@ -160,6 +168,13 @@ waves:
       - { enemy: interceptor, count: 6, formation: dive_then_strafe, spacing: 0.22 }
       - { enemy: interceptor, count: 6, formation: mirror(dive_then_strafe), spacing: 0.22, delay: 0.4 }
       - { enemy: gunship, count: 2, formation: loop_left, spacing: 0.9, delay: 1.0 }
+
+  # Surprise wave #2 (kid playtest 2026-05-03 #7) — interceptors
+  # come up from directly behind; the kid has to twist round.
+  - at: 154.0
+    stage: 4
+    spawn:
+      - { enemy: interceptor, count: 3, formation: from_behind_centre, spacing: 0.5 }
 
   - at: 158.0
     stage: 4
