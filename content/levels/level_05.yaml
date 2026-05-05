@@ -37,18 +37,25 @@ length_seconds: 265
 
 waves:
   # Pacing pass kid playtest 2026-05-02 #8 — every authored gap ≤ 10s.
-  # Stage 1 — straight into the fight.
+  # Stage 1 — straight into the fight. Kid playtest 2026-04-28 #6: the
+  # finale opener was IDENTICAL to L1's (12x fighter arc_left_to_right).
+  # Swapped to interceptor pincer + kamikaze kicker so the kid reads
+  # "L5 starts where L4 left off" inside the first 5 seconds.
   - at: 2.0
     stage: 1
     spawn:
-      - { enemy: fighter, count: 6, formation: arc_left_to_right, spacing: 0.35 }
-      - { enemy: fighter, count: 6, formation: mirror(arc_left_to_right), spacing: 0.35, delay: 0.8 }
+      - { enemy: interceptor, count: 4, formation: pincer_top, spacing: 0.35 }
+      - { enemy: interceptor, count: 4, formation: mirror(pincer_top), spacing: 0.35, delay: 0.8 }
+      - { enemy: kamikaze, count: 4, formation: kamikaze_dive_right, spacing: 0.4, delay: 1.6 }
 
+  # Kid playtest 2026-04-28 #6: drone figure-eight was pure L1 filler.
+  # Replaced with interceptor sweep_horizontal so the upper-zone fan
+  # reads as late-game rapid_aim pressure.
   - at: 12.0
     stage: 1
     spawn:
       - { enemy: interceptor, count: 4, formation: dive_then_strafe, spacing: 0.3 }
-      - { enemy: drone, count: 8, formation: figure_eight_centre, spacing: 0.25, delay: 1.0 }
+      - { enemy: interceptor, count: 6, formation: sweep_horizontal, spacing: 0.25, delay: 1.0 }
 
   - at: 22.0
     stage: 1
@@ -81,25 +88,33 @@ waves:
     spawn:
       - { enemy: kamikaze, count: 5, formation: from_below_left, spacing: 0.35 }
 
-  # Stage 2 — sentinel debuts.
+  # Stage 2 — sentinel debuts. Kid playtest 2026-04-28 #6: drone
+  # figure-eight backing track replaced with interceptor sweep so the
+  # sentinel reveal lands against late-game pressure, not L1 filler.
   - at: 60.0
     stage: 2
     spawn:
       - { enemy: sentinel, count: 1, formation: marauder_entry, spacing: 0.0 }
-      - { enemy: drone, count: 8, formation: figure_eight_centre, spacing: 0.25, delay: 1.0 }
+      - { enemy: interceptor, count: 6, formation: sweep_horizontal, spacing: 0.25, delay: 1.0 }
 
+  # Kid playtest 2026-04-28 #6: was 16x fighter dive_then_strafe — the
+  # heaviest L1-idiom block in the finale. Swapped wholesale to
+  # interceptor; same path shape, very different bullet pattern.
   - at: 70.0
     stage: 2
     spawn:
-      - { enemy: fighter, count: 8, formation: dive_then_strafe, spacing: 0.25 }
-      - { enemy: fighter, count: 8, formation: mirror(dive_then_strafe), spacing: 0.25, delay: 0.4 }
+      - { enemy: interceptor, count: 6, formation: dive_then_strafe, spacing: 0.3 }
+      - { enemy: interceptor, count: 6, formation: mirror(dive_then_strafe), spacing: 0.3, delay: 0.4 }
 
+  # Kid playtest 2026-04-28 #6: drone tail dropped, replaced with a
+  # delayed kamikaze sweep — keeps the third-rhythm-layer idea but
+  # the silhouette is "incoming dive" not "L1 filler".
   - at: 80.0
     stage: 2
     spawn:
       - { enemy: bomber, count: 4, formation: slow_descent_centre, spacing: 0.9 }
       - { enemy: interceptor, count: 4, formation: pincer_top, spacing: 0.3, delay: 1.0 }
-      - { enemy: drone, count: 6, formation: figure_eight_centre, spacing: 0.3, delay: 2.0 }
+      - { enemy: kamikaze, count: 4, formation: kamikaze_dive_right, spacing: 0.4, delay: 2.0 }
 
   - at: 90.0
     stage: 2
@@ -113,19 +128,19 @@ waves:
     spawn:
       - { enemy: resupply_ship, count: 1, formation: resupply_cruise, spacing: 0.0 }
 
-  # Stage 3 — the stack tightens.
+  # Stage 3 — the stack tightens. Kid playtest 2026-04-28 #6: drone
+  # tail dropped — the wave is already kamikaze-double; let it breathe.
   - at: 108.0
     stage: 3
     spawn:
       - { enemy: kamikaze, count: 5, formation: kamikaze_dive_right, spacing: 0.4 }
       - { enemy: kamikaze, count: 5, formation: mirror(kamikaze_dive_right), spacing: 0.4, delay: 0.6 }
-      - { enemy: drone, count: 6, formation: figure_eight_centre, spacing: 0.3, delay: 1.5 }
 
   - at: 118.0
     stage: 3
     spawn:
       - { enemy: interceptor, count: 6, formation: pincer_top, spacing: 0.25 }
-      - { enemy: fighter, count: 6, formation: dive_then_strafe, spacing: 0.3, delay: 1.0 }
+      - { enemy: interceptor, count: 6, formation: dive_then_strafe, spacing: 0.3, delay: 1.0 }
 
   # Marauder squadron #1 (of 2) — kid playtest 2026-05-03 #10. Three
   # ships enter staggered then free-roam in the upper play zone.
@@ -149,17 +164,22 @@ waves:
       - { enemy: gunship, count: 3, formation: mirror(loop_left), spacing: 0.7, delay: 0.5, return_passes: 1 }
 
   # Surprise wave #2 of 3 — interceptors come up the right flank.
+  # Kid playtest 2026-04-28 #6: trailing drone block dropped, kamikaze
+  # sweep takes the upper-zone slot.
   - at: 144.0
     stage: 3
     spawn:
       - { enemy: interceptor, count: 4, formation: from_below_right, spacing: 0.4 }
-      - { enemy: drone, count: 8, formation: figure_eight_centre, spacing: 0.2, delay: 1.5 }
+      - { enemy: kamikaze, count: 4, formation: kamikaze_dive_right, spacing: 0.35, delay: 1.5 }
 
+  # Kid playtest 2026-04-28 #6: was 12x fighter arc_left_to_right (the
+  # second L1 callback in L5). Swapped to interceptor + kamikaze split
+  # so both flank rhythms stay but read late-game.
   - at: 148.0
     stage: 3
     spawn:
-      - { enemy: fighter, count: 6, formation: arc_left_to_right, spacing: 0.3, return_passes: 1 }
-      - { enemy: fighter, count: 6, formation: mirror(arc_left_to_right), spacing: 0.3, delay: 0.5, return_passes: 1 }
+      - { enemy: interceptor, count: 4, formation: arc_left_to_right, spacing: 0.3, return_passes: 1 }
+      - { enemy: kamikaze, count: 6, formation: mirror(kamikaze_dive_right), spacing: 0.3, delay: 0.5 }
       - { enemy: bomber, count: 2, formation: slow_descent_centre, spacing: 1.2, delay: 1.5 }
 
   # Stage 4 — everything, all at once.
@@ -176,13 +196,16 @@ waves:
     spawn:
       - { enemy: resupply_ship, count: 1, formation: resupply_cruise, spacing: 0.0 }
 
+  # Kid playtest 2026-04-28 #6: fighter+drone tail block was the
+  # third L1-idiom recursion in L5. Swapped to interceptor +
+  # kamikaze so the layered-rhythm density stays late-game.
   - at: 176.0
     stage: 4
     spawn:
       - { enemy: sentinel, count: 1, formation: mirror(marauder_entry), spacing: 0.0 }
       - { enemy: gunship, count: 2, formation: loop_left, spacing: 0.8, delay: 1.0 }
-      - { enemy: fighter, count: 6, formation: dive_then_strafe, spacing: 0.3, delay: 1.5 }
-      - { enemy: drone, count: 6, formation: figure_eight_centre, spacing: 0.25, delay: 2.0 }
+      - { enemy: interceptor, count: 6, formation: dive_then_strafe, spacing: 0.3, delay: 1.5 }
+      - { enemy: kamikaze, count: 4, formation: kamikaze_dive_right, spacing: 0.35, delay: 2.0 }
 
   # Marauder squadron #2 — pre-boss "you've earned this" wall of three
   # mini-bosses. Kid playtest 2026-05-03 #10.
@@ -218,13 +241,17 @@ waves:
     spawn:
       - { enemy: kamikaze, count: 4, formation: from_behind_centre, spacing: 0.4 }
 
+  # Kid playtest 2026-04-28 #6: was 12x fighter + 6x drone — the final
+  # pre-boss wave looked like a level-1 finale, not a campaign finale.
+  # Now reads as the late-game everything-stack: sentinel anchor +
+  # interceptor double-dive + kamikaze sweep + interceptor pincer.
   - at: 206.0
     stage: 4
     spawn:
       - { enemy: sentinel, count: 1, formation: marauder_entry, spacing: 0.0 }
-      - { enemy: fighter, count: 6, formation: dive_then_strafe, spacing: 0.3, delay: 0.5 }
-      - { enemy: fighter, count: 6, formation: mirror(dive_then_strafe), spacing: 0.3, delay: 0.9 }
-      - { enemy: drone, count: 6, formation: figure_eight_centre, spacing: 0.25, delay: 1.5 }
+      - { enemy: interceptor, count: 6, formation: dive_then_strafe, spacing: 0.3, delay: 0.5 }
+      - { enemy: interceptor, count: 6, formation: mirror(dive_then_strafe), spacing: 0.3, delay: 0.9 }
+      - { enemy: kamikaze, count: 4, formation: kamikaze_dive_right, spacing: 0.35, delay: 1.5 }
       - { enemy: interceptor, count: 3, formation: pincer_top, spacing: 0.3, delay: 2.0 }
 
   # ───────── Boss ─────────

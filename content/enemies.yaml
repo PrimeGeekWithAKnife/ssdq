@@ -275,7 +275,12 @@ enemies:
   marauder:
     sprite: enemies/marauder.png
     hitbox_radius: 30
-    hp: 60
+    # Tripled 60 → 180 per kid playtest 2026-05-05: marauder dies too
+    # fast for a mini-boss; the kid wants it to feel like a real
+    # encounter, not just a chunkier fighter. Pairs with the L4/L5
+    # content swap (issue #6) and the resupply scaling-drops boost
+    # (issue #5) so weapon-tier'd-up players still grind it down.
+    hp: 180
     speed_along_path: 100     # entry formation speed; free-roam uses its own
     weapon: rapid_dual_line
     # 6 beats clustered into a tight burst, then the fire-loop period

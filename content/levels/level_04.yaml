@@ -36,16 +36,16 @@ length_seconds: 245
 
 waves:
   # ───────── Stage 1 — re-entry, the fleet shows its teeth ─────────
-  # Open with a fighter sweep so the kid immediately remembers "things
-  # shoot back" — no drone-only ramp, level 4 assumes mastery of the
-  # earlier rhythm. Then introduce interceptor pressure (the level-3
-  # workhorse) before the FIRST kamikaze squadron, so the kid sees the
-  # new dive silhouette in isolation against a familiar backdrop.
+  # Open with an interceptor sweep so the kid immediately reads "this is
+  # not level 1" — level 4 assumes mastery of the earlier rhythm and the
+  # rapid_aim bullet fans paint a different silhouette than fighter
+  # singles even on the familiar arc path. Kid playtest 2026-04-28 #6:
+  # "low tier ships should be scarce at higher levels".
   - at: 2.0
     stage: 1
     spawn:
-      - { enemy: fighter, count: 6, formation: arc_left_to_right, spacing: 0.35 }
-      - { enemy: fighter, count: 6, formation: mirror(arc_left_to_right), spacing: 0.35, delay: 0.8 }
+      - { enemy: interceptor, count: 4, formation: arc_left_to_right, spacing: 0.4 }
+      - { enemy: interceptor, count: 4, formation: mirror(arc_left_to_right), spacing: 0.4, delay: 0.8 }
 
   # Pacing pass kid playtest 2026-05-02 #8 — every authored gap ≤ 10s.
   - at: 11.0
@@ -65,14 +65,16 @@ waves:
       - { enemy: kamikaze, count: 4, formation: kamikaze_dive_right, spacing: 0.3 }
       - { enemy: kamikaze, count: 4, formation: mirror(kamikaze_dive_right), spacing: 0.3, delay: 0.8 }
 
-  # Bomber preview + drone weave to close stage 1 with a mixed-rhythm
+  # Bomber preview + kamikaze layer to close stage 1 with a mixed-rhythm
   # block. Sets up the bomber-wall idiom we'll lean on heavily in
-  # stages 3 and 4.
+  # stages 3 and 4. Kid playtest 2026-04-28 #6: drone weave swapped for
+  # a kamikaze sweep — drones read as L1 filler, kamikaze keeps the
+  # diagonal-rhythm energy without the "level 1" silhouette.
   - at: 31.0
     stage: 1
     spawn:
       - { enemy: bomber, count: 3, formation: slow_descent_centre, spacing: 1.0 }
-      - { enemy: drone, count: 6, formation: figure_eight_centre, spacing: 0.3, delay: 1.0 }
+      - { enemy: kamikaze, count: 4, formation: kamikaze_dive_right, spacing: 0.4, delay: 1.0 }
 
   # ───────── Stage 2 — layer it up, give them a top-up ─────────
   - at: 41.0
@@ -106,11 +108,14 @@ waves:
     spawn:
       - { enemy: kamikaze, count: 4, formation: from_below_right, spacing: 0.4 }
 
+  # Kid playtest 2026-04-28 #6: was 16x fighter arc_left_to_right (the
+  # exact L1 idiom). Swapped to interceptor + kamikaze to keep the
+  # double-flank pressure but with a late-game silhouette.
   - at: 78.0
     stage: 2
     spawn:
-      - { enemy: fighter, count: 8, formation: arc_left_to_right, spacing: 0.25, return_passes: 1 }
-      - { enemy: fighter, count: 8, formation: mirror(arc_left_to_right), spacing: 0.25, delay: 0.5, return_passes: 1 }
+      - { enemy: interceptor, count: 6, formation: arc_left_to_right, spacing: 0.3, return_passes: 1 }
+      - { enemy: kamikaze, count: 6, formation: mirror(kamikaze_dive_right), spacing: 0.3, delay: 0.5 }
 
   # ───────── Stage 3 — density ramps ─────────
   - at: 88.0
@@ -125,11 +130,14 @@ waves:
       - { enemy: kamikaze, count: 6, formation: kamikaze_dive_right, spacing: 0.22 }
       - { enemy: kamikaze, count: 6, formation: mirror(kamikaze_dive_right), spacing: 0.22, delay: 0.4 }
 
+  # Kid playtest 2026-04-28 #6: was bomber + 8x drone figure_eight
+  # (pure L1 filler). Drone weave swapped for an interceptor sweep
+  # so the upper-zone fan reads as late-game rapid_aim, not L1 filler.
   - at: 108.0
     stage: 3
     spawn:
       - { enemy: bomber, count: 4, formation: slow_descent_centre, spacing: 0.9 }
-      - { enemy: drone, count: 8, formation: figure_eight_centre, spacing: 0.2, delay: 1.0 }
+      - { enemy: interceptor, count: 6, formation: sweep_horizontal, spacing: 0.25, delay: 1.0 }
 
   # Sentinel debut at L4 (kid playtest 2026-05-03: "sentinel should
   # appear at L4 & L5"). Free-roam mini-threat — appears, drifts in
@@ -162,7 +170,7 @@ waves:
     spawn:
       - { enemy: gunship, count: 3, formation: loop_left, spacing: 0.7 }
       - { enemy: gunship, count: 3, formation: mirror(loop_left), spacing: 0.7, delay: 0.6 }
-      - { enemy: fighter, count: 6, formation: dive_then_strafe, spacing: 0.3, delay: 2.0 }
+      - { enemy: interceptor, count: 4, formation: dive_then_strafe, spacing: 0.3, delay: 2.0 }
 
   # ───────── Stage 4 — pre-boss crescendo: WALL + DIVE ─────────
   - at: 138.0
@@ -203,7 +211,7 @@ waves:
     spawn:
       - { enemy: interceptor, count: 4, formation: pincer_top, spacing: 0.3 }
       - { enemy: interceptor, count: 4, formation: mirror(pincer_top), spacing: 0.3, delay: 0.4 }
-      - { enemy: fighter, count: 6, formation: dive_then_strafe, spacing: 0.3, delay: 0.7 }
+      - { enemy: kamikaze, count: 4, formation: kamikaze_dive_right, spacing: 0.3, delay: 0.7 }
 
   # ───────── Boss ─────────
   # Pulled in 240 → 184 (was 20s after final wave; now 10s).
