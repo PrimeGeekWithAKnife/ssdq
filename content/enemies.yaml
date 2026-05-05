@@ -462,11 +462,18 @@ bosses:
     hitbox_radius: 60
     score: 35000
     intro_telegraph_seconds: 2.0
-    # Kid playtest 2026-05-02 #16 — "Level 4 & 5 bosses need a shield
-    # for 10 seconds every 20 seconds of fighting." Cycle is
-    # [vulnerable_secs, shielded_secs]; the boss starts vulnerable on
-    # phase 1 and toggles on the cycle until death.
-    shield_cycle_seconds: [20.0, 10.0]
+    # Shield mechanic. Originally [20.0, 10.0] per kid playtest
+    # 2026-05-02 #16, but kid playtest 2026-05-05 reported "boss 4 has
+    # no shield use at all" — at high weapon tier (now compounded by
+    # resupply scaling drops from issue #5) boss_04 dies before the
+    # 20s vuln window expires, so the cycle's shield never appeared
+    # in play. Two changes:
+    #   * 5s initial-shield seed (matches boss_05's pattern, gives the
+    #     kid a first-5s telegraph that "this boss shields").
+    #   * Cycle vuln window 20 → 12s so the first cycled shield kicks
+    #     in before any plausible kill time.
+    shield_initial_seconds: 5.0
+    shield_cycle_seconds: [12.0, 10.0]
     phases:
       # Phase 1 — "the wall". High-density burst_then_pause: TWO bursts
       # per loop, each burst is FOUR beats clustered ~0.15s apart, then a
