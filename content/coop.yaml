@@ -3,7 +3,7 @@
 coop:
   # Lives & continues
   starting_lives: 3              # per player; options menu can override
-  continues_per_session: 3       # shared
+  continues_per_session: 5       # 3→5 — cautious-pair agent playtest 2026-05-05 burned through 3 in mid-L4
 
   # Respawn behaviour
   respawn_delay: 2.0             # seconds between death and respawn

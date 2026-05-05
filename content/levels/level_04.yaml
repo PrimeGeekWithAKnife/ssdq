@@ -152,7 +152,12 @@ waves:
   # marauders enter staggered (left/centre/right via mirror) and
   # transition to free-roam after their entry. The kid has to manage
   # three persistent threats simultaneously.
-  - at: 115.0
+  # Agent-playtest pair 2026-05-05: the cluster of (sentinel debut at
+  # 112s + 3 marauders at 115s + interceptor sweep at 118s) was the
+  # densest moment in L4 — denser than the boss itself. Pulled the
+  # marauder squadron 7s later (115s -> 122s) to restore breathing
+  # room and keep the boss-fight as the level's peak.
+  - at: 122.0
     stage: 3
     spawn:
       - { enemy: marauder, count: 1, formation: marauder_entry, spacing: 0.0 }

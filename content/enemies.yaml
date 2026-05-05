@@ -157,9 +157,11 @@ enemies:
     # ship crosses the screen in half the wall-clock time it used to.
     speed_along_path: 100     # was 50
     weapon: null
-    score: 1500               # bigger reward than gunship (800), still under boss
+    # 1500→2500 — anemic for the resupply kit-bump it gates (agent playtest 2026-05-05)
+    score: 2500               # bigger reward than gunship (800), still under boss
     drop_chance: 1.0          # 100% drop — guaranteed power-up
-    drop_pool: [pickup_powerup, pickup_speed, pickup_bomb, pickup_health, pickup_shield]
+    # second pickup_shield — cautious pairs starve for shields (agent playtest 2026-05-05)
+    drop_pool: [pickup_powerup, pickup_speed, pickup_bomb, pickup_health, pickup_shield, pickup_shield]
     # Guaranteed missile drop in addition to the random roll (kid
     # playtest 2026-05-03 #4 — "There needs to be more missile power
     # up drops. Likely ideal for a fixed supply ship drop + 1
@@ -286,7 +288,8 @@ enemies:
     # 6 beats clustered into a tight burst, then the fire-loop period
     # (~max beat + 0.5 = 1.85s) gives a clear rearm gap.
     fire_beats: [0.0, 0.15, 0.3, 0.7, 0.85, 1.0]
-    score: 3000
+    # score 3000→5000 to track 60→180 hp tripling (agent playtest 2026-05-05)
+    score: 5000
     drop_chance: 0.75         # mini-boss reward
     drop_pool: [
       pickup_powerup, pickup_powerup,
@@ -467,13 +470,18 @@ bosses:
     # no shield use at all" — at high weapon tier (now compounded by
     # resupply scaling drops from issue #5) boss_04 dies before the
     # 20s vuln window expires, so the cycle's shield never appeared
-    # in play. Two changes:
+    # in play. First fix (2026-05-05 kid-playtest): 5s initial-shield
+    # seed + cycle vuln window 20 → 12s. Agent playtest 2026-05-05
+    # confirmed that even 12s outlasts the kill-time at high weapon
+    # tier — first cycled shield STILL never appeared — so cycle
+    # tightens further to [10.0, 8.0]. Two changes from original:
     #   * 5s initial-shield seed (matches boss_05's pattern, gives the
     #     kid a first-5s telegraph that "this boss shields").
-    #   * Cycle vuln window 20 → 12s so the first cycled shield kicks
-    #     in before any plausible kill time.
+    #   * Cycle vuln window 20 → 10s so the first cycled shield kicks
+    #     in before any plausible kill time; shielded window 10 → 8s
+    #     keeps the gating tight without exhausting an 8-year-old.
     shield_initial_seconds: 5.0
-    shield_cycle_seconds: [12.0, 10.0]
+    shield_cycle_seconds: [10.0, 8.0]
     phases:
       # Phase 1 — "the wall". High-density burst_then_pause: TWO bursts
       # per loop, each burst is FOUR beats clustered ~0.15s apart, then a
@@ -562,10 +570,15 @@ bosses:
     # start with a shield for 20 seconds. Then have a shield for 5
     # seconds every 10 seconds." The 20s opening window forces the
     # kid to dodge (shields are absorbed) before they can start
-    # chipping HP. Cycle [10s vuln / 5s shielded] is tighter than
-    # boss_04's [20/10] so phase-2 onwards is genuinely punishing.
+    # chipping HP. Original cycle [10s vuln / 5s shielded] was the
+    # spec, but agent playtest 2026-05-05 found the post-opener cycle
+    # was effectively invisible — at high weapon tier the boss dies
+    # inside the first 10s vuln window so the cycled shield never
+    # registered. Tightened cycle vuln 10 → 8s so a cycled shield
+    # actually appears between the 20s opener and the kill; cycled
+    # shielded window unchanged (5s) so the kit-spend rhythm holds.
     shield_initial_seconds: 20.0
-    shield_cycle_seconds: [10.0, 5.0]
+    shield_cycle_seconds: [8.0, 5.0]
     # Homing-missile salvo (kid playtest 2026-05-03 #3 — final boss
     # gets player-style missiles "to ensure all those shields
     # collected earlier get used"). Two missiles every 4 seconds —
