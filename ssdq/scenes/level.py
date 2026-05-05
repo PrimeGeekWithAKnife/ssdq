@@ -227,6 +227,19 @@ _LEVEL_BOSS_INTROS: dict[int, str] = {
 _DEFAULT_LEVEL_INTRO = "Mission start"
 _DEFAULT_BOSS_INTRO = "A LARGE ALIEN SHIP APPROACHES - IT FEELS ANGRY"
 
+# High-weapon-tier shield sprinkle — kid playtest 2026-04-28 #7. When
+# either player has reached weapon tier ≥ 3, a deterministic fraction
+# of common enemies spawn with a 1s shield-on-first-hit so the kid
+# meets a few "tougher" ships at high tier without needing a separate
+# armoured-variant content pipeline. Skipped for chunky/already-shielded
+# enemies (bomber, gunship, sentinel, marauder, resupply_ship).
+_HIGH_TIER_SHIELD_TYPES = frozenset({"fighter", "interceptor", "kamikaze", "drone"})
+_HIGH_TIER_SHIELD_THRESHOLD = 3        # min weapon tier that triggers any sprinkle
+_HIGH_TIER_SHIELD_DENSE_THRESHOLD = 4  # at this tier+, sprinkle is denser
+_HIGH_TIER_SHIELD_SPARSE_MOD = 6       # tier 3: every 6th qualifying enemy (~17%)
+_HIGH_TIER_SHIELD_DENSE_MOD = 4        # tier 4+: every 4th qualifying enemy (25%)
+_HIGH_TIER_SHIELD_SECONDS = 1.0
+
 
 def level_intro_text(level: int) -> str:
     """Return the per-level intro banner copy. Falls back to a generic
@@ -1435,8 +1448,32 @@ class LevelScene(Scene):
         # at spawn — the bubble pops up only after the first damaging
         # bullet, and is one-shot (ShieldOnHitConsumed prevents
         # re-activation after the shield expires).
-        if enemy.shield_on_first_hit_seconds > 0.0:
-            world.add(eid, ShieldOnHitConfig(seconds=enemy.shield_on_first_hit_seconds))
+        #
+        # High-weapon-tier sprinkle (kid playtest 2026-04-28 #7 — "alien
+        # ships need to look different and be tougher" at high weapon
+        # tier). When max(p1, p2) weapon level ≥ 3, every Nth common
+        # enemy spawns with a 1s on-hit shield. Deterministic by spawn
+        # index so replays stay bit-identical.
+        shield_secs = enemy.shield_on_first_hit_seconds
+        if (
+            shield_secs == 0.0
+            and enemy.shield_on_spawn_seconds == 0.0
+            and ev.enemy in _HIGH_TIER_SHIELD_TYPES
+        ):
+            max_tier = max(
+                self._powerup_states[P1].weapon.level,
+                self._powerup_states[P2].weapon.level,
+            )
+            if max_tier >= _HIGH_TIER_SHIELD_THRESHOLD:
+                modulus = (
+                    _HIGH_TIER_SHIELD_DENSE_MOD
+                    if max_tier >= _HIGH_TIER_SHIELD_DENSE_THRESHOLD
+                    else _HIGH_TIER_SHIELD_SPARSE_MOD
+                )
+                if (ev.wave_index + ev.spawn_index + ev.member_index) % modulus == 0:
+                    shield_secs = _HIGH_TIER_SHIELD_SECONDS
+        if shield_secs > 0.0:
+            world.add(eid, ShieldOnHitConfig(seconds=shield_secs))
         # Free-roam capability (kid playtest 2026-05-03 #2 + #10). Marker
         # the formation-end branch reads to know "swap to FreeRoamAI
         # instead of despawning" once the entry formation completes. We
