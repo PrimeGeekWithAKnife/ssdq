@@ -166,6 +166,12 @@ enemies:
     # random"). Net result: every supply ship pops 2 pickups — one
     # missile (always) and one drop_pool roll.
     guaranteed_drops: [pickup_missile]
+    # Level-scaled drops (kid playtest 2026-04-28 #5 — "the further
+    # you've made it, the bigger the catch-up boost"). Each entry
+    # spawns level_index times: on level 1 = +1 weapon-tier + +1
+    # ship-speed pickup; on level 4 = +4 of each. Caps fall out of
+    # the standard pickup logic (weapon tree max, +60% speed cap).
+    level_scaled_drops: [pickup_powerup, pickup_ship_speed]
 
   # ───────── Levels 3-5 introductions ─────────
   # New enemy palette to ramp difficulty across the back half of the

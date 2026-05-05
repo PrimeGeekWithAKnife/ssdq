@@ -215,6 +215,7 @@ def _load_enemies(
             passes_unlimited=bool(e.get("passes_unlimited", False)),
             shield_on_first_hit_seconds=float(e.get("shield_on_first_hit_seconds", 0.0)),
             guaranteed_drops=tuple(e.get("guaranteed_drops") or []),
+            level_scaled_drops=tuple(e.get("level_scaled_drops") or []),
             free_roam=_parse_free_roam(e.get("free_roam"), where, name),
         )
 
@@ -249,6 +250,11 @@ def _load_enemies(
             if d not in pickups:
                 raise ContentError(
                     f"{where}:enemies.{enemy.name}: guaranteed_drops references unknown pickup '{d}'"
+                )
+        for d in enemy.level_scaled_drops:
+            if d not in pickups:
+                raise ContentError(
+                    f"{where}:enemies.{enemy.name}: level_scaled_drops references unknown pickup '{d}'"
                 )
 
     bosses: dict[str, BossDef] = {}

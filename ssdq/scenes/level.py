@@ -277,6 +277,9 @@ class FormationFollower:
     # roll_drop result (kid playtest 2026-05-03 #1 + #4 — supply ship
     # drops 1 guaranteed missile + 1 random).
     guaranteed_drops: tuple[str, ...] = ()
+    # Pickups dropped on death, multiplied by current level_index
+    # (kid playtest 2026-04-28 #5 — resupply scaling boost).
+    level_scaled_drops: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -1414,6 +1417,7 @@ class LevelScene(Scene):
                 drop_pool=enemy.drop_pool,
                 passes_remaining=10_000 if enemy.passes_unlimited else ev.return_passes,
                 guaranteed_drops=enemy.guaranteed_drops,
+                level_scaled_drops=enemy.level_scaled_drops,
             ),
             ScoreValue(points=enemy.score),
         )
@@ -2363,6 +2367,23 @@ class LevelScene(Scene):
                     continue
                 offset = (i + 1) * offset_step
                 self._spawn_pickup(world, name, Vec2(pos.x + offset, pos.y))
+        # Level-scaled drops (kid playtest 2026-04-28 #5 — resupply
+        # "limped through compensation": each entry spawns level_index
+        # times, fanned symmetrically left/right so the cluster stays
+        # visually tight even at level 5 (10 pickups + the 2 above).
+        if follower is not None and follower.level_scaled_drops and self.level_index >= 1:
+            scale_offset_step = 24.0
+            spawn_index = 0
+            for name in follower.level_scaled_drops:
+                if name not in self.app.content.pickups:
+                    continue
+                for _ in range(self.level_index):
+                    pair = spawn_index // 2 + 1
+                    direction = -1 if spawn_index % 2 == 0 else 1
+                    dx = direction * pair * scale_offset_step
+                    dy = -scale_offset_step if spawn_index >= 8 else 0.0
+                    self._spawn_pickup(world, name, Vec2(pos.x + dx, pos.y + dy))
+                    spawn_index += 1
         # Visual feedback: explosion at the enemy's position.
         scale = 2 if follower is not None and follower.score >= 600 else 1
         self._spawn_explosion(world, pos, scale=scale)

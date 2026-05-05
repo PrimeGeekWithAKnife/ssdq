@@ -106,6 +106,14 @@ class EnemyDef:
     # 2026-05-03 #1 + #4) to guarantee a missile drop on top of the
     # standard random pickup.
     guaranteed_drops: tuple[str, ...] = ()
+    # Pickups dropped on death, multiplied by the current level number
+    # (kid playtest 2026-04-28 #5 — "limped through compensation": the
+    # further into the campaign the kid has reached, the bigger the
+    # catch-up boost). Each name in the tuple is spawned `level_index`
+    # times. Used by `resupply_ship` to grant +N weapon-tier pickups +
+    # +N ship-speed pickups on level N. Caps fall out of the standard
+    # apply_pickup logic (weapon tree max, +60% ship-speed cap).
+    level_scaled_drops: tuple[str, ...] = ()
     # Free-roam AI config (kid playtest 2026-05-03 #2 + #10). When
     # set, the enemy enters via the configured intro formation, and
     # on formation-end it transitions to FreeRoamAI instead of
