@@ -483,6 +483,9 @@ class BossState:
     shield_remaining: float = 0.0
     cycle_phase: str = "off"  # "off" | "vuln" | "shield"
     cycle_t: float = 0.0
+    # Total seconds the boss has spent shielded — subtracted from the
+    # time-bonus elapsed so shield windows don't penalise the player.
+    shielded_seconds_accumulated: float = 0.0
     # Total damage taken so far across all phases — kid playtest #13.
     # Replaces the old per-phase HP refill model: bar reads
     # (max_total - damage_taken) / max_total which decreases monotonically.
@@ -1901,6 +1904,11 @@ class LevelScene(Scene):
           `shield_remaining` with the shielded duration.
         """
         boss_def = boss_state.boss
+        # Accumulate shielded time BEFORE decay so we don't miss the
+        # final tick of a shield window (and don't double-count once
+        # decay has driven shield_remaining to 0).
+        if boss_state.shield_remaining > 0.0:
+            boss_state.shielded_seconds_accumulated += TICK_DT
         # Shield timer decay first.
         if boss_state.shield_remaining > 0.0:
             boss_state.shield_remaining = max(0.0, boss_state.shield_remaining - TICK_DT)
@@ -1943,7 +1951,11 @@ class LevelScene(Scene):
             # Time bonus — full boss score reduces linearly to zero
             # over a 60-second target. Quick kill = full bonus,
             # 60s+ fight = no bonus.
-            elapsed = max(0.0, self._sim_time - boss_state.fight_started_at)
+            elapsed = max(
+                0.0,
+                (self._sim_time - boss_state.fight_started_at)
+                - boss_state.shielded_seconds_accumulated,
+            )
             bonus_factor = max(0.0, min(1.0, 1.0 - elapsed / 60.0))
             bonus = max(0, int(boss_state.boss.score * bonus_factor))
             if bonus > 0:

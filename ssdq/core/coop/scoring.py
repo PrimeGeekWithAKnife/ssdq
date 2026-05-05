@@ -77,12 +77,21 @@ class ScoreLedger:
     def award(self, slot: PlayerSlot, base_points: int, *, multiplier: float = 1.0) -> int:
         """Award `base_points * multiplier` to `slot`'s personal score and
         the team total. Returns the actual points awarded (after
-        `math.floor` and clamping)."""
+        `math.floor` and clamping).
+
+        Big-ticket awards (`base_points >= 5000`, e.g. boss kills) cap
+        the proximity multiplier at 1.25 so a single co-op kill can't
+        balloon the leaderboard. Sub-5000 awards (regular enemies)
+        retain the full configured multiplier.
+        """
         if base_points < 0:
             raise ValueError(f"base_points must be ≥ 0, got {base_points}")
         if multiplier < 0.0:
             raise ValueError(f"multiplier must be ≥ 0, got {multiplier}")
-        awarded = math.floor(base_points * multiplier)
+        effective_mult = multiplier
+        if base_points >= 5000 and effective_mult > 1.25:
+            effective_mult = 1.25
+        awarded = math.floor(base_points * effective_mult)
         if slot == P1:
             self._p1 += awarded
         elif slot == P2:
