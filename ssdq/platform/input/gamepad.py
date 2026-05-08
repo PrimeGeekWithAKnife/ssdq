@@ -261,6 +261,17 @@ class GamepadProvider:
         binding = self._bindings.get(pad.get_guid(), pad_name=pad.get_name())
 
         move = _deadzone_stick(_safe_axis(pad, AXIS_LX), _safe_axis(pad, AXIS_LY))
+        # Cheap HID pads report D-pad as a hat (POV) rather than analogue
+        # stick axes — kid playtest 2026-05-08: "controllers cannot select
+        # any option other than the default choice". Fold hat into move
+        # when the stick axis is at rest so menus + gameplay both work
+        # with the D-pad. Pygame hat-Y is inverted vs SDL stick-Y
+        # (hat +y = up, stick +y = down on Xbox layout) — negate.
+        hat_x, hat_y = _safe_hat(pad, 0)
+        if abs(move.x) < 0.05 and hat_x != 0:
+            move = Vec2(float(hat_x), move.y)
+        if abs(move.y) < 0.05 and hat_y != 0:
+            move = Vec2(move.x, -float(hat_y))
 
         fire_held = _safe_button(pad, binding.button_for(BindingAction.FIRE))
         confirm_held = _safe_button(pad, binding.button_for(BindingAction.CONFIRM))
@@ -310,6 +321,18 @@ def _safe_button(pad: pygame.joystick.JoystickType, button: int) -> bool:
     if button < 0 or button >= pad.get_numbuttons():
         return False
     return bool(pad.get_button(button))
+
+
+def _safe_hat(pad: pygame.joystick.JoystickType, hat_index: int) -> tuple[int, int]:
+    """Read a hat (D-pad / POV), returning (0, 0) if the pad doesn't expose it.
+
+    SDL hat conventions: x in {-1, 0, +1} = left/centre/right;
+    y in {-1, 0, +1} = down/centre/up (note: y is inverted vs the
+    left-stick axis on Xbox-layout pads, where +y = down).
+    """
+    if hat_index < 0 or hat_index >= pad.get_numhats():
+        return (0, 0)
+    return pad.get_hat(hat_index)
 
 
 def _any_button_pressed(pad: pygame.joystick.JoystickType) -> bool:

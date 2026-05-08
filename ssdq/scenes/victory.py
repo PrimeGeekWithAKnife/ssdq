@@ -28,13 +28,18 @@ _HINT_COLOUR = (130, 150, 180)
 class VictoryScene(Scene):
     """End-of-campaign celebration screen."""
 
-    __slots__ = ("_app", "_body_font", "_hint_font", "_title_font")
+    __slots__ = ("_app", "_body_font", "_hint_font", "_prev_confirm", "_prev_fire", "_title_font")
 
     def __init__(self, app: AppState) -> None:
         self._app = app
         self._title_font: pygame.font.Font | None = None
         self._body_font: pygame.font.Font | None = None
         self._hint_font: pygame.font.Font | None = None
+        # Held-fire blocker — the kid was firing when the boss died, so
+        # without rising-edge the celebration banner is auto-skipped in
+        # one tick. Kid playtest 2026-05-08 #3.
+        self._prev_fire: bool = True
+        self._prev_confirm: bool = True
 
     def enter(self, world: World) -> None:
         if not pygame.font.get_init():
@@ -49,9 +54,13 @@ class VictoryScene(Scene):
         tick: TickIndex,
         inputs: tuple[PlayerInput, PlayerInput],
     ) -> SceneTransition | None:
-        if not (
-            inputs[0].confirm or inputs[1].confirm or inputs[0].fire or inputs[1].fire
-        ):
+        fire_now = inputs[0].fire or inputs[1].fire
+        confirm_now = inputs[0].confirm or inputs[1].confirm
+        rising_fire = fire_now and not self._prev_fire
+        rising_confirm = confirm_now and not self._prev_confirm
+        self._prev_fire = fire_now
+        self._prev_confirm = confirm_now
+        if not (rising_fire or rising_confirm):
             return None
         from ssdq.core.leaderboard import add_entry, load, qualifies, save
         from ssdq.scenes.initials import InitialsScene

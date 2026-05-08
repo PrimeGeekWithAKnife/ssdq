@@ -27,7 +27,12 @@ logger = logging.getLogger(__name__)
 _FREQUENCY = 44_100
 _BIT_DEPTH = -16  # signed 16-bit
 _CHANNELS = 2  # stereo
-_BUFFER = 512
+# Buffer bumped 512 → 1024 (kid playtest 2026-05-08 reported "music
+# stutters occasionally" on the Pi 5). 512 samples = ~12ms at 44.1kHz
+# which underruns under load on aarch64 with multiple SFX channels
+# firing simultaneously. 1024 = ~23ms is still imperceptible for a
+# kid's shmup but reliably stutter-free.
+_BUFFER = 1024
 
 
 class AudioBus:

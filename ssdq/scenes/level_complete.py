@@ -32,7 +32,14 @@ _TEXT_COLOUR = (220, 240, 230)
 class LevelCompleteScene(Scene):
     """Banner + final scores. Routes to next level via DockingScene."""
 
-    __slots__ = ("_app", "_body_font", "_completed_level_index", "_title_font")
+    __slots__ = (
+        "_app",
+        "_body_font",
+        "_completed_level_index",
+        "_prev_confirm",
+        "_prev_fire",
+        "_title_font",
+    )
 
     def __init__(self, app: AppState, completed_level_index: int | None = None) -> None:
         self._app = app
@@ -44,6 +51,13 @@ class LevelCompleteScene(Scene):
         )
         self._title_font: pygame.font.Font | None = None
         self._body_font: pygame.font.Font | None = None
+        # Held-fire blocker — the kid is shooting when the boss dies, so
+        # without rising-edge detection the level-clear banner is
+        # auto-dismissed in one tick and the kid never sees it. Same
+        # convention as TitleScene / LeaderboardScene. Kid playtest
+        # 2026-05-08 #3.
+        self._prev_fire: bool = True
+        self._prev_confirm: bool = True
 
     def enter(self, world: World) -> None:
         if not pygame.font.get_init():
@@ -57,7 +71,13 @@ class LevelCompleteScene(Scene):
         tick: TickIndex,
         inputs: tuple[PlayerInput, PlayerInput],
     ) -> SceneTransition | None:
-        if not (inputs[0].confirm or inputs[1].confirm or inputs[0].fire or inputs[1].fire):
+        fire_now = inputs[0].fire or inputs[1].fire
+        confirm_now = inputs[0].confirm or inputs[1].confirm
+        rising_fire = fire_now and not self._prev_fire
+        rising_confirm = confirm_now and not self._prev_confirm
+        self._prev_fire = fire_now
+        self._prev_confirm = confirm_now
+        if not (rising_fire or rising_confirm):
             return None
         # Advance the session pointer to the next level (if any) BEFORE
         # entering the docking cinematic, so DockingScene knows where to
