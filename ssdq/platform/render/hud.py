@@ -79,14 +79,19 @@ class Hud:
             x=_PADDING,
             anchor_left=True,
         )
-        self._draw_panel(
-            surface,
-            label="P2",
-            colour=_P2_COLOUR,
-            stats=_player_stats(state, "p2"),
-            x=surface.get_width() - _PADDING,
-            anchor_left=False,
-        )
+        # P2 panel skipped in single-player mode (added 2026-05-08).
+        # The P2 ship is never spawned, so its life/score column is
+        # meaningless — hide it rather than show zeros that would
+        # imply a dead second player.
+        if not getattr(state, "single_player", False):
+            self._draw_panel(
+                surface,
+                label="P2",
+                colour=_P2_COLOUR,
+                stats=_player_stats(state, "p2"),
+                x=surface.get_width() - _PADDING,
+                anchor_left=False,
+            )
         self._draw_controls_hint(surface)
 
     def _draw_controls_hint(self, surface: pygame.Surface) -> None:

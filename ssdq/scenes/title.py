@@ -1,10 +1,13 @@
-"""Title scene: PLAY / SETTINGS menu. Doubles as Lobby per spec §4.4.
+"""Title scene menu. Doubles as Lobby per spec §4.4.
 
-Default selection is PLAY so existing reflexes (mash FIRE → start playing)
-keep working. Stick-Y (or pad-D-pad) cycles between PLAY and SETTINGS;
-selecting SETTINGS pushes the gamepad-rebind scene (kid playtest 2026-04-28
-#1+#2 — players need to remap buttons that don't match the canonical
-Xbox layout on cheap HID pads).
+Five options: 1 PLAYER / 2 PLAYERS / LEVELS / HIGH SCORES / SETTINGS.
+Default selection is 2 PLAYERS so existing reflexes (mash FIRE → start
+co-op) keep working; 1 PLAYER sits above it so an arriving solo player
+sees the option immediately. Stick-Y / D-pad navigates rows.
+
+The 1P / 2P split (added 2026-05-08) sets `app.single_player` before
+routing to the campaign — LevelScene reads the flag and skips P2's
+ship spawn + HUD column when solo.
 """
 
 from __future__ import annotations
@@ -27,20 +30,26 @@ _HINT_COLOUR = (130, 130, 150)
 # Stick-Y rising-edge threshold for menu navigation.
 _NAV_THRESHOLD = 0.5
 
-_OPTION_PLAY = "PLAY"
+_OPTION_ONE_PLAYER = "1 PLAYER"
+_OPTION_TWO_PLAYERS = "2 PLAYERS"
 _OPTION_LEVELS = "LEVELS"
 _OPTION_SCORES = "HIGH SCORES"
 _OPTION_SETTINGS = "SETTINGS"
 _OPTIONS: tuple[str, ...] = (
-    _OPTION_PLAY,
+    _OPTION_ONE_PLAYER,
+    _OPTION_TWO_PLAYERS,
     _OPTION_LEVELS,
     _OPTION_SCORES,
     _OPTION_SETTINGS,
 )
+# Default cursor lands on 2 PLAYERS (the existing arcade-flow option) so
+# mash-FIRE on title still launches co-op. 1 PLAYER sits above it for
+# visual reading order; an arriving solo player nudges up once.
+_DEFAULT_SELECTED_INDEX = 1
 
 
 class TitleScene(Scene):
-    """Three-option menu (PLAY / LEVELS / SETTINGS). Confirm activates the row."""
+    """Five-option menu (1 PLAYER / 2 PLAYERS / LEVELS / HIGH SCORES / SETTINGS). Confirm activates the row."""
 
     __slots__ = (
         "_app",
@@ -64,7 +73,7 @@ class TitleScene(Scene):
         # immediately re-enter Level when GameOver bounces back to Title.
         self._prev_fire = True
         self._prev_y: float = 0.0
-        self._selected_index: int = 0
+        self._selected_index: int = _DEFAULT_SELECTED_INDEX
 
     def enter(self, world: World) -> None:
         if not pygame.font.get_init():
@@ -122,10 +131,15 @@ class TitleScene(Scene):
         if not (confirm or rising_fire):
             return None
         chosen = _OPTIONS[self._selected_index]
-        if chosen == _OPTION_PLAY:
+        if chosen in (_OPTION_ONE_PLAYER, _OPTION_TWO_PLAYERS):
             from ssdq.scenes.intro import IntroScene
             from ssdq.scenes.level import LevelScene
 
+            # Solo vs co-op flag — LevelScene reads this to decide whether
+            # to spawn P2's ship + HUD column. Set BEFORE clear_progression
+            # so the selection survives the reset (clear_progression is
+            # progression-state only, not session mode).
+            self._app.single_player = chosen == _OPTION_ONE_PLAYER
             # Fresh campaign start — clear any carry-forward state from a
             # previous game-over so we don't inherit stale bomb stockpile,
             # weapon tier or score (kid playtest 2026-04-28 #4).

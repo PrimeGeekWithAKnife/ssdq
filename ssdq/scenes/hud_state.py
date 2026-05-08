@@ -38,3 +38,8 @@ class HudCoopState:
     team_score: int
     p1: HudPlayerStats
     p2: HudPlayerStats
+    # Solo-play flag (added 2026-05-08). When True the HUD suppresses
+    # the P2 panel — the P2 ship was never spawned in single-player
+    # mode so its lives/score column is meaningless. Default False
+    # preserves the existing two-panel layout.
+    single_player: bool = False

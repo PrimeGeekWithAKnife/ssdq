@@ -36,6 +36,13 @@ class AppState:
     last_p2_score: int = 0
     completed_level: bool = False
 
+    # Solo-play mode (added 2026-05-08). When True, LevelScene only spawns
+    # P1 and the HUD hides the P2 column. Set by TitleScene on the
+    # 1 PLAYER row; cleared on 2 PLAYERS. NOT cleared by
+    # clear_progression — it's a session-mode flag set by the title each
+    # entry, not a campaign-progression artefact.
+    single_player: bool = False
+
     # Per-pad button bindings. Optional so pre-existing scene tests that
     # build a bare AppState still construct; main.py always wires this in
     # at startup so production code can rely on it being present.

@@ -573,6 +573,13 @@ class LevelScene(Scene):
             p1_lives=seeded_p1_lives,
             p2_lives=seeded_p2_lives,
         )
+        # Solo-play mode (added 2026-05-08): force P2 OUT so
+        # CoopSession.is_game_over fires on a P1 wipeout. The
+        # _engaged gate in _apply_player_input skips continue
+        # consumption for non-engaged-yet-OUT slots, so P2 stays out
+        # cleanly without burning the player's continues.
+        if self.app.single_player:
+            self._session.mark_out(P2)
         # Powerup state per slot — one ship type for the slice; tree name
         # is parsed off the primary weapon name (e.g. "pulse_lvl1" → "pulse").
         ship = bundle.ships["vanguard"]
@@ -636,9 +643,14 @@ class LevelScene(Scene):
         self._telegraphed = set()
         self._engaged = set()
 
-        # Spawn both player ships immediately (slice has no ship-select).
+        # Spawn P1 immediately. P2 only spawns in 2-player mode (added
+        # 2026-05-08); the title menu sets app.single_player. The
+        # _engaged gate elsewhere already keeps an unspawned P2 out of
+        # lifecycle/continue accounting, so all that's needed here is
+        # the spawn skip.
         self._spawn_player(world, P1, self._player_positions[P1])
-        self._spawn_player(world, P2, self._player_positions[P2])
+        if not self.app.single_player:
+            self._spawn_player(world, P2, self._player_positions[P2])
 
         # HUD snapshot resource (renderer reads via duck-typed shape).
         world.insert_resource(self._build_hud_state(world))
@@ -2758,6 +2770,7 @@ class LevelScene(Scene):
                 missile_level=p2.missile_level,
                 drones=drones_p2,
             ),
+            single_player=self.app.single_player,
         )
 
     def _switch_music(self, name: str) -> None:

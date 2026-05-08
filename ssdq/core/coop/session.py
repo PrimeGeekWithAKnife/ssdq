@@ -73,6 +73,19 @@ class CoopSession:
             self.lifecycle(slot).hit(config=self.config, options=self.options),
         )
 
+    def mark_out(self, slot: PlayerSlot) -> None:
+        """Force `slot` into OUT state with 0 lives.
+
+        Used by single-player mode (added 2026-05-08) to keep P2 from
+        blocking ``is_game_over`` — a never-engaged P2 would otherwise
+        sit at ALIVE forever and the campaign could never end on a
+        P1 wipeout.
+        """
+        self._set_lifecycle(
+            slot,
+            PlayerLifecycle(slot=slot, state=LifecycleState.OUT, lives=0),
+        )
+
     def tick(self, dt: float) -> None:
         """Advance both players' lifecycles by `dt`."""
         self.p1 = self.p1.tick(dt, config=self.config)
