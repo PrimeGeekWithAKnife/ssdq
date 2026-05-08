@@ -36,8 +36,6 @@ class LevelCompleteScene(Scene):
         "_app",
         "_body_font",
         "_completed_level_index",
-        "_prev_confirm",
-        "_prev_fire",
         "_title_font",
     )
 
@@ -51,13 +49,6 @@ class LevelCompleteScene(Scene):
         )
         self._title_font: pygame.font.Font | None = None
         self._body_font: pygame.font.Font | None = None
-        # Held-fire blocker — the kid is shooting when the boss dies, so
-        # without rising-edge detection the level-clear banner is
-        # auto-dismissed in one tick and the kid never sees it. Same
-        # convention as TitleScene / LeaderboardScene. Kid playtest
-        # 2026-05-08 #3.
-        self._prev_fire: bool = True
-        self._prev_confirm: bool = True
 
     def enter(self, world: World) -> None:
         if not pygame.font.get_init():
@@ -71,13 +62,14 @@ class LevelCompleteScene(Scene):
         tick: TickIndex,
         inputs: tuple[PlayerInput, PlayerInput],
     ) -> SceneTransition | None:
-        fire_now = inputs[0].fire or inputs[1].fire
-        confirm_now = inputs[0].confirm or inputs[1].confirm
-        rising_fire = fire_now and not self._prev_fire
-        rising_confirm = confirm_now and not self._prev_confirm
-        self._prev_fire = fire_now
-        self._prev_confirm = confirm_now
-        if not (rising_fire or rising_confirm):
+        # END-SCREEN ADVANCE = START button only (kid playtest 2026-05-08).
+        # The kid is mashing FIRE through the whole boss fight; even
+        # rising-edge FIRE detection trips within 200ms because they
+        # naturally release-and-press. START is never held during
+        # gameplay (pause toggle uses it but releases immediately) so
+        # it cleanly distinguishes "I want to advance" from "I'm still
+        # firing reflexively". inp.pause is already edge-triggered.
+        if not (inputs[0].pause or inputs[1].pause):
             return None
         # Advance the session pointer to the next level (if any) BEFORE
         # entering the docking cinematic, so DockingScene knows where to
@@ -106,7 +98,7 @@ class LevelCompleteScene(Scene):
             f"Team score: {self._app.last_team_score:08d}",
             f"P1: {self._app.last_p1_score:08d}    P2: {self._app.last_p2_score:08d}",
             "",
-            "Press FIRE to continue",
+            "Press START to continue",
         ]
         y = h // 2
         for line in lines:

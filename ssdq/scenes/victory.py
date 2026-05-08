@@ -28,18 +28,13 @@ _HINT_COLOUR = (130, 150, 180)
 class VictoryScene(Scene):
     """End-of-campaign celebration screen."""
 
-    __slots__ = ("_app", "_body_font", "_hint_font", "_prev_confirm", "_prev_fire", "_title_font")
+    __slots__ = ("_app", "_body_font", "_hint_font", "_title_font")
 
     def __init__(self, app: AppState) -> None:
         self._app = app
         self._title_font: pygame.font.Font | None = None
         self._body_font: pygame.font.Font | None = None
         self._hint_font: pygame.font.Font | None = None
-        # Held-fire blocker — the kid was firing when the boss died, so
-        # without rising-edge the celebration banner is auto-skipped in
-        # one tick. Kid playtest 2026-05-08 #3.
-        self._prev_fire: bool = True
-        self._prev_confirm: bool = True
 
     def enter(self, world: World) -> None:
         if not pygame.font.get_init():
@@ -54,13 +49,10 @@ class VictoryScene(Scene):
         tick: TickIndex,
         inputs: tuple[PlayerInput, PlayerInput],
     ) -> SceneTransition | None:
-        fire_now = inputs[0].fire or inputs[1].fire
-        confirm_now = inputs[0].confirm or inputs[1].confirm
-        rising_fire = fire_now and not self._prev_fire
-        rising_confirm = confirm_now and not self._prev_confirm
-        self._prev_fire = fire_now
-        self._prev_confirm = confirm_now
-        if not (rising_fire or rising_confirm):
+        # END-SCREEN ADVANCE = START button only (kid playtest 2026-05-08).
+        # Kid mashes FIRE through the boss fight; START is the only
+        # button reliably idle when the boss dies.
+        if not (inputs[0].pause or inputs[1].pause):
             return None
         from ssdq.core.leaderboard import add_entry, load, qualifies, save
         from ssdq.scenes.initials import InitialsScene
@@ -131,7 +123,7 @@ class VictoryScene(Scene):
             r = self._body_font.render(line, True, _BODY_COLOUR)
             surface.blit(r, r.get_rect(center=(w // 2, y)))
             y += r.get_height() + 8
-        hint = self._hint_font.render("FIRE to return to title", True, _HINT_COLOUR)
+        hint = self._hint_font.render("START to continue", True, _HINT_COLOUR)
         surface.blit(hint, hint.get_rect(center=(w // 2, h - 60)))
 
     def exit(self, world: World) -> None:

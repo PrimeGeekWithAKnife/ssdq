@@ -45,8 +45,6 @@ class InitialsScene(Scene):
         "_hint_font",
         "_letter_font",
         "_on_submit",
-        "_prev_confirm",
-        "_prev_fire",
         "_prev_x",
         "_prev_y",
         "_score",
@@ -69,11 +67,6 @@ class InitialsScene(Scene):
         self._slot_index: int = 0
         self._prev_x: float = 0.0
         self._prev_y: float = 0.0
-        # Held-fire blocker — without rising-edge detection, FIRE held
-        # from the upstream VictoryScene auto-submits "AAA" on the very
-        # first tick of this scene. Kid playtest 2026-05-08 #3.
-        self._prev_fire: bool = True
-        self._prev_confirm: bool = True
         self._title_font: pygame.font.Font | None = None
         self._letter_font: pygame.font.Font | None = None
         self._body_font: pygame.font.Font | None = None
@@ -95,12 +88,6 @@ class InitialsScene(Scene):
     ) -> SceneTransition | None:
         # Either pad navigates — typical for handing the controller
         # over to whichever player is faster off the mark.
-        fire_now = inputs[0].fire or inputs[1].fire
-        confirm_now = inputs[0].confirm or inputs[1].confirm
-        rising_fire = fire_now and not self._prev_fire
-        rising_confirm = confirm_now and not self._prev_confirm
-        self._prev_fire = fire_now
-        self._prev_confirm = confirm_now
         for inp in inputs:
             x = inp.move.x
             y = inp.move.y
@@ -120,7 +107,11 @@ class InitialsScene(Scene):
                 ) % len(_LETTERS)
             self._prev_x = x
             self._prev_y = y
-        if rising_fire or rising_confirm:
+        # SUBMIT = START button (kid playtest 2026-05-08). FIRE is held
+        # constantly during boss combat; using START avoids auto-submit
+        # of the default "AAA" the moment the kid lands on this scene.
+        # inp.pause is already edge-triggered.
+        if inputs[0].pause or inputs[1].pause:
             initials = "".join(_LETTERS[i] for i in self._slots)
             return self._on_submit(initials)
         return None
@@ -160,7 +151,7 @@ class InitialsScene(Scene):
         hints = [
             "STICK UP/DOWN to change letter",
             "STICK LEFT/RIGHT to move between letters",
-            "FIRE to confirm",
+            "START to submit",
         ]
         hy = h - 24 - len(hints) * 28
         for line in hints:
