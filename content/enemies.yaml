@@ -310,6 +310,31 @@ enemies:
       dodge_aggression: 0.4
       zone: [80, 320]         # upper play zone — kid still has space below
 
+  # ───────── Levels 6-7 introductions ─────────
+  # Fun review 2026-06-12 R5 — the boy asked for more levels after the
+  # 2026-05-10 playtest verdict. Level 6's signature mechanic is COVER.
+
+  # Level 6 introduction — drifting rock that EATS enemy lasers
+  # (blocks_enemy_bullets). The kid's intro banner says it outright:
+  # "Hide behind the rocks - they eat alien lasers!" Unarmed and slow
+  # (speed 40 on 7-10s paths = 17-25s on screen) so the rocks linger
+  # as terrain through the calm stretches and keep the 5s idle-cue
+  # from compressing the level. Destructible by design — 14 hp is a
+  # deliberate chunk so popping one is a CHOICE (lose your cover, gain
+  # the lane), not a reflex. No drops and a token score: the reward
+  # for shooting a rock is the opened lane, and an empty drop_pool
+  # keeps it out of the kid-tuned 10% drop floor for combatants
+  # (test_resupply_ship.py excludes pool-less enemies).
+  asteroid_hulk:
+    sprite: enemies/asteroid_hulk.png
+    hitbox_radius: 40         # ~full visual — cover should feel solid
+    hp: 14                    # a commitment to clear, trivial to leave
+    speed_along_path: 40      # slowest mover in the game — it's terrain
+    weapon: null
+    score: 150                # token — the lane is the reward, not points
+    drop_chance: 0.0          # rocks don't carry cargo
+    blocks_enemy_bullets: true
+
 # Boss definition. Phase inside the Level scene, not a separate scene
 # (per spec §4.4). Two phases per spec §2 DOD #4.
 bosses:
@@ -666,6 +691,108 @@ bosses:
         formation: boss_lemniscate_wide
         weapon: ring_shot
         fire_beats: [0.5, 3.2, 5.9, 7.8]
+
+  # Level-6 boss "THE CARRIER" — a derelict alien flagship drifting in
+  # the asteroid graveyard, waking up as the kid arrives (fun review
+  # 2026-06-12 R5). Two phases: post-campaign-finale levels go back to
+  # the readable two-act structure — L6/L7 are the kid's victory lap,
+  # the difficulty lives in the escort waves the scheduler keeps firing
+  # at boss_at+20/+40 (carrier launches its swarm), not in a third
+  # phase. 1900+1900 = 3800 total — a step past boss_05's 3300 because
+  # the kid arrives with L6 kit, but the per-phase pace stays honest.
+  #
+  # Weapons reuse the two families the kid has mastered: a thinned
+  # burst_then_pause wall on the X-dive (≈ boss_04 phase 1 with ~20%
+  # fewer beats — 6 per 7s loop vs 8 — because the escorts share the
+  # screen), then ring_shot from the low hover so the rings reach the
+  # play zone fast. shield_on_phase_start gives a 3s breather at the
+  # handover (first transition ONLY — level.py gates phase_index == 1)
+  # so the kid registers "phase two" before the rings start.
+  #
+  # §6.3 mastery constraint holds: both weapons are pattern=fan, all
+  # variation is in the deterministic fire_beats. Same input → same
+  # fight.
+  boss_06:
+    sprite: enemies/boss_06.png
+    hitbox_radius: 70                    # long carrier hull — between boss_05 (64) and boss_07 (72)
+    score: 40000
+    intro_telegraph_seconds: 3.0         # post-finale bosses keep the long "register it" beat
+    shield_on_phase_start_seconds: 3.0
+    phases:
+      # Phase 1 — the wall, thinned. boss_04's two-burst X-dive shape
+      # with 3 beats per burst instead of 4: the carrier's interceptor
+      # escorts (level_06.yaml, boss_at+20) take the density budget the
+      # missing beats free up.
+      - hp: 1900
+        formation: boss_dive_cross
+        weapon: burst_then_pause
+        fire_beats: [0.15, 0.30, 0.45, 2.05, 2.20, 2.35]
+
+      # Phase 2 — rings off the deck. Low hover + ring_shot is the
+      # boss_03-gasp pairing the kid already knows; 4 rings across the
+      # 6s loop keeps each ring readable while kamikaze escorts
+      # (boss_at+40) force the kid to keep moving between them.
+      - hp: 1900
+        formation: boss_low_hover
+        weapon: ring_shot
+        fire_beats: [0.6, 2.0, 3.4, 4.8]
+
+  # Level-7 boss "THE MOTHERSHIP" — the end of the invasion. Biggest
+  # reward in the game (60000) and the only boss that flies ONE path
+  # for the whole fight: all three phases ride the full-width
+  # lemniscate, so the fight's identity is "the mothership never stops
+  # sweeping" and the phases are purely about what it throws. 3×1400 =
+  # 4200 total — the new campaign ceiling, earned via the four
+  # escorted resupply ships level_07.yaml feeds the kid on the way in.
+  #
+  # Shield kit follows the boss_05 pattern but harder: 12s opening
+  # shield (the kid spends it learning the lemniscate sweep), then an
+  # [8s vuln / 6s shielded] cycle. Homing missiles every 5s in pairs —
+  # slightly slower than boss_05's 4s cadence, because the escort
+  # waves at boss_at+20/+44 already spend the kid's attention.
+  #
+  # Phase arc: aimed_triple (the kid's oldest known threat, at finale
+  # tempo) → ring_shot (sparse, readable) → burst_then_pause hotter
+  # than either (three 4-beat bursts per loop, 1.33 beats/s vs phase
+  # 1's 1.0) — the "fire everything" ending the intro banner promises.
+  # All three weapons are fan/aimed_fan; §6.3 holds to the last fight.
+  boss_07:
+    sprite: enemies/boss_07.png
+    hitbox_radius: 72                    # widest silhouette in the game — layered saucer
+    score: 60000
+    intro_telegraph_seconds: 3.0
+    shield_initial_seconds: 12.0
+    shield_cycle_seconds: [8.0, 6.0]
+    homing_missile_rate_seconds: 5.0
+    homing_missile_salvo: 2
+    phases:
+      # Phase 1 — aimed_triple on a steady 0.9s grid across the 9s
+      # lemniscate. The familiar 3-bullet aimed fan, but fired from a
+      # boss that crosses the whole screen width — the aim point moves
+      # constantly, so the kid tracks the saucer, not a lane.
+      - hp: 1400
+        formation: boss_lemniscate_wide
+        weapon: aimed_triple
+        fire_beats: [0.5, 1.4, 2.3, 3.2, 4.1, 5.0, 5.9, 6.8, 7.7]
+
+      # Phase 2 — rings while sweeping. 5 rings across the 9s loop:
+      # sparser per second than phase 1 but the lemniscate drags each
+      # ring's origin across the screen, so consecutive rings overlap
+      # into a weave. The breather phase before the finale.
+      - hp: 1400
+        formation: boss_lemniscate_wide
+        weapon: ring_shot
+        fire_beats: [0.8, 2.6, 4.4, 6.2, 8.0]
+
+      # Phase 3 — FIRE EVERYTHING. Three 4-beat burst_then_pause
+      # clusters per loop (12 beats / 9s ≈ 1.33/s — strictly hotter
+      # than either earlier phase) while the homing-missile salvos keep
+      # coming. The last ~14 seconds of the invasion; the kid spends
+      # every banked shield here and that is the point.
+      - hp: 1400
+        formation: boss_lemniscate_wide
+        weapon: burst_then_pause
+        fire_beats: [0.2, 0.4, 0.6, 0.8, 3.1, 3.3, 3.5, 3.7, 6.0, 6.2, 6.4, 6.6]
 
 # Enemy weapon definitions. Bullets are deterministic — see top-of-file note.
 enemy_weapons:

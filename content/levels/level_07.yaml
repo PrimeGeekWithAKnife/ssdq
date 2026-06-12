@@ -1,0 +1,168 @@
+# Level 7 — "Mothership Convoy"
+# The end of the invasion (fun review 2026-06-12 R5). The mothership's
+# supply convoy is making its run to the front — the kid intercepts it.
+#
+# Music: music/level_07.ogg pool (C-minor march — see
+# tools/music_levels.py compose_level_07; per-entry rotation adds _b/_c
+# variants). Boss music: music/boss_07.ogg. Background: bg_starfield_01
+# (deep space — the convoy is the scenery).
+#
+# Signature pressure: POWER IS EARNED. The fun review's R2 pass closed
+# the max-kit faucet, so L7's powerup engine is FOUR escorted resupply
+# ships — each one arrives wrapped in a fighting escort the kid has to
+# peel off before the transport crosses out. The mook mix deliberately
+# leans on the low-drop hulls (fighter 20%, interceptor 18%, drone /
+# kamikaze 10%) so skipping a convoy fight means arriving at the
+# mothership under-kitted. The intro banner says it straight: "Blast
+# the supply ships to power up!"
+#
+# Length: 280 seconds = boss_at (208) + 72. THE MOTHERSHIP opens with
+# a 12s shield and cycles [8 vuln / 6 shielded], so its fight runs
+# long by design; its escort waves land at boss_at+20/+44 and the
+# window past them keeps a slow kill from clipping level-complete.
+# Crescendo stays well under the L5 peak (251 bullets / ~360 entities,
+# the Pi 5 ceiling) — the heat here is shields + homing missiles, not
+# raw bullet count.
+
+level: 7
+title: "Mothership Convoy"
+codename: mothership_convoy
+music: music/level_07.ogg
+boss_music: music/boss_07.ogg
+background: bg_starfield_01
+length_seconds: 280
+
+waves:
+  # Stage 1 — convoy outriders. Light hulls only; the kid's kit was
+  # reset-ish by the R2 faucet cap, so the opener is winnable at
+  # entry tier while the first escorted transport approaches.
+  - at: 2.0
+    stage: 1
+    spawn:
+      - { enemy: fighter, count: 5, formation: arc_left_to_right, spacing: 0.4 }
+      - { enemy: drone, count: 4, formation: slow_descent_centre, spacing: 0.5, delay: 1.5 }
+
+  - at: 14.0
+    stage: 1
+    spawn:
+      - { enemy: interceptor, count: 5, formation: dive_then_strafe, spacing: 0.3 }
+      - { enemy: interceptor, count: 5, formation: mirror(dive_then_strafe), spacing: 0.3, delay: 0.6 }
+
+  # ESCORTED RESUPPLY #1 of 4 — the level's deal, stated early: the
+  # transport crosses the top while its escort dives the kid. Kill the
+  # escort, then the transport, and the kit grows. Ignore it and it
+  # leaves with the powerups.
+  - at: 28.0
+    stage: 1
+    spawn:
+      - { enemy: resupply_ship, count: 1, formation: resupply_cruise, spacing: 0.0 }
+      - { enemy: fighter, count: 4, formation: pincer_top, spacing: 0.35, delay: 0.5 }
+      - { enemy: kamikaze, count: 3, formation: kamikaze_dive_right, spacing: 0.4, delay: 1.5 }
+
+  - at: 42.0
+    stage: 1
+    spawn:
+      - { enemy: sentinel, count: 1, formation: marauder_entry, spacing: 0.0 }
+      - { enemy: interceptor, count: 4, formation: sweep_horizontal, spacing: 0.3, delay: 1.0 }
+
+  # Surprise wave #1 of 3 — kamikazes up the right flank while the
+  # sentinel still holds the upper zone. Then a 14s calm.
+  - at: 46.0
+    stage: 1
+    spawn:
+      - { enemy: kamikaze, count: 4, formation: from_below_right, spacing: 0.35 }
+
+  # Stage 2 — the convoy's fighting screen. Mini-boss anchors start
+  # arriving; the second transport comes wrapped in a mirrored pincer.
+  - at: 66.0
+    stage: 2
+    spawn:
+      - { enemy: marauder, count: 1, formation: marauder_entry, spacing: 0.0 }
+      - { enemy: drone, count: 6, formation: figure_eight_centre, spacing: 0.3, delay: 1.0 }
+
+  # ESCORTED RESUPPLY #2 of 4.
+  - at: 82.0
+    stage: 2
+    spawn:
+      - { enemy: resupply_ship, count: 1, formation: resupply_cruise, spacing: 0.0 }
+      - { enemy: interceptor, count: 4, formation: pincer_top, spacing: 0.3, delay: 0.5 }
+      - { enemy: interceptor, count: 4, formation: mirror(pincer_top), spacing: 0.3, delay: 1.0 }
+
+  - at: 96.0
+    stage: 2
+    spawn:
+      - { enemy: sentinel, count: 1, formation: marauder_entry, spacing: 0.0 }
+      - { enemy: sentinel, count: 1, formation: mirror(marauder_entry), spacing: 0.0, delay: 0.8 }
+      - { enemy: fighter, count: 4, formation: arc_left_to_right, spacing: 0.4, delay: 1.5 }
+
+  - at: 110.0
+    stage: 2
+    spawn:
+      - { enemy: bomber, count: 3, formation: slow_descent_centre, spacing: 1.0 }
+      - { enemy: kamikaze, count: 4, formation: kamikaze_dive_right, spacing: 0.4, delay: 1.2 }
+
+  # Surprise wave #2 of 3 — from directly behind. Then a 16s calm
+  # before the convoy's heavy section.
+  - at: 118.0
+    stage: 2
+    spawn:
+      - { enemy: kamikaze, count: 5, formation: from_behind_centre, spacing: 0.4 }
+
+  # Stage 3 — the heavy section. The third transport travels with a
+  # sentinel anchor; the twin-marauder squad is the level's signature
+  # mini-boss beat (a pair, not L5's triple — they free-roam together
+  # and the kid has to split fire).
+  # ESCORTED RESUPPLY #3 of 4.
+  - at: 140.0
+    stage: 3
+    spawn:
+      - { enemy: resupply_ship, count: 1, formation: resupply_cruise, spacing: 0.0 }
+      - { enemy: sentinel, count: 1, formation: marauder_entry, spacing: 0.0, delay: 0.5 }
+      - { enemy: interceptor, count: 4, formation: sweep_horizontal, spacing: 0.3, delay: 1.5 }
+
+  # Twin-marauder squad.
+  - at: 154.0
+    stage: 3
+    spawn:
+      - { enemy: marauder, count: 1, formation: marauder_entry, spacing: 0.0 }
+      - { enemy: marauder, count: 1, formation: mirror(marauder_entry), spacing: 0.0, delay: 1.0 }
+
+  - at: 170.0
+    stage: 3
+    spawn:
+      - { enemy: gunship, count: 3, formation: loop_left, spacing: 0.7, return_passes: 1 }
+      - { enemy: interceptor, count: 5, formation: pincer_top, spacing: 0.25, delay: 1.0 }
+
+  # ESCORTED RESUPPLY #4 of 4 — the last top-up before the mothership.
+  - at: 184.0
+    stage: 3
+    spawn:
+      - { enemy: resupply_ship, count: 1, formation: resupply_cruise, spacing: 0.0 }
+      - { enemy: fighter, count: 4, formation: arc_left_to_right, spacing: 0.4, delay: 0.5 }
+
+  # Surprise wave #3 of 3 — a converging pair up BOTH flanks while the
+  # kid is busy with the transport. Then a 16s calm into the finale.
+  - at: 186.0
+    stage: 3
+    spawn:
+      - { enemy: kamikaze, count: 3, formation: from_below_left, spacing: 0.35 }
+      - { enemy: kamikaze, count: 3, formation: from_below_right, spacing: 0.35, delay: 0.4 }
+
+  # ───────── Boss ─────────
+  # THE MOTHERSHIP — end of the invasion. Arena sweep clears the
+  # stragglers (half score) so the saucer reveal owns the screen.
+  - at: 208.0
+    stage: boss
+    boss: boss_07
+
+  # Mothership escorts — boss-stage waves keep firing during the
+  # fight (same pattern as the L6 carrier swarm).
+  - at: 228.0
+    stage: boss
+    spawn:
+      - { enemy: interceptor, count: 4, formation: pincer_top, spacing: 0.3 }
+
+  - at: 252.0
+    stage: boss
+    spawn:
+      - { enemy: kamikaze, count: 4, formation: from_behind_centre, spacing: 0.4 }

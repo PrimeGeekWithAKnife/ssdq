@@ -1,0 +1,171 @@
+# Level 6 — "Asteroid Graveyard"
+# First post-campaign-finale level (fun review 2026-06-12 R5 — the boy's
+# 2026-05-10 playtest verdict asked for "more levels"). The fleet limps
+# through a derelict battlefield: dead rocks and a dormant carrier.
+#
+# Music: music/level_06.ogg pool (eerie B-minor — see tools/music_levels.py
+# compose_level_06; per-entry rotation adds _b/_c variants). Boss music:
+# music/boss_06.ogg. Background: bg_starfield_01 (deep space — the
+# graveyard reads through the hulks themselves, not the backdrop).
+#
+# Signature mechanic: COVER. asteroid_hulk drifts slowly (speed 40) and
+# EATS enemy lasers (blocks_enemy_bullets) — the intro banner tells the
+# kid outright: "Hide behind the rocks - they eat alien lasers!" Every
+# stage seeds hulks alongside shooters so the kid learns to fight FROM
+# the rocks, then the ambush lattice (pincer/sweep/from_below) forces
+# them to leave cover and find the next one. Hulks linger 17-25s per
+# pass, which also keeps the screen alive through the two long calms
+# (post-resupply, 13-14s) — without them the 5s idle-cue would compress
+# the breathers away.
+#
+# Length: 252 seconds = boss_at (192) + 60 — the carrier fight gets a
+# full minute of room because the scheduler keeps firing its escort
+# waves at boss_at+20/+40 (the carrier "launches its swarm") and a
+# fast kill should not cut the level-complete window into the escorts.
+
+level: 6
+title: "Asteroid Graveyard"
+codename: asteroid_graveyard
+music: music/level_06.ogg
+boss_music: music/boss_06.ogg
+background: bg_starfield_01
+length_seconds: 252
+
+waves:
+  # Stage 1 — teach the cover mechanic. Rocks arrive FIRST, then the
+  # fighters open fire, so the kid's very first read is "lasers hit
+  # the rock, not me". Gentle shooters on purpose: the lesson is the
+  # mechanic, not the dodge.
+  - at: 2.0
+    stage: 1
+    spawn:
+      - { enemy: asteroid_hulk, count: 3, formation: slow_descent_centre, spacing: 1.5 }
+      - { enemy: fighter, count: 4, formation: arc_left_to_right, spacing: 0.5, delay: 2.0 }
+
+  - at: 14.0
+    stage: 1
+    spawn:
+      - { enemy: interceptor, count: 5, formation: sweep_horizontal, spacing: 0.3 }
+      - { enemy: asteroid_hulk, count: 2, formation: sweep_horizontal, spacing: 2.0, delay: 0.5 }
+
+  # Surprise wave #1 of 2 — kamikazes rise up the left flank while a
+  # pincer drops from above. Cover doesn't help against body-slams:
+  # the kid learns rocks stop LASERS, not ships.
+  - at: 26.0
+    stage: 1
+    spawn:
+      - { enemy: kamikaze, count: 4, formation: from_below_left, spacing: 0.35 }
+      - { enemy: interceptor, count: 4, formation: pincer_top, spacing: 0.3, delay: 1.0 }
+
+  - at: 38.0
+    stage: 1
+    spawn:
+      - { enemy: gunship, count: 2, formation: loop_left, spacing: 0.8, return_passes: 1 }
+      - { enemy: asteroid_hulk, count: 3, formation: slow_descent_centre, spacing: 1.2, delay: 0.5 }
+
+  # Resupply #1, then a 13s calm. The stage-1 hulks are still drifting
+  # down — they hold the screen so the idle-cue (5s) doesn't pull
+  # stage 2 forward and eat the breather.
+  - at: 47.0
+    stage: 1
+    spawn:
+      - { enemy: resupply_ship, count: 1, formation: resupply_cruise, spacing: 0.0 }
+
+  # Stage 2 — fight around the rocks. Density up; every wave pairs
+  # shooters with fresh cover so positioning stays the puzzle.
+  - at: 60.0
+    stage: 2
+    spawn:
+      - { enemy: drone, count: 6, formation: figure_eight_centre, spacing: 0.3 }
+      - { enemy: asteroid_hulk, count: 2, formation: sweep_horizontal, spacing: 2.0, delay: 1.0 }
+
+  - at: 72.0
+    stage: 2
+    spawn:
+      - { enemy: interceptor, count: 4, formation: pincer_top, spacing: 0.3 }
+      - { enemy: interceptor, count: 4, formation: mirror(pincer_top), spacing: 0.3, delay: 0.6 }
+
+  # Surprise wave #2 of 2 — kamikazes from directly behind. No cover
+  # below the player; pure twist-and-shoot.
+  - at: 84.0
+    stage: 2
+    spawn:
+      - { enemy: kamikaze, count: 5, formation: from_behind_centre, spacing: 0.4 }
+
+  # Sentinel debut for the level — its wide twin-aim fan is exactly
+  # what the rocks eat, so the kid who has internalised cover wins
+  # this duel cheaply. Fight around the rocks.
+  - at: 92.0
+    stage: 2
+    spawn:
+      - { enemy: sentinel, count: 1, formation: marauder_entry, spacing: 0.0 }
+      - { enemy: asteroid_hulk, count: 3, formation: slow_descent_centre, spacing: 1.0, delay: 0.5 }
+
+  - at: 104.0
+    stage: 2
+    spawn:
+      - { enemy: bomber, count: 3, formation: slow_descent_centre, spacing: 1.0 }
+      - { enemy: interceptor, count: 5, formation: dive_then_strafe, spacing: 0.3, delay: 1.2 }
+
+  # Resupply #2, then a 14s calm — again held alive by drifting hulks
+  # rather than dead air.
+  - at: 112.0
+    stage: 2
+    spawn:
+      - { enemy: resupply_ship, count: 1, formation: resupply_cruise, spacing: 0.0 }
+
+  # Stage 3 — escalation. The graveyard wakes up: mini-boss anchors,
+  # mirrored sweeps and dive lattices, with the rocks now reading as
+  # contested ground rather than safe harbour.
+  - at: 126.0
+    stage: 3
+    spawn:
+      - { enemy: marauder, count: 1, formation: marauder_entry, spacing: 0.0 }
+      - { enemy: asteroid_hulk, count: 4, formation: sweep_horizontal, spacing: 1.5, delay: 0.5 }
+
+  - at: 140.0
+    stage: 3
+    spawn:
+      - { enemy: interceptor, count: 6, formation: sweep_horizontal, spacing: 0.25 }
+      - { enemy: interceptor, count: 6, formation: mirror(sweep_horizontal), spacing: 0.25, delay: 0.8 }
+
+  - at: 152.0
+    stage: 3
+    spawn:
+      - { enemy: gunship, count: 3, formation: loop_left, spacing: 0.7, return_passes: 1 }
+      - { enemy: kamikaze, count: 4, formation: kamikaze_dive_right, spacing: 0.4, delay: 1.5 }
+
+  - at: 164.0
+    stage: 3
+    spawn:
+      - { enemy: sentinel, count: 1, formation: marauder_entry, spacing: 0.0 }
+      - { enemy: fighter, count: 5, formation: arc_left_to_right, spacing: 0.4, delay: 1.0 }
+      - { enemy: asteroid_hulk, count: 2, formation: slow_descent_centre, spacing: 1.5, delay: 2.0 }
+
+  # Final pre-boss lattice, then a 12s calm into the carrier reveal.
+  - at: 176.0
+    stage: 3
+    spawn:
+      - { enemy: interceptor, count: 5, formation: pincer_top, spacing: 0.25 }
+      - { enemy: kamikaze, count: 4, formation: mirror(kamikaze_dive_right), spacing: 0.35, delay: 0.8 }
+
+  # ───────── Boss ─────────
+  # THE CARRIER — the derelict flagship wakes up. The arena sweep
+  # clears stragglers (half score) so the reveal gets the stage.
+  - at: 192.0
+    stage: boss
+    boss: boss_06
+
+  # Carrier escorts — the swarm it launches. The scheduler keeps
+  # firing boss-stage waves while the fight runs; a fast kill leaves
+  # stragglers, which LevelScene already tolerates.
+  - at: 212.0
+    stage: boss
+    spawn:
+      - { enemy: interceptor, count: 4, formation: pincer_top, spacing: 0.3 }
+
+  - at: 232.0
+    stage: boss
+    spawn:
+      - { enemy: kamikaze, count: 4, formation: kamikaze_dive_right, spacing: 0.4 }
+      - { enemy: asteroid_hulk, count: 2, formation: slow_descent_centre, spacing: 1.5, delay: 1.0 }

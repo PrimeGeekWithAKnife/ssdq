@@ -101,6 +101,15 @@ class EnemyDef:
     # the kid for engaging at all without the spawn-shield's "you can't
     # touch me yet" frustration.
     shield_on_first_hit_seconds: float = 0.0
+    # Level-6 "Asteroid Graveyard" cover mechanic (fun review 2026-06-12
+    # R5 — "Hide behind the rocks - they eat alien lasers!"). When true,
+    # ENEMY bullets that overlap this enemy are absorbed (despawned) so
+    # the kid can shelter behind it. Player bullets still damage it
+    # normally — cover is destructible by design, otherwise the screen
+    # fills with permanent walls. Checked only on the ENEMY_BULLET ×
+    # ENEMY pair of the collision IGNORE path (bullets are already in
+    # the spatial grid) so the flag costs nothing when unused.
+    blocks_enemy_bullets: bool = False
     # Pickups always dropped on death, in addition to the random
     # `roll_drop` result. Used by the resupply ship (kid playtest
     # 2026-05-03 #1 + #4) to guarantee a missile drop on top of the

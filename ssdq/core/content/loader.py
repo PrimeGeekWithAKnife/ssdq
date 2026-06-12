@@ -214,6 +214,7 @@ def _load_enemies(
             shield_on_spawn_seconds=float(e.get("shield_on_spawn_seconds", 0.0)),
             passes_unlimited=bool(e.get("passes_unlimited", False)),
             shield_on_first_hit_seconds=float(e.get("shield_on_first_hit_seconds", 0.0)),
+            blocks_enemy_bullets=bool(e.get("blocks_enemy_bullets", False)),
             guaranteed_drops=tuple(e.get("guaranteed_drops") or []),
             level_scaled_drops=tuple(e.get("level_scaled_drops") or []),
             free_roam=_parse_free_roam(e.get("free_roam"), where, name),

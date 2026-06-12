@@ -180,9 +180,10 @@ _LEVEL_INTRO_BANNER_SECONDS = 6.0
 
 # ───────── per-level narrative copy ─────────
 #
-# Verbatim user copy from kid-playtest feedback. Levels 3–5 are wired
-# even though their content bundles are deferred — when the levels land,
-# the narrative is already there.
+# Verbatim user copy from kid-playtest feedback (levels 1–5). Levels
+# 6–7 (fun review 2026-06-12 R5 — the boy asked for "more levels")
+# keep the same short, punchy register and each names the level's
+# mechanic so the banner doubles as a tutorial line.
 _LEVEL_INTROS: dict[int, str] = {
     1: (
         "Before you can save Earth you must destroy the aliens "
@@ -209,6 +210,13 @@ _LEVEL_INTROS: dict[int, str] = {
         "of hyperspace near Earth. Let's hope they finished repairs "
         "on that space station!!"
     ),
+    6: (
+        "The asteroid graveyard! Hide behind the rocks - they eat "
+        "alien lasers!"
+    ),
+    7: (
+        "The mothership convoy! Blast the supply ships to power up!"
+    ),
 }
 
 _LEVEL_BOSS_INTROS: dict[int, str] = {
@@ -220,6 +228,8 @@ _LEVEL_BOSS_INTROS: dict[int, str] = {
         "HYPERSPACE ARMADA flagship engaged - destroy it before "
         "reinforcements land!"
     ),
+    6: "THE CARRIER awakens! Smash it before it launches its swarm!",
+    7: "THE MOTHERSHIP itself! End the invasion - fire everything!",
 }
 
 # Fallback used when an unknown level index is requested. Kept as a
@@ -240,6 +250,11 @@ _HIGH_TIER_SHIELD_DENSE_THRESHOLD = 4  # at this tier+, sprinkle is denser
 _HIGH_TIER_SHIELD_SPARSE_MOD = 6       # tier 3: every 6th qualifying enemy (~17%)
 _HIGH_TIER_SHIELD_DENSE_MOD = 4        # tier 4+: every 4th qualifying enemy (25%)
 _HIGH_TIER_SHIELD_SECONDS = 1.0
+
+# Faction pair that can trigger bullet-blocking cover (level 6 asteroid
+# hulks). Pre-built frozenset so the hot collision loop's IGNORE path
+# pays one set compare, not two enum compares per orientation.
+_BULLET_BLOCK_PAIR = frozenset({Faction.ENEMY_BULLET, Faction.ENEMY})
 
 # Single-player campaign scaling. The boy reported (2026-05-23) that two
 # kitted-out players melt bosses too fast — so when solo, also reduce
@@ -316,6 +331,14 @@ class PickupTag:
     """Marker so the collision layer can identify pickups quickly."""
 
     pickup_name: str
+
+
+@dataclass(frozen=True, slots=True)
+class BulletBlocker:
+    """Marker for enemies that absorb ENEMY bullets (level-6 asteroid
+    hulks — "hide behind the rocks, they eat alien lasers"). Read by the
+    ENEMY_BULLET × ENEMY branch of the collision IGNORE path; enemies
+    without it keep the zero-cost ignore."""
 
 
 @dataclass
@@ -1513,6 +1536,11 @@ class LevelScene(Scene):
         )
         if enemy.weapon and enemy.fire_beats:
             world.add(eid, EnemyShooterRef(shooter=EnemyShooter(beats=enemy.fire_beats)))
+        # Bullet-blocking cover (level 6 asteroid hulks — fun review
+        # 2026-06-12 R5). The marker is what the collision IGNORE path
+        # checks; enemies without it pay nothing.
+        if enemy.blocks_enemy_bullets:
+            world.add(eid, BulletBlocker())
         # Spawn-shield (kid playtest 2026-05-02 #3). Attach an
         # EnemyShield + ShieldHalo so the kid clearly sees the
         # forcefield. The halo radius is generous so the visual reads
@@ -2330,6 +2358,23 @@ class LevelScene(Scene):
                 continue
             decision = should_apply_damage(ftag_a.faction, ftag_b.faction, self._session.options)
             if decision == DamageDecision.IGNORE:
+                # Bullet-blocking cover (level 6 asteroid hulks — fun
+                # review 2026-06-12 R5): ENEMY_BULLET × ENEMY is normally
+                # a free ignore, but if the enemy is a BulletBlocker the
+                # rock eats the laser. Enemy bullets are already in the
+                # grid, so the extra cost lands on this pair type only.
+                if frozenset((ftag_a.faction, ftag_b.faction)) == _BULLET_BLOCK_PAIR:
+                    if ftag_a.faction == Faction.ENEMY_BULLET:
+                        bullet_eid, enemy_eid = a, b
+                    else:
+                        bullet_eid, enemy_eid = b, a
+                    if world.has(enemy_eid, BulletBlocker):
+                        pos_a = world.must_get(a, Position).pos
+                        pos_b = world.must_get(b, Position).pos
+                        r_a = world.must_get(a, CircleHitbox).radius
+                        r_b = world.must_get(b, CircleHitbox).radius
+                        if circles_overlap(pos_a, r_a, pos_b, r_b):
+                            self._absorb_bullet_on_blocker(world, bullet_eid)
                 continue
             pos_a = world.must_get(a, Position).pos
             pos_b = world.must_get(b, Position).pos
@@ -2349,6 +2394,29 @@ class LevelScene(Scene):
                 self._handle_enemy_hit(world, b, a)
             elif ftag_b.faction == Faction.PLAYER_BULLET and ftag_a.faction == Faction.ENEMY:
                 self._handle_enemy_hit(world, a, b)
+
+    def _absorb_bullet_on_blocker(self, world: World, bullet_eid: Entity) -> None:
+        """Despawn an enemy bullet that struck bullet-blocking cover.
+
+        A tiny two-frame spark (half-scale explosion head) marks the
+        impact point so the kid SEES the rock eat the laser — without
+        it the bullet just vanishes and cover never reads as a
+        mechanic. Deliberately small: hulks sit inside dense bullet
+        curtains on L6 and a full explosion per absorbed bullet would
+        white out the screen (and cost Pi frames)."""
+        pos = world.get(bullet_eid, Position)
+        if pos is not None:
+            world.spawn(
+                Position(pos.pos),
+                AnimatedSprite(
+                    frames=("particles/explosion_00.png", "particles/explosion_01.png"),
+                    frame_ticks=3,
+                    loop=False,
+                    layer=9,
+                    scale=0.5,
+                ),
+            )
+        world.despawn(bullet_eid)
 
     def _handle_player_hit(
         self,
