@@ -10,6 +10,10 @@ Banner + final scores, then routes to the next stop in the multi-level arc:
 * If there is no next level, route through DockingScene anyway —
   DockingScene's own next-scene logic falls back to TitleScene when no
   successor level exists.
+* Special case: completing level ``_HYPERSPACE_AFTER_LEVEL`` (5) with a
+  level 6 in the bundle detours through HyperspaceScene first; its
+  ``_finish()`` then Replaces into DockingScene and the normal routing
+  resumes (fun review 2026-06-12).
 """
 
 from __future__ import annotations
@@ -34,6 +38,12 @@ _PROMPT_COLOUR = (255, 240, 120)
 # FIRE press to advance. Lockout + rising-edge together absorb the
 # held-FIRE-from-boss-kill that was auto-skipping the banner.
 _LOCKOUT_TICKS: int = 120
+
+# After this level's boss the campaign detours through the hyperspace
+# bonus run before docking (fun review 2026-06-12 — the palate-cleanser
+# between the two campaign halves). Gated on the NEXT level existing in
+# the content bundle so the detour stays dormant until levels 6+ land.
+_HYPERSPACE_AFTER_LEVEL: int = 5
 
 
 class LevelCompleteScene(Scene):
@@ -107,6 +117,15 @@ class LevelCompleteScene(Scene):
 
             return Replace(scene=VictoryScene(self._app))
         self._app.current_level = next_index
+        # Hyperspace detour: completing level 5 (with a level 6 to come,
+        # checked above) rides the bonus run first. current_level is
+        # already bumped to 6 at this point, so when HyperspaceScene
+        # finishes and Replaces into DockingScene, the existing docking
+        # routing lands on level 6 with zero docking changes.
+        if self._completed_level_index == _HYPERSPACE_AFTER_LEVEL:
+            from ssdq.scenes.hyperspace import HyperspaceScene
+
+            return Replace(scene=HyperspaceScene(self._app, exit_to="docking"))
         return Replace(scene=DockingScene(self._app))
 
     def render(self, world: World, surface: Any, alpha: float) -> None:

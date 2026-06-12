@@ -271,22 +271,20 @@ def main(argv: list[str] | None = None) -> int:
                         stack.request_quit()
                         break
 
-                # Render. The Level scene's renderer is world-driven and lives
-                # in `Renderer.draw`; chrome scenes (Title/GameOver/etc.) draw
-                # their own surface via Scene.render. We pick which one based
-                # on the top scene having world entities to render.
+                # Render. World scenes (Level / Hyperspace) are drawn by
+                # `Renderer.draw`; chrome scenes (Title/GameOver/etc.) draw
+                # their own surface via Scene.render. World scenes opt in
+                # via the `world_rendered` class attribute + a
+                # `background_name` property (small protocol — avoids an
+                # isinstance ladder growing per world scene).
                 surface = window.surface()
                 top_scene = stack.top()
-                from ssdq.scenes.level import LevelScene as _LevelScene
-
-                if isinstance(top_scene, _LevelScene):
-                    # Make sure the renderer's backdrop matches the active
-                    # level's `background:` field. Cheap (no-op when name
-                    # is already current); cost-of-construction only fires
-                    # on actual level change.
-                    level_def = app.content.levels.get(top_scene.level_index)
-                    if level_def is not None:
-                        renderer.set_background_by_name(level_def.background)
+                if getattr(top_scene, "world_rendered", False):
+                    # Make sure the renderer's backdrop matches the scene's
+                    # declared background. Cheap (no-op when the name is
+                    # already current); cost-of-construction only fires
+                    # on actual scene/level change.
+                    renderer.set_background_by_name(top_scene.background_name)
                     renderer.draw(
                         world,
                         surface,
@@ -295,6 +293,10 @@ def main(argv: list[str] | None = None) -> int:
                         paused=stack.paused,
                         pause_dim_alpha=app.content.coop.pause_dim_alpha,
                     )
+                    # Scene overlay on top of the world render (hyperspace
+                    # banner / exit glow). LevelScene.render is a no-op so
+                    # this costs nothing on campaign levels.
+                    stack.render(surface, clock.alpha)
                 else:
                     # Chrome scenes paint themselves; pause overlay still applies.
                     stack.render(surface, clock.alpha)

@@ -488,6 +488,84 @@ class SpaceStationBackground:
                 )
 
 
+# ───────── hyperspace streaks (bonus interstitial) ─────────
+
+# HyperspaceScene backdrop. Same three-layer deterministic recipe as
+# ParallaxStarfield but the motion is HORIZONTAL (stars rush right-to-
+# left past ships flying right) and the two faster layers draw short
+# streak lines instead of points — the classic "stars smeared by speed"
+# read. Channels 95_000+ keep the star positions uncorrelated with the
+# vertical starfield's 10_000/20_000 allocations.
+
+_HYPER_LAYERS: tuple[tuple[int, float, tuple[int, int, int]], ...] = (
+    # (count, speed_px_per_sec, colour)
+    (40, 90.0, (90, 100, 130)),
+    (28, 220.0, (150, 170, 210)),
+    (14, 420.0, (220, 235, 255)),
+)
+_HYPER_BG_COLOUR = (4, 4, 18)
+# Streak length range for the fast layers. Per-star deterministic so
+# the field looks irregular; faster layer skews longer via speed.
+_HYPER_STREAK_MIN = 4
+_HYPER_STREAK_MAX = 14
+
+
+class HyperspaceBackground:
+    """Horizontal three-layer star-streak parallax for the bonus run.
+
+    Cloned from :class:`ParallaxStarfield`: deterministic star placement
+    via :func:`tick_unit` channels, ``x = (x_base - speed * elapsed) % w``
+    so the field scrolls leftward forever. Slow layer draws pixels; the
+    two fast layers draw 4–14px horizontal streaks (trail extends to the
+    right of the star — motion blur opposite the direction of travel).
+    """
+
+    __slots__ = ("_height", "_stars", "_width")
+
+    def __init__(self, width: int, height: int) -> None:
+        self._width = width
+        self._height = height
+        stars: list[tuple[float, float, float, int, tuple[int, int, int]]] = []
+        star_id = 0
+        for count, speed, colour in _HYPER_LAYERS:
+            for _ in range(count):
+                x = tick_unit(0, channel=95_000 + star_id) * width
+                y = tick_unit(0, channel=96_000 + star_id) * height
+                # Streak length: speed-proportional base ± per-star jitter.
+                base = _HYPER_STREAK_MIN + (
+                    (_HYPER_STREAK_MAX - _HYPER_STREAK_MIN) * speed / 420.0
+                )
+                jitter = tick_unit(0, channel=97_000 + star_id) * 4.0 - 2.0
+                length = int(max(_HYPER_STREAK_MIN, min(_HYPER_STREAK_MAX, base + jitter)))
+                stars.append((x, y, speed, length, colour))
+                star_id += 1
+        self._stars: tuple[tuple[float, float, float, int, tuple[int, int, int]], ...] = (
+            tuple(stars)
+        )
+
+    @property
+    def width(self) -> int:
+        return self._width
+
+    @property
+    def height(self) -> int:
+        return self._height
+
+    def draw(self, surface: pygame.Surface, tick: int) -> None:
+        elapsed = tick / _TICKS_PER_SEC
+        w = self._width
+        h = self._height
+        surface.fill(_HYPER_BG_COLOUR)
+        for x_base, y, speed, length, colour in self._stars:
+            x = (x_base - speed * elapsed) % w
+            iy = int(y) % h
+            if speed >= 200.0:
+                # Fast layers: horizontal streak trailing to the right.
+                pygame.draw.line(surface, colour, (int(x), iy), (int(x) + length, iy))
+            else:
+                surface.set_at((int(x), iy), colour)
+
+
 # ───────── registry ─────────
 
 
@@ -506,6 +584,7 @@ BACKGROUND_REGISTRY: dict[str, BackgroundFactory] = {
     "bg_moon_surface": MoonSurfaceBackground,
     "bg_space_station": SpaceStationBackground,
     "bg_earth": EarthHorizonBackground,
+    "bg_hyperspace": HyperspaceBackground,
 }
 
 # Default name used when the active level is unknown / unset (e.g. the

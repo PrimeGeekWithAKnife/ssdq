@@ -169,3 +169,9 @@ class World:
 
     def try_resource(self, t: type[T]) -> T | None:
         return cast("T | None", self._resources.get(t))
+
+    def remove_resource(self, t: type[Any]) -> None:
+        """Drop a resource if present. No-op when absent — scene exit()
+        paths call this unconditionally so a scene that never inserted
+        its resource (early-aborted enter) doesn't crash teardown."""
+        self._resources.pop(t, None)

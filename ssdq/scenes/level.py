@@ -563,6 +563,23 @@ class LevelScene(Scene):
         self.app = app
         self.level_index = level_index
 
+    # Render-branch protocol (read by main.py): scenes whose entities
+    # are drawn by the world Renderer set `world_rendered = True` and
+    # expose the backdrop to draw under them. Plain class attr (no
+    # annotation) so the dataclass machinery doesn't treat it as a field.
+    world_rendered = True
+
+    @property
+    def background_name(self) -> str:
+        """The active level's `background:` field, for the renderer.
+
+        Unknown level indices fall back to the registry default name —
+        the renderer degrades gracefully on unknown names anyway, this
+        just keeps the property total.
+        """
+        level_def = self.app.content.levels.get(self.level_index)
+        return level_def.background if level_def is not None else "bg_starfield_01"
+
     # ───────── lifecycle ─────────
 
     def enter(self, world: World) -> None:
