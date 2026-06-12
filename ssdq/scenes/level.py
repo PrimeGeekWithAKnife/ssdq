@@ -90,6 +90,7 @@ from ssdq.core.waves import (
 )
 from ssdq.scenes.app_state import AppState
 from ssdq.scenes.hud_state import HudCoopState, HudPlayerStats
+from ssdq.scenes.music_routing import boss_music_name, clamp_level, level_music_pool
 
 logger = logging.getLogger(__name__)
 
@@ -705,10 +706,15 @@ class LevelScene(Scene):
             )
 
         # Music — start the per-level track. Track names are registered
-        # by BootScene as ``level_NN`` / ``boss_NN`` (zero-padded). The
-        # YAML's ``level.music`` field is a content path, not a bus name,
-        # so we derive the registered name from the level index here.
+        # by BootScene as ``level_NN`` (+ ``_b``/``_c`` variants) /
+        # ``boss_NN`` (zero-padded). The YAML's ``level.music`` field is
+        # a content path, not a bus name, so we derive the registered
+        # name from the level index here. The rotation counter is bumped
+        # exactly once per entry, AFTER picking this entry's track, so
+        # the next entry of the same level hears the following pool slot
+        # (fun review 2026-06-12: consecutive entries should differ).
         self._switch_music(self._level_music_name())
+        self._advance_music_rotation()
 
     def exit(self, world: World) -> None:
         self.app.audio.stop_music()
@@ -2941,19 +2947,42 @@ class LevelScene(Scene):
         self._music_playing = name
 
     def _level_music_name(self) -> str:
-        """BootScene-registered track name for the current level.
+        """BootScene-registered track name for this level ENTRY.
 
-        Levels 1..5 get their own track. Anything outside that range
-        (defensive — content currently ships level 1 + 2) falls back to
-        level_01 so we always have *something* registered.
+        Each level owns a pool of up to three tracks (base + _b/_c
+        variants — fun review 2026-06-12: one track per level was
+        wearing thin). The pool is filtered through AudioBus.has_music
+        because ``crossfade_to`` silently keeps the OLD track for
+        unregistered names — without the filter a missing variant would
+        freeze the rotation on whatever was already playing. Selection
+        only READS the per-level rotation counter, so repeated calls
+        are idempotent; ``enter()`` bumps the counter exactly once via
+        :meth:`_advance_music_rotation`. Out-of-range indices fall back
+        to level 1's pool (defensive, pre-pool behaviour preserved).
         """
-        idx = self.level_index if 1 <= self.level_index <= 5 else 1
-        return f"level_{idx:02d}"
+        idx = clamp_level(self.level_index)
+        pool = [name for name in level_music_pool(idx) if self.app.audio.has_music(name)]
+        if not pool:
+            # Nothing registered (headless tests / missing assets) —
+            # the base name keeps the "always return something" contract;
+            # crossfade_to no-ops on it just as it always did.
+            pool = [level_music_pool(idx)[0]]
+        counter = self.app.music_rotation.get(idx, 0)
+        return pool[counter % len(pool)]
+
+    def _advance_music_rotation(self) -> None:
+        """Bump this level's pool rotation counter — once per entry.
+
+        Kept separate from :meth:`_level_music_name` so tests (and the
+        boss-music branch in ``tick``) can call the name helpers freely
+        without skipping tracks.
+        """
+        idx = clamp_level(self.level_index)
+        self.app.music_rotation[idx] = self.app.music_rotation.get(idx, 0) + 1
 
     def _boss_music_name(self) -> str:
         """BootScene-registered boss track name for the current level."""
-        idx = self.level_index if 1 <= self.level_index <= 5 else 1
-        return f"boss_{idx:02d}"
+        return boss_music_name(self.level_index)
 
     # ───────── helpers: lookups ─────────
 

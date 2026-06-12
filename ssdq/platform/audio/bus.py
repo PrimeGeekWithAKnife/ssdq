@@ -106,6 +106,17 @@ class AudioBus:
             return
         self._music_paths[name] = path
 
+    def has_music(self, name: str) -> bool:
+        """True when ``name`` was registered AND its file existed on disk.
+
+        ``crossfade_to`` silently keeps the current track for unknown
+        names (deliberate — missing assets degrade to "keep playing"),
+        so any caller picking from a pool of tracks must filter by this
+        first or a missing variant would freeze the rotation on the old
+        song without any error surfacing.
+        """
+        return name in self._music_paths
+
     # -- playback -------------------------------------------------------
 
     def play_sfx(self, name: str, volume: float = 1.0) -> None:

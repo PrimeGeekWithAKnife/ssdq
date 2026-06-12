@@ -125,6 +125,15 @@ class AppState:
     # formation isn't lost between levels. Cycled via PlayerInput.drone_cycle.
     drone_config: dict[PlayerSlot, int] = field(default_factory=_zero_per_slot)
 
+    # Per-level music rotation counters (level index → entry count). Each
+    # LevelScene.enter() picks pool[count % len(pool)] then bumps the count
+    # once, so re-entering a level cycles base → _b → _c → base (fun review
+    # 2026-06-12: one track per level was wearing thin). NOT cleared by
+    # clear_progression — like single_player it's a session ambience
+    # artefact, not a campaign-progression artefact; restarting a campaign
+    # should still rotate the soundtrack rather than replay last run's.
+    music_rotation: dict[int, int] = field(default_factory=dict)
+
     # ───────── equippable helpers ─────────
 
     def get_shield_charges(self, slot: PlayerSlot) -> int:
@@ -165,3 +174,7 @@ class AppState:
         self.shield_charges = _zero_per_slot()
         self.drones_pending = _zero_per_slot()
         self.drone_config = _zero_per_slot()
+        # music_rotation deliberately NOT reset — like single_player it's
+        # a session ambience artefact, not a progression artefact. A
+        # fresh campaign should hear the NEXT track in each level's
+        # pool, not restart the rotation.

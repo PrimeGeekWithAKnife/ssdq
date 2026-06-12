@@ -16,6 +16,7 @@ from ssdq.core.ecs import World
 from ssdq.core.scene import Replace, Scene, SceneTransition
 from ssdq.core.types import PlayerInput, TickIndex
 from ssdq.scenes.app_state import AppState
+from ssdq.scenes.music_routing import LEVEL_VARIANT_SUFFIXES, MAX_MUSIC_LEVEL
 from ssdq.scenes.title import TitleScene
 
 _CONTENT_DIR = Path("content")
@@ -81,15 +82,19 @@ class BootScene(Scene):
             "missile",
         ):
             bus.load_sfx(name, str(sfx_dir / f"{name}.ogg"))
-        # Music: one track per level (1..5), one per boss (1..5), plus the
-        # calmer ``resupply`` track played by DockingScene between levels.
-        # Levels 3..5 don't yet have full content but the placeholder
-        # tracks are pre-rendered (tools/generate_music.py); missing files
-        # are silently no-op'd by AudioBus so the registration is forward
-        # -compatible with future level content.
-        for i in range(1, 6):
-            bus.load_music(f"level_{i:02d}", str(music_dir / f"level_{i:02d}.ogg"))
+        # Music: a POOL per level (base + _b/_c variants, levels 1..7 —
+        # fun review 2026-06-12: one track per level was wearing thin),
+        # one boss track per level, the ``hyperspace`` cue for the
+        # post-L5 bonus ride, plus the calmer ``resupply`` track played
+        # by DockingScene between levels. Missing files are silently
+        # no-op'd by AudioBus (and excluded from has_music) so the
+        # registration stays forward-compatible with future content.
+        for i in range(1, MAX_MUSIC_LEVEL + 1):
+            for suffix in LEVEL_VARIANT_SUFFIXES:
+                name = f"level_{i:02d}{suffix}"
+                bus.load_music(name, str(music_dir / f"{name}.ogg"))
             bus.load_music(f"boss_{i:02d}", str(music_dir / f"boss_{i:02d}.ogg"))
+        bus.load_music("hyperspace", str(music_dir / "hyperspace.ogg"))
         bus.load_music("resupply", str(music_dir / "resupply.ogg"))
         # Cinematic intro cue, played once during the post-PLAY story
         # crawl (kid playtest 2026-05-02 #4 — "intro needs dramatic /
