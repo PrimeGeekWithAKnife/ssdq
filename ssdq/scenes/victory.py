@@ -24,17 +24,30 @@ _TITLE_COLOUR = (255, 240, 120)
 _BODY_COLOUR = (220, 230, 255)
 _HINT_COLOUR = (130, 150, 180)
 
+# 120 ticks = 2.0s at 60Hz — kept in sync with LevelCompleteScene
+# (counter animation period + held-fire absorption window).
+_LOCKOUT_TICKS: int = 120
+
 
 class VictoryScene(Scene):
     """End-of-campaign celebration screen."""
 
-    __slots__ = ("_app", "_body_font", "_hint_font", "_title_font")
+    __slots__ = (
+        "_app",
+        "_body_font",
+        "_hint_font",
+        "_lockout_remaining",
+        "_prev_fire",
+        "_title_font",
+    )
 
     def __init__(self, app: AppState) -> None:
         self._app = app
         self._title_font: pygame.font.Font | None = None
         self._body_font: pygame.font.Font | None = None
         self._hint_font: pygame.font.Font | None = None
+        self._lockout_remaining: int = _LOCKOUT_TICKS
+        self._prev_fire: bool = True
 
     def enter(self, world: World) -> None:
         if not pygame.font.get_init():
@@ -49,10 +62,17 @@ class VictoryScene(Scene):
         tick: TickIndex,
         inputs: tuple[PlayerInput, PlayerInput],
     ) -> SceneTransition | None:
-        # END-SCREEN ADVANCE = START button only (kid playtest 2026-05-08).
-        # Kid mashes FIRE through the boss fight; START is the only
-        # button reliably idle when the boss dies.
-        if not (inputs[0].pause or inputs[1].pause):
+        # END-SCREEN ADVANCE: post-lockout rising-edge FIRE only. Lockout
+        # period doubles as the score-counter animation. See
+        # LevelCompleteScene.tick for the full reasoning.
+        fire_now = inputs[0].fire or inputs[1].fire
+        if self._lockout_remaining > 0:
+            self._lockout_remaining -= 1
+            self._prev_fire = fire_now
+            return None
+        rising = fire_now and not self._prev_fire
+        self._prev_fire = fire_now
+        if not rising:
             return None
         from ssdq.core.leaderboard import add_entry, load, qualifies, save
         from ssdq.scenes.initials import InitialsScene
@@ -109,22 +129,34 @@ class VictoryScene(Scene):
         w, h = surface.get_size()
         banner = self._title_font.render("VICTORY", True, _TITLE_COLOUR)
         surface.blit(banner, banner.get_rect(center=(w // 2, h // 4)))
+        # Score-counter animation matches LevelCompleteScene — counts up
+        # over the 2-second lockout, FIRE prompt appears only after the
+        # final totals settle.
+        progress = 1.0 - (self._lockout_remaining / _LOCKOUT_TICKS)
+        if progress < 0.0:
+            progress = 0.0
+        elif progress > 1.0:
+            progress = 1.0
+        team = int(self._app.last_team_score * progress)
+        p1 = int(self._app.last_p1_score * progress)
+        p2 = int(self._app.last_p2_score * progress)
         lines = [
             "Earth's defence fleet is broken.",
             "The alien armada falls back.",
             "",
             "You saved billions of lives.",
             "",
-            f"Final team score: {self._app.last_team_score:08d}",
-            f"P1: {self._app.last_p1_score:08d}    P2: {self._app.last_p2_score:08d}",
+            f"Final team score: {team:08d}",
+            f"P1: {p1:08d}    P2: {p2:08d}",
         ]
         y = h // 2 - 80
         for line in lines:
             r = self._body_font.render(line, True, _BODY_COLOUR)
             surface.blit(r, r.get_rect(center=(w // 2, y)))
             y += r.get_height() + 8
-        hint = self._hint_font.render("START to continue", True, _HINT_COLOUR)
-        surface.blit(hint, hint.get_rect(center=(w // 2, h - 60)))
+        if self._lockout_remaining == 0:
+            hint = self._hint_font.render("FIRE to continue", True, _HINT_COLOUR)
+            surface.blit(hint, hint.get_rect(center=(w // 2, h - 60)))
 
     def exit(self, world: World) -> None:
         return None

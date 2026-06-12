@@ -240,6 +240,14 @@ _HIGH_TIER_SHIELD_SPARSE_MOD = 6       # tier 3: every 6th qualifying enemy (~17
 _HIGH_TIER_SHIELD_DENSE_MOD = 4        # tier 4+: every 4th qualifying enemy (25%)
 _HIGH_TIER_SHIELD_SECONDS = 1.0
 
+# Single-player campaign scaling. The boy reported (2026-05-23) that two
+# kitted-out players melt bosses too fast — so when solo, also reduce
+# the load relative to co-op. Density scales spawn counts per wave (each
+# spawn keeps at least 1 member); boss HP scale multiplies every phase
+# HP at boss-spawn time. Both are tunable here — playtest-driven.
+_SP_ENEMY_DENSITY: float = 0.65   # 35% fewer common enemies per spawn
+_SP_BOSS_HP_SCALE: float = 0.65   # bosses take 35% less to kill solo
+
 
 def level_intro_text(level: int) -> str:
     """Return the per-level intro banner copy. Falls back to a generic
@@ -472,6 +480,13 @@ class BossState:
     shooter: EnemyShooter
     path_t0: float
     intro_remaining: float
+    # Effective per-phase HPs after applying any session-level scaling
+    # (e.g. _SP_BOSS_HP_SCALE in single-player). Populated at boss spawn;
+    # all HP-threshold / phase-transition math reads from here rather
+    # than ``boss.phases[*].hp`` so scaling stays consistent across the
+    # whole fight. Defaults to empty for unit tests that construct
+    # BossState directly without going through _maybe_spawn_boss.
+    phase_hps: tuple[int, ...] = ()
     settled: bool = False
     # Wall-clock sim_time at which the boss intro completed — used by
     # the time-based bonus on death (kid playtest 2026-05-02 #12).
@@ -549,7 +564,12 @@ class LevelScene(Scene):
         if self.level_index not in bundle.levels:
             raise RuntimeError(f"level {self.level_index} not in content")
         level = bundle.levels[self.level_index]
-        self._scheduler = WaveScheduler(level)
+        # Single-player runs ship at reduced wave density (boy playtest
+        # 2026-05-23). Multiplier flows into WaveScheduler at build-time
+        # so spawn counts are pre-scaled; boss HP scaling happens later
+        # at boss-spawn time in _maybe_spawn_boss.
+        density = _SP_ENEMY_DENSITY if self.app.single_player else 1.0
+        self._scheduler = WaveScheduler(level, density_multiplier=density)
         # Seed score from any prior cleared-level totals (carry-forward).
         # Title→PLAY and LevelSelect both clear last_*_score before launching,
         # so a fresh session sees zeros here.
@@ -1530,7 +1550,15 @@ class LevelScene(Scene):
         # pegged at ~50% across a 2-phase fight. Now Health monotonically
         # decreases from total_max → 0 and phase transitions fire when
         # HP drops below the cumulative remaining-phase total.
-        total_max = sum(p.hp for p in boss.phases)
+        # Single-player scaling (kid playtest 2026-05-23): apply
+        # _SP_BOSS_HP_SCALE to every phase HP at spawn, then read from
+        # BossState.phase_hps everywhere downstream so the threshold +
+        # phase-transition math stays consistent.
+        hp_scale = _SP_BOSS_HP_SCALE if self.app.single_player else 1.0
+        scaled_phase_hps: tuple[int, ...] = tuple(
+            max(1, int(p.hp * hp_scale + 0.5)) for p in boss.phases
+        )
+        total_max = sum(scaled_phase_hps)
         eid = world.spawn(
             Position(sample.pos),
             CircleHitbox(radius=boss.hitbox_radius),
@@ -1565,7 +1593,8 @@ class LevelScene(Scene):
             boss=boss,
             entity=eid,
             phase_index=0,
-            phase_hp_remaining=boss.phases[0].hp,
+            phase_hp_remaining=scaled_phase_hps[0],
+            phase_hps=scaled_phase_hps,
             shooter=EnemyShooter(beats=boss.phases[0].fire_beats),
             path_t0=self._sim_time + boss.intro_telegraph_seconds,
             intro_remaining=boss.intro_telegraph_seconds,
@@ -1834,8 +1863,17 @@ class LevelScene(Scene):
         # cumulative HP of the REMAINING phases (i.e. the player has
         # consumed the current phase's pool).
         hp = world.must_get(boss_state.entity, Health).hp
-        remaining_phases_after = boss_state.boss.phases[boss_state.phase_index + 1 :]
-        threshold = sum(p.hp for p in remaining_phases_after)
+        # Use scaled phase HPs (set at spawn from _SP_BOSS_HP_SCALE) so
+        # phase-transition thresholds stay aligned with the scaled total
+        # Health pool. Falls back to raw boss.phases for any BossState
+        # constructed outside _maybe_spawn_boss (unit tests with the
+        # default empty phase_hps tuple).
+        phase_hps = (
+            boss_state.phase_hps
+            if boss_state.phase_hps
+            else tuple(p.hp for p in boss_state.boss.phases)
+        )
+        threshold = sum(phase_hps[boss_state.phase_index + 1 :])
         boss_state.phase_hp_remaining = max(0, hp - threshold)
         if hp <= threshold and boss_state.phase_index + 1 < len(boss_state.boss.phases):
             self._transition_boss_phase(world, boss_state)
@@ -2024,7 +2062,11 @@ class LevelScene(Scene):
         boss_state.shooter = EnemyShooter(beats=new_phase.fire_beats)
         boss_state.path_t0 = self._sim_time
         boss_state.last_path_t_wrap = 0.0
-        boss_state.phase_hp_remaining = new_phase.hp
+        # Use scaled phase HP if present (single-player), else raw.
+        if boss_state.phase_hps:
+            boss_state.phase_hp_remaining = boss_state.phase_hps[boss_state.phase_index]
+        else:
+            boss_state.phase_hp_remaining = new_phase.hp
         # NOTE: Health is NOT refilled — it represents total remaining
         # HP across all phases now (kid playtest #13). The boss bar
         # decreases monotonically.

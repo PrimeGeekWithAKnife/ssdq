@@ -54,6 +54,7 @@ class SettingsScene(Scene):
         "_capture_target",
         "_hint_font",
         "_nav",
+        "_nav_pad_button_state",
         "_on_exit",
         "_pad_button_state",
         "_pad_guid",
@@ -90,6 +91,12 @@ class SettingsScene(Scene):
         # because the GamepadProvider's poll() drains the event queue before
         # any scene tick runs, leaving capture mode no events to consume.
         self._pad_button_state: dict[str, list[bool]] = {}
+        # Separate prev-state for the binding-agnostic nav fallback used in
+        # _tick_navigate (raw polling so the user can advance the action
+        # cursor on a pad whose stick / D-pad / canonical-index buttons
+        # don't work). Keyed by pygame instance id, NOT GUID, since this
+        # is purely about edge detection per physical device.
+        self._nav_pad_button_state: dict[int, list[bool]] = {}
 
     def selected_action(self) -> BindingAction:
         return self._actions[self.selected_index]
@@ -158,7 +165,7 @@ class SettingsScene(Scene):
             surface.blit(cap, cap.get_rect(center=(w // 2, y + 30)))
         else:
             hint = self._hint_font.render(
-                "Up/Down: select   FIRE: rebind   CANCEL: back",
+                "Any button to cycle   FIRE: rebind   CANCEL: back",
                 True,
                 _HINT_COLOUR,
             )
@@ -185,6 +192,13 @@ class SettingsScene(Scene):
         elif y < -_NAV_THRESHOLD and self._nav.prev_y >= -_NAV_THRESHOLD:
             self.selected_index = (self.selected_index - 1) % len(self._actions)
         self._nav.prev_y = y
+        # BINDING-AGNOSTIC NAV FALLBACK (mirrors TitleScene): any pad
+        # button other than the FIRE / CONFIRM / CANCEL-bound ones cycles
+        # forward. Required when the player's pad has no working stick
+        # / D-pad / canonical-index button. Wraps so one direction is
+        # enough to reach every action row.
+        if self._poll_any_nav_button():
+            self.selected_index = (self.selected_index + 1) % len(self._actions)
         if i.confirm:
             self.capturing = True
             self._capture_target = self.selected_action()
@@ -197,6 +211,52 @@ class SettingsScene(Scene):
         if i.cancel:
             return Pop()
         return None
+
+    def _poll_any_nav_button(self) -> bool:
+        """True if any pad has a rising-edge button press other than the
+        FIRE / CONFIRM / CANCEL bindings on that pad. Used as a
+        binding-agnostic menu nav fallback for cheap HID pads. Refreshes
+        ``_nav_pad_button_state`` as a side-effect.
+        """
+        from ssdq.platform.input.bindings import BindingAction
+
+        rising = False
+        new_state: dict[int, list[bool]] = {}
+        try:
+            count = pygame.joystick.get_count()
+        except pygame.error:
+            return False
+        for i in range(count):
+            try:
+                pad = pygame.joystick.Joystick(i)
+                pad.init()
+                iid = int(pad.get_instance_id())
+            except pygame.error:
+                continue
+            skip: set[int] = {0, 1}
+            store = getattr(self._app, "bindings", None)
+            if store is not None:
+                try:
+                    binding = store.get(pad.get_guid(), pad_name=pad.get_name())
+                    skip = {
+                        int(binding.button_for(BindingAction.FIRE)),
+                        int(binding.button_for(BindingAction.CONFIRM)),
+                        int(binding.button_for(BindingAction.CANCEL)),
+                    }
+                except (pygame.error, KeyError, AttributeError):
+                    pass
+            prev = self._nav_pad_button_state.get(iid, [])
+            states: list[bool] = []
+            for btn in range(pad.get_numbuttons()):
+                held = bool(pad.get_button(btn))
+                states.append(held)
+                if btn in skip:
+                    continue
+                if held and (btn >= len(prev) or not prev[btn]):
+                    rising = True
+            new_state[iid] = states
+        self._nav_pad_button_state = new_state
+        return rising
 
     def _poll_pad_states(self) -> dict[str, tuple[str, list[bool]]]:
         """Return ``{guid: (name, [button_states])}`` for every connected pad.
@@ -229,10 +289,24 @@ class SettingsScene(Scene):
         # are gone by the time scenes tick, but get_button() still reports
         # live state.
         states = self._poll_pad_states()
+        # Scope detection to the pad that opened settings if it's still
+        # connected. Without this, a noisy / jittery second pad steals
+        # the rebind even though the player is pressing on the first
+        # pad (kid playtest 2026-05-09: "one pad initiates the key remap
+        # selection but cannot select a new button — only the other
+        # gamepad button registers"). Falls back to scanning all pads
+        # only if the requesting GUID is empty (keyboard-launched
+        # settings) or has disconnected mid-flow.
+        if self._pad_guid and self._pad_guid in states:
+            detection_pads: dict[str, tuple[str, list[bool]]] = {
+                self._pad_guid: states[self._pad_guid]
+            }
+        else:
+            detection_pads = states
         detected_idx: int | None = None
         detected_guid: str | None = None
         detected_name: str | None = None
-        for guid, (name, buttons) in states.items():
+        for guid, (name, buttons) in detection_pads.items():
             prev = self._pad_button_state.get(guid, [])
             for i, val in enumerate(buttons):
                 if val and (i >= len(prev) or not prev[i]):
@@ -242,15 +316,15 @@ class SettingsScene(Scene):
                     break
             if detected_idx is not None:
                 break
-        # Refresh prev-state for next tick regardless of detection.
+        # Refresh prev-state for ALL connected pads regardless of which
+        # set we detected against — re-entering capture mode for a
+        # different action would otherwise see stale prev for the
+        # non-scoped pads.
         self._pad_button_state = {guid: list(buttons) for guid, (_n, buttons) in states.items()}
         if detected_idx is None or self._capture_target is None:
             return None
-        # Trust the press — single-pad-per-slot is the common case, and
-        # rebinding the "wrong" pad is harmless (each GUID owns its own
-        # entry). Use detected_guid so the binding lands on the pad the
-        # player actually pressed, even if the scene was opened with a
-        # stale guid.
+        # detected_guid will always equal self._pad_guid when scoping is
+        # active — fall-back path uses detected_guid as before.
         if self._app.bindings is not None:
             target_guid = detected_guid or self._pad_guid
             target_name = detected_name or self._pad_name

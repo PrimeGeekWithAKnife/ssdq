@@ -66,10 +66,24 @@ class WaveScheduler:
     the boss state machine).
     """
 
-    __slots__ = ("_boss_pending", "_elapsed", "_level", "_pending")
+    __slots__ = (
+        "_boss_pending",
+        "_density_multiplier",
+        "_elapsed",
+        "_level",
+        "_pending",
+    )
 
-    def __init__(self, level: LevelDef) -> None:
+    def __init__(self, level: LevelDef, *, density_multiplier: float = 1.0) -> None:
         self._level = level
+        # Density multiplier scales each spawn's member count at schedule
+        # build time. 1.0 = co-op (every member fires); <1.0 thins out
+        # the wave (single-player gets fewer enemies per spawn). Always
+        # at least 1 member per spawn so a wave never disappears entirely
+        # (which would break boss-trigger timing in some level scripts).
+        # Kid playtest 2026-05-23: solo runs need less density to feel
+        # comparable to co-op.
+        self._density_multiplier = max(0.0, density_multiplier)
         self._elapsed = 0.0
         self._pending: list[_PendingMember] = []
         self._boss_pending: list[BossEvent] = []
@@ -96,7 +110,14 @@ class WaveScheduler:
                 continue
             for si, spawn in enumerate(wave.spawns):
                 base = wave.at + spawn.delay
-                for mi in range(spawn.count):
+                # Apply density scaling — floor of 1 so a spawn never
+                # disappears entirely. Uses banker's-style rounding via
+                # int(x + 0.5) for deterministic behaviour on the .5
+                # boundary across hosts.
+                effective_count = max(
+                    1, int(spawn.count * self._density_multiplier + 0.5)
+                )
+                for mi in range(effective_count):
                     self._pending.append(
                         _PendingMember(
                             fire_at=base + spawn.spacing * mi,

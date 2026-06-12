@@ -27,15 +27,24 @@ from ssdq.scenes.docking import DockingScene
 _BG_COLOUR = (4, 16, 8)
 _TITLE_COLOUR = (140, 255, 200)
 _TEXT_COLOUR = (220, 240, 230)
+_PROMPT_COLOUR = (255, 240, 120)
+
+# 120 ticks = 2.0s at 60Hz — covers the score-counter animation. After
+# the counter reaches the final value the scene accepts a rising-edge
+# FIRE press to advance. Lockout + rising-edge together absorb the
+# held-FIRE-from-boss-kill that was auto-skipping the banner.
+_LOCKOUT_TICKS: int = 120
 
 
 class LevelCompleteScene(Scene):
-    """Banner + final scores. Routes to next level via DockingScene."""
+    """Banner + counted-up scores. Routes to next level via DockingScene."""
 
     __slots__ = (
         "_app",
         "_body_font",
         "_completed_level_index",
+        "_lockout_remaining",
+        "_prev_fire",
         "_title_font",
     )
 
@@ -49,6 +58,13 @@ class LevelCompleteScene(Scene):
         )
         self._title_font: pygame.font.Font | None = None
         self._body_font: pygame.font.Font | None = None
+        # Lockout doubles as the score-counter animation window — render
+        # interpolates the displayed score by (1 - remaining/total).
+        # Tests set this to 0 to skip both animation and wait.
+        self._lockout_remaining: int = _LOCKOUT_TICKS
+        # Initialised True so a FIRE button held from the boss kill must
+        # be released before a fresh press post-lockout advances.
+        self._prev_fire: bool = True
 
     def enter(self, world: World) -> None:
         if not pygame.font.get_init():
@@ -62,14 +78,22 @@ class LevelCompleteScene(Scene):
         tick: TickIndex,
         inputs: tuple[PlayerInput, PlayerInput],
     ) -> SceneTransition | None:
-        # END-SCREEN ADVANCE = START button only (kid playtest 2026-05-08).
-        # The kid is mashing FIRE through the whole boss fight; even
-        # rising-edge FIRE detection trips within 200ms because they
-        # naturally release-and-press. START is never held during
-        # gameplay (pause toggle uses it but releases immediately) so
-        # it cleanly distinguishes "I want to advance" from "I'm still
-        # firing reflexively". inp.pause is already edge-triggered.
-        if not (inputs[0].pause or inputs[1].pause):
+        # END-SCREEN ADVANCE: post-lockout rising-edge FIRE only (kid
+        # playtest 2026-05-09 final: drop CONFIRM/PAUSE because the user
+        # asked for the simplest possible binding — FIRE is the one
+        # button they always have working). Lockout window doubles as
+        # the score-counter animation period.
+        fire_now = inputs[0].fire or inputs[1].fire
+        if self._lockout_remaining > 0:
+            self._lockout_remaining -= 1
+            # Keep prev-fire fresh through the lockout so the rising-edge
+            # check after lockout reflects today's state, not the boss-kill
+            # snapshot from 2s ago.
+            self._prev_fire = fire_now
+            return None
+        rising = fire_now and not self._prev_fire
+        self._prev_fire = fire_now
+        if not rising:
             return None
         # Advance the session pointer to the next level (if any) BEFORE
         # entering the docking cinematic, so DockingScene knows where to
@@ -94,17 +118,35 @@ class LevelCompleteScene(Scene):
         w, h = surface.get_size()
         banner = self._title_font.render("LEVEL CLEAR", True, _TITLE_COLOUR)
         surface.blit(banner, banner.get_rect(center=(w // 2, h // 3)))
+        # Score-counter animation: ticks scores up linearly from 0 to
+        # final values across the lockout window. Reaches the real
+        # totals exactly as the FIRE prompt becomes available, so the
+        # kid sees a clean "counter stops → press FIRE" sequence.
+        progress = 1.0 - (self._lockout_remaining / _LOCKOUT_TICKS)
+        if progress < 0.0:
+            progress = 0.0
+        elif progress > 1.0:
+            progress = 1.0
+        team = int(self._app.last_team_score * progress)
+        p1 = int(self._app.last_p1_score * progress)
+        p2 = int(self._app.last_p2_score * progress)
         lines = [
-            f"Team score: {self._app.last_team_score:08d}",
-            f"P1: {self._app.last_p1_score:08d}    P2: {self._app.last_p2_score:08d}",
-            "",
-            "Press START to continue",
+            f"Team score: {team:08d}",
+            f"P1: {p1:08d}    P2: {p2:08d}",
         ]
         y = h // 2
         for line in lines:
             r = self._body_font.render(line, True, _TEXT_COLOUR)
             surface.blit(r, r.get_rect(center=(w // 2, y)))
             y += r.get_height() + 8
+        # Prompt only appears once the counter has finished — otherwise
+        # an early FIRE press would skip past the totals before the kid
+        # has a chance to see them.
+        if self._lockout_remaining == 0:
+            prompt = self._body_font.render(
+                "Press FIRE to continue", True, _PROMPT_COLOUR
+            )
+            surface.blit(prompt, prompt.get_rect(center=(w // 2, y + 16)))
 
     def exit(self, world: World) -> None:
         return None
