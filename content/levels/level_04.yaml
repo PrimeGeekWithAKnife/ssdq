@@ -32,7 +32,7 @@ codename: over_earth
 music: music/level_04.ogg
 boss_music: music/boss_04.ogg
 background: bg_earth
-length_seconds: 245
+length_seconds: 215
 
 waves:
   # ───────── Stage 1 — re-entry, the fleet shows its teeth ─────────

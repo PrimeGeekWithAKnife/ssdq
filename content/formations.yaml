@@ -98,6 +98,58 @@ formations:
       - [ 320, 280]
       - [ 320, 200]
 
+  # ───────── Boss variety splines (fun review 2026-06-12 R4) ─────────
+  # 20 instrumented playthroughs showed all five bosses flying the same
+  # two loops (boss_phase_1 / boss_phase_2), so by L3 the kid has seen
+  # every boss path the campaign owns. Three new looped paths below give
+  # each boss its own flight signature. Looped catmull_rom paths do NOT
+  # need a duplicated endpoint — path.py adds the wrap segment.
+
+  # Corner-to-corner X dives. The boss lunges diagonally across the
+  # arena and back, so the threat reads as "it is coming AT me" rather
+  # than the side-to-side patrol the kid has memorised.
+  boss_dive_cross:
+    type: catmull_rom
+    duration: 7.0
+    loop: true
+    control_points:
+      - [ 240, 100]
+      - [1040, 270]
+      - [1040, 100]
+      - [ 240, 270]
+
+  # Low menacing float — a slow oval that dips into the top of the
+  # kid's working zone (y ≈ 285). Pairs with full-circle weapons:
+  # being LOW means ring/cross bullets reach the player fast, so the
+  # path itself is the difficulty knob.
+  boss_low_hover:
+    type: catmull_rom
+    duration: 6.0
+    loop: true
+    control_points:
+      - [ 340, 240]
+      - [ 640, 285]
+      - [ 940, 240]
+      - [ 640, 195]
+
+  # Full-width figure-8 for the campaign finale. The repeated [640,160]
+  # is the intentional double crossing — the spline passes through the
+  # centre twice per loop, once per lobe, which is what makes it read
+  # as a lemniscate instead of a wide oval.
+  boss_lemniscate_wide:
+    type: catmull_rom
+    duration: 9.0
+    loop: true
+    control_points:
+      - [ 640, 160]
+      - [ 360,  90]
+      - [ 180, 170]
+      - [ 360, 250]
+      - [ 640, 160]
+      - [ 920,  90]
+      - [1100, 170]
+      - [ 920, 250]
+
   # Resupply-ship cruise. Enters from the top-left, gently arcs across
   # the upper third of the screen, and exits top-right. Stays well
   # above the player's working zone (y < 280) so collision is rare —

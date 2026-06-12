@@ -1561,6 +1561,10 @@ class LevelScene(Scene):
         formation = bundle.formations.get(boss.phases[0].formation)
         if formation is None:
             return
+        # Arena sweep — the boss gets the stage to itself (fun review
+        # 2026-06-12 R4). Must run BEFORE the boss entity spawns so the
+        # ENEMY-faction filter can't catch the boss itself.
+        self._sweep_enemies_for_boss(world)
         # Spawn boss above screen; it'll slide into formation as t advances.
         sample = evaluate_path(formation, 0.0)
         # Health = total HP across ALL phases; MaxHealth is the same.
@@ -1627,6 +1631,52 @@ class LevelScene(Scene):
         )
         self._scheduler.consume_boss_event(be)
         self._boss_dispatched = True
+
+    def _sweep_enemies_for_boss(self, world: World) -> None:
+        """Despawn straggler mooks when the boss arrives, for half score.
+
+        Fun review 2026-06-12 R4: leftover waves firing through the
+        boss intro muddy the "this is THE fight" beat, and unpopped
+        mooks during a 1000+ HP fight are clutter, not threat. Each
+        swept enemy pays out half its score to the nearest alive player
+        (mirrors the bomb-kill nearest-slot fallback) with a small
+        explosion so the clear reads as a reward, not a glitch.
+
+        Deliberately NOT routed through _on_enemy_killed — no drop
+        rolls, no full score: the sweep is a consolation prize, not a
+        free loot piñata at every boss door.
+
+        Exemptions:
+        * Resupply-type ships (anything carrying guaranteed_drops /
+          level_scaled_drops) survive the sweep — despawning the kid's
+          kit delivery mid-cruise is a trust violation.
+        * The faction filter alone protects pickups (PICKUP), players +
+          drones (PLAYER) and bullets; in-flight enemy bullets clear
+          via their own TTL.
+        """
+        swept = 0
+        for eid, ftag in list(world.query1(FactionTag)):
+            if ftag.faction != Faction.ENEMY:
+                continue
+            follower = world.get(eid, FormationFollower)
+            if follower is not None and (
+                follower.guaranteed_drops or follower.level_scaled_drops
+            ):
+                continue
+            pos_comp = world.get(eid, Position)
+            if pos_comp is not None:
+                score_val = world.get(eid, ScoreValue)
+                if score_val is not None:
+                    slot = self._nearest_alive_player_slot(pos_comp.pos)
+                    if slot is not None:
+                        self._session.scores.award(
+                            slot, score_val.points // 2, multiplier=1.0
+                        )
+                self._spawn_explosion(world, pos_comp.pos, scale=1)
+            world.despawn(eid)
+            swept += 1
+        if swept:
+            self.app.audio.play_sfx("explosion", volume=0.5)
 
     def _advance_enemies(self, world: World) -> None:
         from dataclasses import replace as _dc_replace
@@ -2007,6 +2057,27 @@ class LevelScene(Scene):
         elif not active and has_halo:
             world.remove(eid, ShieldHalo)
 
+    def _boss_pity_multiplier(self) -> float:
+        """Fairness floor for marathon boss fights (fun review
+        2026-06-12 R4). Below 60 seconds of UNSHIELDED fight time the
+        fight is untouched (1.0). Past that, player-bullet damage ramps
+        +2%/s up to a 3.0 cap, so an under-kitted kid grinds the fight
+        down in bounded time instead of stalling out. Shielded seconds
+        don't count — the same exclusion the time bonus uses — so
+        shield-heavy bosses (boss_04/05) don't hit the ramp early.
+        """
+        boss_state = self._boss
+        if boss_state is None:
+            return 1.0
+        elapsed = max(
+            0.0,
+            (self._sim_time - boss_state.fight_started_at)
+            - boss_state.shielded_seconds_accumulated,
+        )
+        if elapsed <= 60.0:
+            return 1.0
+        return min(3.0, 1.0 + 0.02 * (elapsed - 60.0))
+
     def _kill_boss(self, world: World, boss_state: BossState) -> None:
         """Boss-death routing — explosion fanfare, time-based bonus,
         sfx, level-completed flag. Kid playtest 2026-05-02 #12.
@@ -2091,8 +2162,12 @@ class LevelScene(Scene):
         # decreases monotonically.
 
         # Open the one-shot phase-start shield window if the boss
-        # configures one (kid playtest #15 — boss_03 phase 2).
-        if boss_state.boss.shield_on_phase_start_seconds > 0.0:
+        # configures one (kid playtest #15 — boss_03 phase 2). FIRST
+        # transition only (phase_index == 1 after the increment above):
+        # with 3-phase desperation bosses (fun review 2026-06-12 R4) a
+        # per-transition shield would hide boss_03's 160-HP gasp behind
+        # a 10s forcefield — longer than the gasp itself survives.
+        if boss_state.boss.shield_on_phase_start_seconds > 0.0 and boss_state.phase_index == 1:
             boss_state.shield_remaining = boss_state.boss.shield_on_phase_start_seconds
 
     def _spawn_enemy_bullets(
@@ -2391,7 +2466,12 @@ class LevelScene(Scene):
         if self._target_is_shielded(world, enemy_eid):
             world.despawn(bullet_eid)
             return
-        new_hp = hlth.hp - damage.amount
+        amount = damage.amount
+        # Fairness floor — player bullets only, boss entity only (the
+        # ramp must never touch enemy-on-player or bomb damage paths).
+        if self._boss is not None and enemy_eid == self._boss.entity:
+            amount = max(1, int(amount * self._boss_pity_multiplier() + 0.5))
+        new_hp = hlth.hp - amount
         world.replace(enemy_eid, Health(hp=new_hp))
         # Capture credit before despawning the bullet.
         owned = world.get(bullet_eid, PlayerOwned)

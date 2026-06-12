@@ -18,9 +18,9 @@
 # threat first. Stage 4 is the pre-boss crescendo — dense walls and
 # kamikaze-style interceptor swarms.
 #
-# Pacing: 225s in the brief (between level 1's 225 and a level-5 push
-# of ~260) → length_seconds 235 to leave room for the crescendo +
-# 5-second pre-boss settle. 18 wave events across 4 combat stages
+# Pacing: the boss wave fires at 175s (pulled in from 230 in the
+# kid-playtest pacing pass) → length_seconds 205 leaves the standard
+# ~30s margin past boss-spawn. 18 wave events across 4 combat stages
 # plus the boss wave — same density as level 2 but with the new
 # interceptor pressure dialled in.
 
@@ -30,7 +30,7 @@ codename: tense_orbital
 music: music/level_03.ogg
 boss_music: music/boss_03.ogg
 background: bg_space_station
-length_seconds: 235
+length_seconds: 205
 
 waves:
   # Pacing pass kid playtest 2026-05-02 #8 — every authored gap ≤ 10s.
