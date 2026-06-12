@@ -552,6 +552,11 @@ class LevelScene(Scene):
     # auto-spend was the cause of "P2's life count went 1 → 3 after
     # they died again." Populated lazily in _apply_player_input.
     _engaged: set[PlayerSlot] = field(default_factory=set, init=False)
+    # True ship deaths this level (drone hits and shield-absorbed hits
+    # excluded) — drives the resupply death catch-up bonus (fun review
+    # 2026-06-12 R2): struggling players get extra powerups instead of
+    # the old always-on level-index drop flood.
+    _deaths_this_level: int = field(default=0, init=False)
 
     def __init__(self, app: AppState, level_index: int = 1) -> None:
         self.app = app
@@ -610,6 +615,16 @@ class LevelScene(Scene):
         # re-award.
         bomb_bonus = max(0, self.app.bomb_bonus_pending)
         self.app.bomb_bonus_pending = 0
+        # Drain the docking shield-charge bonus into both slots' running
+        # inventories — same one-shot pattern as bomb_bonus_pending above.
+        # Fun review 2026-06-12 R2: DockingScene had been staging this
+        # since the equippable-shield work but nothing ever consumed it,
+        # so the promised resupply shield silently evaporated each dock.
+        shield_bonus = max(0, self.app.shield_charge_pending)
+        self.app.shield_charge_pending = 0
+        if shield_bonus:
+            self.app.add_shield_charge(P1, shield_bonus)
+            self.app.add_shield_charge(P2, shield_bonus)
         # Carry weapon tier across LEVEL boundaries — kid playtest:
         # "If you were good and you got awesome weaponry then you keep
         # it." Look up each slot's last persisted level (defaults to 0
@@ -662,6 +677,7 @@ class LevelScene(Scene):
         self._music_playing = None
         self._telegraphed = set()
         self._engaged = set()
+        self._deaths_this_level = 0
 
         # Spawn P1 immediately. P2 only spawns in 2-player mode (added
         # 2026-05-08); the title menu sets app.single_player. The
@@ -762,10 +778,13 @@ class LevelScene(Scene):
         player arriving at level N is floored to tier ``N - 1`` so a
         player who's been struggling still has a fighting chance at
         each new level. Never downgrades a higher prior tier. Level 1
-        has no floor (fresh start).
+        has no floor (fresh start). Fun review 2026-06-12 R2: the
+        floor caps at tier 2 — the old uncapped floor handed out
+        tier 4 for free on level 5, so the back-half tiers were never
+        earned. Tiers 3+ now only come from pickups.
         """
         prior = self.app.last_weapon_tiers.get(slot.index, 0)
-        floor = max(0, self.level_index - 1)
+        floor = max(0, min(self.level_index - 1, 2))
         return max(0, min(max(prior, floor), max_tree_level))
 
     def _seeded_missile_level(self, slot: PlayerSlot) -> int:
@@ -2277,6 +2296,9 @@ class LevelScene(Scene):
         world.despawn(player_eid)
         self._player_entities[slot] = None
         self._session.hit(slot)
+        # Past the drone branch, can_be_hit gate and shield-absorb branch
+        # above, so only true ship deaths feed the resupply catch-up.
+        self._deaths_this_level += 1
         self.app.audio.play_sfx("hit")
         # Drop weapon level, refresh bombs (but lives is owned by lifecycle).
         ship = self.app.content.ships["vanguard" if slot == P1 else "vanguard_red"]
@@ -2471,21 +2493,38 @@ class LevelScene(Scene):
                 offset = (i + 1) * offset_step
                 self._spawn_pickup(world, name, Vec2(pos.x + offset, pos.y))
         # Level-scaled drops (kid playtest 2026-04-28 #5 — resupply
-        # "limped through compensation": each entry spawns level_index
-        # times, fanned symmetrically left/right so the cluster stays
-        # visually tight even at level 5 (10 pickups + the 2 above).
+        # "limped through compensation"): each entry spawns
+        # min(level_index, 2) times, fanned symmetrically left/right so
+        # the cluster stays visually tight. Fun review 2026-06-12 R2:
+        # the old uncapped level_index multiplier guaranteed max kit by
+        # L4-5 (20 instrumented runs), so the cap is 2 and struggling
+        # players get a death catch-up bonus below instead.
         if follower is not None and follower.level_scaled_drops and self.level_index >= 1:
             scale_offset_step = 24.0
             spawn_index = 0
             for name in follower.level_scaled_drops:
                 if name not in self.app.content.pickups:
                     continue
-                for _ in range(self.level_index):
+                for _ in range(min(self.level_index, 2)):
                     pair = spawn_index // 2 + 1
                     direction = -1 if spawn_index % 2 == 0 else 1
                     dx = direction * pair * scale_offset_step
                     dy = -scale_offset_step if spawn_index >= 8 else 0.0
                     self._spawn_pickup(world, name, Vec2(pos.x + dx, pos.y + dy))
+                    spawn_index += 1
+            # Death catch-up (replaces the old uncapped scaling as the
+            # "boost when you're behind" mechanism): +1 weapon-tier
+            # pickup per ship death this level, capped at 3, continuing
+            # the same fan layout so the cluster reads as one drop.
+            if "pickup_powerup" in self.app.content.pickups:
+                for _ in range(min(self._deaths_this_level, 3)):
+                    pair = spawn_index // 2 + 1
+                    direction = -1 if spawn_index % 2 == 0 else 1
+                    dx = direction * pair * scale_offset_step
+                    dy = -scale_offset_step if spawn_index >= 8 else 0.0
+                    self._spawn_pickup(
+                        world, "pickup_powerup", Vec2(pos.x + dx, pos.y + dy)
+                    )
                     spawn_index += 1
         # Visual feedback: explosion at the enemy's position.
         scale = 2 if follower is not None and follower.score >= 600 else 1

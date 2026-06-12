@@ -20,9 +20,10 @@ enemies:
   # power-up set restricted to WEAPON BOOST and SPEED. Bomb / Health
   # are still defined and reachable on rare drops, but they're no
   # longer in the common pools so the kid sees the meaningful upgrades
-  # first. Shield (10s forcefield invulnerability) added 2026-04-27 per
-  # follow-up feedback — drops only from gunship / bomber so it feels
-  # earned. Wingman / missile power-ups remain backlogged.
+  # first. Shield (equippable charge — 3s invulnerability on button
+  # press, see SHIELD_CONSUME_DURATION) added 2026-04-27 per follow-up
+  # feedback — drops only from gunship / bomber so it feels earned.
+  # Wingman / missile power-ups remain backlogged.
   # Task #9 drop-pool note (kid-playtest balance):
   #   bomb / shield / weapon_upgrade  ~30% combined  (frequent, useful)
   #   ship_speed / weapon_speed       ~30% combined  (mid)
@@ -170,9 +171,14 @@ enemies:
     guaranteed_drops: [pickup_missile]
     # Level-scaled drops (kid playtest 2026-04-28 #5 — "the further
     # you've made it, the bigger the catch-up boost"). Each entry
-    # spawns level_index times: on level 1 = +1 weapon-tier + +1
-    # ship-speed pickup; on level 4 = +4 of each. Caps fall out of
-    # the standard pickup logic (weapon tree max, +60% speed cap).
+    # spawns min(level_index, 2) times: on level 1 = +1 weapon-tier +
+    # +1 ship-speed pickup; level 2+ = +2 of each. Fun review
+    # 2026-06-12 R2 capped the old uncapped level_index multiplier
+    # (it guaranteed max kit by L4-5); catch-up is now driven by ship
+    # deaths instead — +1 weapon-tier pickup per death this level,
+    # capped at 3 (LevelScene._on_enemy_killed). Pickup-side caps
+    # still fall out of the standard logic (weapon tree max, +60%
+    # speed cap).
     level_scaled_drops: [pickup_powerup, pickup_ship_speed]
 
   # ───────── Levels 3-5 introductions ─────────
@@ -769,16 +775,18 @@ pickups:
     fall_speed: 80
     effect: extra_life          # the 1-up
 
-  # Shield: 10 seconds of total invulnerability via a forcefield ring.
-  # Stacking refreshes the timer (does NOT add) — collecting two shields
-  # back-to-back gives you 10 seconds, not 20. Drops from chunkier
-  # enemies (gunship, bomber) so it feels earned, not handed out.
+  # Shield: equippable charge — collecting one adds a charge to the
+  # player's inventory; pressing the shield button consumes a charge
+  # for a short invulnerability window. The window length is code-owned
+  # (SHIELD_CONSUME_DURATION, 3s by design — ssdq/core/powerups/state.py),
+  # NOT a YAML knob: a `duration:` here is never read by the SHIELD
+  # branch of apply_pickup. Drops from chunkier enemies (gunship,
+  # bomber) so it feels earned, not handed out.
   pickup_shield:
     sprite: pickups/shield.png
     hitbox_radius: 14
     fall_speed: 80
     effect: shield
-    duration: 10.0             # seconds — per user feedback
 
   # Task #9 — kid-playtest pool of 8 power-ups.
   # Permanent +15% ship-speed bump per pickup, capped at +60% (the

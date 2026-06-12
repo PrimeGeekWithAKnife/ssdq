@@ -43,9 +43,10 @@ _SKIP_AFTER_SECONDS = 1.0
 _DOCK_Y_FRAC = 0.42  # fraction of screen height
 # Bombs to grant each player on completion.
 _BOMB_BONUS = 2
-# Shield charges to grant each player on completion. Currently staged
-# into ``AppState.shield_charge_pending`` ahead of the equippable-shield
-# power-up landing in #4 — see app_state.py for the consumption TODO.
+# Shield charges to grant each player on completion. Staged into
+# ``AppState.shield_charge_pending``; the next ``LevelScene.enter``
+# drains it into both slots' running ``shield_charges`` inventories
+# (one-shot, same pattern as bomb_bonus_pending).
 _SHIELD_BONUS = 1
 
 _BG_COLOUR = (4, 6, 20)
@@ -229,10 +230,10 @@ class DockingScene(Scene):
 
         We accumulate (rather than overwrite) so back-to-back dockings
         across multiple levels stack correctly. ``LevelScene.enter``
-        consumes ``bomb_bonus_pending`` one-shot. The shield-charge
-        counter is staged in anticipation of #4 (equippable shield);
-        until that lands the field is set but not yet consumed —
-        AppState's ``shield_charge_pending`` carries a TODO marker.
+        consumes ``bomb_bonus_pending`` AND ``shield_charge_pending``
+        one-shot, draining the latter into both slots' equippable
+        shield-charge inventories (fun review 2026-06-12 R2 — the
+        pending counter used to be staged but never consumed).
         Weapon tier is NOT (re)granted here — that's persisted via
         ``LevelScene.exit`` and seeded back in ``LevelScene.enter``;
         we just *display* it on screen so the kid sees that it carried
