@@ -46,6 +46,7 @@ from ssdq.core.components import (
     PlayerOwned,
     Position,
     ScoreValue,
+    ShieldHalo,
     Sprite,
     TimeToLive,
     Velocity,
@@ -58,6 +59,11 @@ from ssdq.core.coop import (
 )
 from ssdq.core.coop.scoring import ScoreLedger
 from ssdq.core.ecs import World
+from ssdq.core.powerups.state import (
+    PlayerPowerupState,
+    WeaponState,
+    apply_pickup,
+)
 from ssdq.core.rng import tick_int, tick_range, tick_unit
 from ssdq.core.scene import Replace, Scene, SceneTransition
 from ssdq.core.types import P1, P2, Entity, PlayerInput, PlayerSlot, TickIndex, Vec2
@@ -69,13 +75,17 @@ from ssdq.scenes.level import PLAY_H, PLAY_W, PlayerShip, _input_is_active
 
 # Total ride length. Spawning stops at _RIDE_SECONDS and the right-edge
 # exit glow ramps over the final stretch; at _TOTAL_SECONDS we _finish().
-_RIDE_SECONDS = 68.0
-_TOTAL_SECONDS = 72.0
+# Fun review 2026-06-12: the boy loves the ride — make it longer (was
+# 68/72/62). At 4s orb trains of 5, reaching a 15-in-a-row streak needs
+# 3 perfect consecutive trains, a real but fair top-tier goal over 110s.
+_RIDE_SECONDS = 110.0
+_TOTAL_SECONDS = 114.0
 # "HYPERSPACE!" banner hold at the start of the ride.
 _BANNER_SECONDS = 3.0
 # No new rocks in the final 6s of spawning so the screen is visibly
 # clearing as the exit glow approaches — the kid reads "almost there"
-# rather than dying to a rock spat out at second 67.
+# rather than dying to a rock spat out at the last second. Kept at the
+# same ~6s-clear / ~4s-exit-glow relationship as the shorter ride.
 _OBSTACLE_CUTOFF = _RIDE_SECONDS - 6.0
 
 # ───────── movement / firing ─────────
@@ -119,6 +129,44 @@ _ORB_SPEED = -120.0
 _ORB_TRAIN_LEN = 5
 _ORB_SPACING_PX = 44.0
 
+# ───────── streak-reward tuning (fun review 2026-06-12) ─────────
+
+# A perfect run of nugget collects earns escalating rewards. Milestones
+# are exact (5/10/15); the 15 reward re-arms the streak so a long ride
+# can earn it more than once. Breaking the run (a missed/culled orb, or
+# a death) resets the streak — see _cull_entities / _handle_player_hit.
+_STREAK_MILESTONES = (5, 10, 15)
+# Curated pickup pool for the 5-streak random reward. Real pickup names
+# from content/enemies.yaml (verified): all five exist and parse.
+_REWARD_PICKUP_NAMES = (
+    "pickup_powerup",
+    "pickup_ship_speed",
+    "pickup_bomb",
+    "pickup_health",
+    "pickup_shield",
+)
+# In-ride fire-cadence scaling per scene weapon tier. Each tier shaves
+# the cooldown via _FIRE_COOLDOWN / (1 + _FIRE_TIER_GAIN * tier) so a
+# powered-up player visibly shoots faster on the ride (the reward's
+# only in-ride teeth; the persistent tier carries to L6 separately).
+_FIRE_TIER_GAIN = 0.12
+# Reward drones: cap the in-ride visual at 2 per slot (matches the
+# campaign's _DRONE_MAX) and fire a rightward bolt on this cadence.
+_HYPER_DRONE_MAX = 2
+_HYPER_DRONE_FIRE_COOLDOWN = 0.30
+_HYPER_DRONE_OFFSET_Y = 38.0  # |dy| from the ship; slot 0 above, 1 below
+_HYPER_DRONE_OFFSET_X = 4.0  # slightly ahead of the ship's nose column
+_HYPER_DRONE_SCALE = 0.66 * 0.7  # same "noticeably smaller" feel as L6
+# Super shield (15-streak reward): banked, press the shield button to
+# spend one; grants a 90s purple-halo invulnerability window. Ride-only
+# (banked count + active timer are scene-local — never carry to L6).
+_SUPER_SHIELD_SECONDS = 90.0
+_SUPER_SHIELD_COLOUR = (185, 95, 255)
+_SUPER_SHIELD_HALO_RADIUS = 30.0
+# Reward banner flash hold (a short "POWER UP!" / "DRONE!" / "SUPER
+# SHIELD!" toast). ~2s, readable for a 9-year-old without gating play.
+_REWARD_BANNER_SECONDS = 2.0
+
 # Deterministic-noise channels — distinct per decision so the streams
 # don't correlate (same convention as the backdrop generators, which
 # own the 10_000–96_000 ranges; the hyperspace scene takes 61_xxx).
@@ -131,6 +179,9 @@ _CH_RAIDER_LANE = 61_011
 _CH_ORB_PATTERN = 61_020
 _CH_ORB_SIDE = 61_021
 _CH_ORB_DIST = 61_022
+# Streak-reward channels (fun review 2026-06-12 — nugget-streak rewards).
+_CH_REWARD_ROLL = 61_030  # which random pickup the 5-streak grants
+_CH_DRONE_FIRE = 61_031  # scene-local drone fire cadence jitter
 
 
 # ───────── scene-local components ─────────
@@ -158,6 +209,17 @@ class HyperRaider:
 class HyperOrb:
     """Marker on score orbs so collection (and the deeper right-edge
     cull allowance for incoming trains) can identify them."""
+
+
+@dataclass(frozen=True, slots=True)
+class HyperDrone:
+    """Marker on a scene-local reward drone. Rides at a fixed offset
+    beside its owning player's ship and auto-fires rightward bolts. Kept
+    entirely scene-local (its own marker + reposition/fire loops) so the
+    ride takes none of LevelScene's drone-formation machinery."""
+
+    slot: PlayerSlot
+    slot_index: int  # 0 or 1 — which of the up-to-2 reward drones this is
 
 
 @dataclass(frozen=True, slots=True)
@@ -200,6 +262,29 @@ class HyperspaceScene(Scene):
         self._engaged: set[PlayerSlot] = set()
         self._sim_time: float = 0.0
         self._internal_tick: int = 0
+        # ── nugget-streak rewards (fun review 2026-06-12) ──
+        # Per-slot "in a row" collect counter. Breaks on a missed orb
+        # (an uncollected orb culled off-screen — resets ALL slots) or
+        # on death (resets the dead slot). Milestones at 5/10/15.
+        self._orb_streak: dict[PlayerSlot, int] = {P1: 0, P2: 0}
+        # Scene-local powerup state per slot. Seeded in enter() from the
+        # carry-forward fields exactly as LevelScene.enter does, so the
+        # 5-streak reward applies on top of the player's real loadout
+        # and routes the persistent bits back to AppState (carry to L6).
+        self._powerup_states: dict[PlayerSlot, PlayerPowerupState] = {}
+        # 15-streak super shield: banked count (press shield to spend)
+        # and the active countdown. BOTH scene-local — never carry.
+        self._super_shield_banked: dict[PlayerSlot, int] = {P1: 0, P2: 0}
+        self._super_shield_secs: dict[PlayerSlot, float] = {P1: 0.0, P2: 0.0}
+        # Rising-edge tracking for the shield button (PlayerInput.shield
+        # is documented edge-triggered, but the ride reads raw inputs;
+        # track prev state so a held press spends exactly one bank).
+        self._prev_shield: dict[PlayerSlot, bool] = {P1: False, P2: False}
+        # Per-slot reward-banner flash: (text, seconds_remaining). Drawn
+        # in render() and decayed each tick.
+        self._reward_banner: dict[PlayerSlot, tuple[str, float]] = {}
+        # Per-(slot, slot_index) reward-drone fire cooldown.
+        self._drone_cooldown: dict[tuple[PlayerSlot, int], float] = {}
         # Spawn timers. First rock lands ~1.5s in so the banner gets a
         # beat of clean screen; orbs at ~4s; raider per its 10–12s gap.
         self._next_obstacle_tick: int = 90
@@ -263,6 +348,29 @@ class HyperspaceScene(Scene):
         if not self.app.single_player:
             self._spawn_player(world, P2, self._spawn_pos(P2))
 
+        # Seed per-slot powerup state from the carry-forward fields,
+        # mirroring LevelScene.enter exactly (tree parsed off the ship's
+        # primary weapon; tier/bombs/ship-speed/missile from app.last_*).
+        # The 5-streak reward applies pickups on top of this and routes
+        # the persistent results back to AppState so they carry into L6.
+        ship = bundle.ships["vanguard"]
+        tree = ship.primary_weapon.split("_lvl")[0]
+        max_tree_level = max(0, len(bundle.weapon_trees.get(tree, ())) - 1)
+        self._powerup_states = {}
+        for slot in (P1, P2):
+            prior_tier = self.app.last_weapon_tiers.get(slot.index, 0)
+            tier = max(0, min(prior_tier, max_tree_level))
+            bombs = max(self.app.last_bombs.get(slot.index, 0), ship.starting_bombs)
+            speed_bonus = self.app.last_ship_speed_bonus.get(slot.index, 0.0)
+            missile_level = self.app.last_missile_levels.get(slot.index, 0)
+            self._powerup_states[slot] = PlayerPowerupState(
+                weapon=WeaponState(tree=tree, level=tier),
+                bombs=bombs,
+                lives=self.app.options.starting_lives,
+                ship_speed_bonus=speed_bonus,
+                missile_level=max(0, missile_level),
+            )
+
         # Trimmed HUD snapshot — scores + lives only; bombs/missiles/
         # drones/shields don't exist on the ride so their counters stay
         # zero rather than leaking stale campaign numbers.
@@ -319,6 +427,13 @@ class HyperspaceScene(Scene):
         # 2. player input → movement + fire.
         self._apply_player_input(world, P1, inputs[0], dt)
         self._apply_player_input(world, P2, inputs[1], dt)
+
+        # 2a. reward state — super-shield bank/activate + halo upkeep,
+        # reward-drone reposition/fire, and the flash-banner decay. Kept
+        # after player input so drones snap to the just-moved ship.
+        self._update_super_shields(world, inputs, dt)
+        self._advance_reward_drones(world, dt)
+        self._tick_reward_banners(dt)
 
         # 3. scene-local spawns (all stop at _RIDE_SECONDS).
         if self._sim_time < _RIDE_SECONDS:
@@ -384,6 +499,52 @@ class HyperspaceScene(Scene):
                 band.fill((210, 235, 255, a))
                 surface.blit(band, (x, 0))
 
+        self._render_streak_overlay(surface, w, h)
+
+    def _render_streak_overlay(self, surface: pygame.Surface, w: int, h: int) -> None:
+        """Big, few-words streak + super-shield readout per active player,
+        plus the ~2s reward banners. Kept readable for a 9-year-old."""
+        if self._session is None or self._hint_font is None or self._title_font is None:
+            return
+        slots = (P1,) if self.app.single_player else (P1, P2)
+        for slot in slots:
+            if self._session.lifecycle(slot).state == LifecycleState.OUT:
+                continue
+            # Per-side column: P1 top-left, P2 top-right.
+            left = slot == P1
+            x = 24 if left else w - 24
+            y = 96
+            lines: list[tuple[str, tuple[int, int, int]]] = []
+            streak = self._orb_streak.get(slot, 0)
+            if streak > 0:
+                nxt = next((m for m in _STREAK_MILESTONES if m > streak), None)
+                if nxt is not None:
+                    lines.append((f"STREAK x{streak}  (next {nxt})", (255, 240, 120)))
+                else:
+                    lines.append((f"STREAK x{streak}", (255, 240, 120)))
+            banked = self._super_shield_banked.get(slot, 0)
+            if banked > 0:
+                lines.append((f"SUPER SHIELD x{banked} - press shield", _SUPER_SHIELD_COLOUR))
+            secs = self._super_shield_secs.get(slot, 0.0)
+            if secs > 0.0:
+                lines.append((f"SUPER SHIELD {secs:0.0f}s", _SUPER_SHIELD_COLOUR))
+            for text, colour in lines:
+                surf = self._hint_font.render(text, True, colour)
+                rect = surf.get_rect()
+                if left:
+                    rect.topleft = (x, y)
+                else:
+                    rect.topright = (x, y)
+                surface.blit(surf, rect)
+                y += 34
+            # Reward banner — big toast centred over this player's column.
+            banner = self._reward_banner.get(slot)
+            if banner is not None:
+                text, _rem = banner
+                surf = self._title_font.render(text, True, (255, 255, 255))
+                cx = w // 4 if left else (w * 3) // 4
+                surface.blit(surf, surf.get_rect(center=(cx, h // 2)))
+
     # ───────── helpers: players ─────────
 
     @staticmethod
@@ -429,9 +590,16 @@ class HyperspaceScene(Scene):
 
         ship = self.app.content.ships["vanguard" if slot == P1 else "vanguard_red"]
         move = inp.move.clamped_magnitude(1.0)
+        # Ship-speed reward (5-streak pickup, or carried-in bonus) gives
+        # visible in-ride teeth: scale the max-speed by the additive
+        # bonus exactly like the campaign (ship_speed_bonus is capped at
+        # +60% in PlayerPowerupState so this can't make the ship wild).
+        pstate = self._powerup_states.get(slot)
+        speed_scale = 1.0 + (pstate.ship_speed_bonus if pstate is not None else 0.0)
+        max_speed = ship.max_speed * speed_scale
         # Gentle accel: ease the velocity toward the stick target rather
         # than snapping to it — hyperspace coasting, not arcade strafing.
-        target = Vec2(move.x * ship.max_speed, move.y * ship.max_speed)
+        target = Vec2(move.x * max_speed, move.y * max_speed)
         vel = self._player_vel[slot]
         blend = min(1.0, _PLAYER_ACCEL_RATE * dt)
         vel = Vec2(vel.x + (target.x - vel.x) * blend, vel.y + (target.y - vel.y) * blend)
@@ -463,7 +631,11 @@ class HyperspaceScene(Scene):
                 Sprite(path=_BULLET_SPRITE, layer=8, rotation_rad=math.pi / 2.0),
                 TimeToLive(ticks=180),
             )
-            cooldown = _FIRE_COOLDOWN
+            # Weapon-tier reward (5-streak powerup, or carried-in tier)
+            # shaves the cooldown so a powered player visibly shoots
+            # faster on the ride. Bounded by the tree's max tier.
+            tier = pstate.weapon.level if pstate is not None else 0
+            cooldown = _FIRE_COOLDOWN / (1.0 + _FIRE_TIER_GAIN * tier)
             self.app.audio.play_sfx("laser", volume=0.4)
         world.replace(eid, PlayerShip(slot=slot, weapon_cooldown=cooldown))
 
@@ -661,6 +833,79 @@ class HyperspaceScene(Scene):
         world.despawn(pickup_eid)
         self._session.scores.award(owned.slot, _ORB_POINTS, multiplier=1.0)
         self.app.audio.play_sfx("pickup")
+        # Nugget-streak (fun review 2026-06-12): this collect continues
+        # the slot's run. Despawning the orb HERE (a true collect) is
+        # what distinguishes it from the off-screen cull, which is the
+        # only place a streak resets to 0 for a miss.
+        slot = owned.slot
+        self._orb_streak[slot] = self._orb_streak.get(slot, 0) + 1
+        self._dispatch_streak_reward(world, slot, self._orb_streak[slot])
+
+    def _dispatch_streak_reward(self, world: World, slot: PlayerSlot, streak: int) -> None:
+        """Fire escalating milestone rewards on the collecting slot at
+        exactly 5/10/15. The 15-reward re-arms the streak (reset to 0) so
+        a long ride can earn the super shield more than once."""
+        if streak not in _STREAK_MILESTONES:
+            return
+        if streak == 5:
+            self._grant_reward_powerup(slot)
+        elif streak == 10:
+            self._grant_reward_drone(world, slot)
+        elif streak == 15:
+            self._grant_reward_super_shield(slot)
+            # Re-arm: a fresh run toward the next super shield.
+            self._orb_streak[slot] = 0
+
+    def _grant_reward_powerup(self, slot: PlayerSlot) -> None:
+        """5-streak: roll a random pickup, apply it to the slot's scene
+        powerup state, and route the persistent results to AppState so
+        they carry into Level 6 (clear_progression is NOT called between
+        a campaign hyperspace and L6)."""
+        assert self._session is not None
+        idx = tick_int(self._internal_tick, 0, len(_REWARD_PICKUP_NAMES), channel=_CH_REWARD_ROLL)
+        name = _REWARD_PICKUP_NAMES[idx]
+        bundle = self.app.content
+        pdef = bundle.pickups[name]
+        state = self._powerup_states[slot]
+        tree = state.weapon.tree
+        max_tree_level = max(0, len(bundle.weapon_trees.get(tree, ())) - 1)
+        result = apply_pickup(state, pdef, weapon_tree_max_level=max_tree_level)
+        self._powerup_states[slot] = result.new_state
+        # Persist the carry-forward bits exactly like LevelScene.exit's
+        # cleared-level branch writes them, so the next LevelScene.enter
+        # re-seeds from these on L6.
+        self.app.last_weapon_tiers[slot.index] = result.new_state.weapon.level
+        self.app.last_ship_speed_bonus[slot.index] = result.new_state.ship_speed_bonus
+        self.app.last_bombs[slot.index] = result.new_state.bombs
+        if result.extra_life:
+            self._session.grant_extra_life(slot)
+        if result.shield_charge_added:
+            self.app.add_shield_charge(slot)
+        self._flash_reward(slot, "POWER UP!")
+        self.app.audio.play_sfx("pickup")
+
+    def _grant_reward_drone(self, world: World, slot: PlayerSlot) -> None:
+        """10-streak: queue a drone for L6 (carries via drones_pending)
+        AND spawn a scene-local reward drone that rides beside the ship.
+        The in-ride visual is capped at _HYPER_DRONE_MAX per slot."""
+        self.app.drones_pending[slot] = self.app.drones_pending.get(slot, 0) + 1
+        free_idx = self._next_free_drone_slot_index(world, slot)
+        if free_idx is not None:
+            self._spawn_reward_drone(world, slot, free_idx)
+        self._flash_reward(slot, "DRONE!")
+        self.app.audio.play_sfx("pickup")
+
+    def _grant_reward_super_shield(self, slot: PlayerSlot) -> None:
+        """15-streak: bank one single-use super shield. The player spends
+        it by pressing the shield button (rising edge) for a 90s purple
+        invulnerability window. Banked count + active timer are scene-
+        local — the super shield never carries to L6."""
+        self._super_shield_banked[slot] = self._super_shield_banked.get(slot, 0) + 1
+        self._flash_reward(slot, "SUPER SHIELD! press shield")
+        self.app.audio.play_sfx("pickup")
+
+    def _flash_reward(self, slot: PlayerSlot, text: str) -> None:
+        self._reward_banner[slot] = (text, _REWARD_BANNER_SECONDS)
 
     def _handle_player_hit(
         self,
@@ -678,6 +923,11 @@ class HyperspaceScene(Scene):
         player_eid = a if ftag_a.faction == Faction.PLAYER else b
         other = b if player_eid == a else a
         other_ftag = ftag_b if player_eid == a else ftag_a
+        # Reward drones share the PLAYER faction but are decorative
+        # bystanders here — a rock striking a drone must NOT despawn the
+        # real ship reference or cost the player a life. Ignore the hit.
+        if world.has(player_eid, HyperDrone):
+            return
         owned = world.get(player_eid, PlayerOwned)
         if owned is None:
             return
@@ -686,11 +936,26 @@ class HyperspaceScene(Scene):
         # hit — post-respawn i-frames work exactly as in the campaign.
         if not self._session.lifecycle(slot).can_be_hit:
             return
+        # Super-shield absorb (15-streak reward): while the 90s window is
+        # active, soak the hit — no life lost, the ship survives — but
+        # still shatter the incoming rock / consume the bullet so it
+        # can't camp on the ship. The streak is NOT broken (no death).
+        if self._super_shield_secs.get(slot, 0.0) > 0.0:
+            if other_ftag.faction == Faction.ENEMY_BULLET and world.is_alive(other):
+                world.despawn(other)
+            elif other_ftag.faction == Faction.ENEMY and world.is_alive(other):
+                other_pos = world.get(other, Position)
+                if other_pos is not None:
+                    self._spawn_explosion(world, other_pos.pos, scale=1)
+                world.despawn(other)
+            return
         player_pos = world.must_get(player_eid, Position).pos
         self._spawn_explosion(world, player_pos, scale=2)
         world.despawn(player_eid)
         self._player_entities[slot] = None
         self._session.hit(slot)
+        # Death breaks this slot's nugget streak (true "in a row").
+        self._orb_streak[slot] = 0
         self.app.audio.play_sfx("hit")
         if other_ftag.faction == Faction.ENEMY_BULLET:
             # Consume the bullet so it can't double-hit next tick.
@@ -726,6 +991,161 @@ class HyperspaceScene(Scene):
         self._spawn_explosion(world, pos, scale=1)
         world.despawn(enemy_eid)
         self.app.audio.play_sfx("explosion", volume=0.5)
+
+    # ───────── helpers: streak rewards / super shield / drones ─────────
+
+    def _reset_all_streaks(self) -> None:
+        """A missed (left-edge culled) nugget breaks every player's run."""
+        for slot in (P1, P2):
+            self._orb_streak[slot] = 0
+
+    def _update_super_shields(
+        self, world: World, inputs: tuple[PlayerInput, PlayerInput], dt: float
+    ) -> None:
+        """Read the shield button rising-edge per slot to spend a banked
+        super shield, decay any active window, and keep the purple halo
+        attached to the live ship for the window's duration."""
+        for slot, inp in ((P1, inputs[0]), (P2, inputs[1])):
+            pressed = bool(inp.shield)
+            rising = pressed and not self._prev_shield.get(slot, False)
+            self._prev_shield[slot] = pressed
+            active = self._super_shield_secs.get(slot, 0.0) > 0.0
+            # Rising-edge activate: spend one bank only when not already
+            # running a window (so a held press can't drain the stack).
+            if rising and not active and self._super_shield_banked.get(slot, 0) > 0:
+                self._super_shield_banked[slot] -= 1
+                self._super_shield_secs[slot] = _SUPER_SHIELD_SECONDS
+                active = True
+                self.app.audio.play_sfx("shield")
+            # Decay the active window.
+            if active:
+                remaining = self._super_shield_secs.get(slot, 0.0) - dt
+                self._super_shield_secs[slot] = max(0.0, remaining)
+            # Halo upkeep: purple ring while active on the live ship,
+            # removed the moment the window closes.
+            self._sync_super_shield_halo(world, slot)
+
+    def _sync_super_shield_halo(self, world: World, slot: PlayerSlot) -> None:
+        eid = self._player_entities.get(slot)
+        if eid is None or not world.is_alive(eid):
+            return
+        want = self._super_shield_secs.get(slot, 0.0) > 0.0
+        has = world.has(eid, ShieldHalo)
+        if want and not has:
+            world.add(
+                eid,
+                ShieldHalo(base_radius=_SUPER_SHIELD_HALO_RADIUS, colour=_SUPER_SHIELD_COLOUR),
+            )
+        elif has and not want:
+            world.remove(eid, ShieldHalo)
+
+    def _tick_reward_banners(self, dt: float) -> None:
+        for slot in list(self._reward_banner.keys()):
+            text, remaining = self._reward_banner[slot]
+            remaining -= dt
+            if remaining <= 0.0:
+                del self._reward_banner[slot]
+            else:
+                self._reward_banner[slot] = (text, remaining)
+
+    def _hyper_drones_for_slot(
+        self, world: World, slot: PlayerSlot
+    ) -> list[tuple[Entity, HyperDrone]]:
+        """Stable (entity, drone) list for ``slot`` ordered by slot_index
+        so flank assignment is deterministic (mirrors LevelScene)."""
+        out: list[tuple[Entity, HyperDrone]] = []
+        for eid, drone in world.query1(HyperDrone):
+            if drone.slot == slot:
+                out.append((eid, drone))
+        out.sort(key=lambda pair: pair[1].slot_index)
+        return out
+
+    def _next_free_drone_slot_index(self, world: World, slot: PlayerSlot) -> int | None:
+        """First slot_index in 0..(_HYPER_DRONE_MAX-1) not occupied by a
+        live reward drone for ``slot``; None if the cap is reached."""
+        used = {d.slot_index for _e, d in self._hyper_drones_for_slot(world, slot)}
+        for i in range(_HYPER_DRONE_MAX):
+            if i not in used:
+                return i
+        return None
+
+    def _spawn_reward_drone(self, world: World, slot: PlayerSlot, slot_index: int) -> Entity:
+        """Spawn a scene-local reward drone for ``slot`` beside the ship.
+        Carries the same player ship sprite at a smaller scale; rides at
+        a fixed vertical offset (slot 0 above, slot 1 below)."""
+        ship_name = "vanguard" if slot == P1 else "vanguard_red"
+        ship = self.app.content.ships[ship_name]
+        anchor = self._player_positions.get(slot, self._spawn_pos(slot))
+        off = self._drone_offset(slot_index)
+        eid = world.spawn(
+            Position(Vec2(anchor.x + off.x, anchor.y + off.y)),
+            CircleHitbox(radius=6.0),
+            FactionTag(Faction.PLAYER),
+            PlayerOwned(slot),
+            # Same clockwise-90° rotation as the player ship so the drone
+            # faces RIGHT along the flight path.
+            Sprite(
+                path=ship.sprite,
+                layer=9,
+                scale=_HYPER_DRONE_SCALE,
+                rotation_rad=math.pi / 2.0,
+            ),
+            HyperDrone(slot=slot, slot_index=slot_index),
+        )
+        self._drone_cooldown[(slot, slot_index)] = 0.0
+        return eid
+
+    @staticmethod
+    def _drone_offset(slot_index: int) -> Vec2:
+        sign = -1.0 if slot_index == 0 else 1.0
+        return Vec2(_HYPER_DRONE_OFFSET_X, sign * _HYPER_DRONE_OFFSET_Y)
+
+    def _advance_reward_drones(self, world: World, dt: float) -> None:
+        """Reposition each reward drone beside its owner and auto-fire a
+        rightward bolt on its cadence. When the owner is dead/INVULN the
+        drone holds position and does not fire (no anchor to follow)."""
+        for slot in (P1, P2):
+            anchor = self._player_pos_if_alive(slot)
+            for eid, drone in self._hyper_drones_for_slot(world, slot):
+                if not world.is_alive(eid):
+                    continue
+                if anchor is None:
+                    # Owner not on-screen — leave the drone in place,
+                    # don't fire; it snaps back when the ship respawns.
+                    self._drone_cooldown[(slot, drone.slot_index)] = 0.0
+                    continue
+                off = self._drone_offset(drone.slot_index)
+                dpos = Vec2(
+                    max(0.0, min(PLAY_W, anchor.x + off.x)),
+                    max(0.0, min(PLAY_H, anchor.y + off.y)),
+                )
+                world.replace(eid, Position(dpos))
+                key = (slot, drone.slot_index)
+                cd = max(0.0, self._drone_cooldown.get(key, 0.0) - dt)
+                if cd <= 0.0:
+                    self._fire_drone_bolt(world, slot, dpos)
+                    # Tiny per-drone jitter keeps two drones' bolts from
+                    # perfectly stacking; deterministic via the channel.
+                    jitter = tick_range(
+                        self._internal_tick + drone.slot_index,
+                        0.0,
+                        0.04,
+                        channel=_CH_DRONE_FIRE,
+                    )
+                    cd = _HYPER_DRONE_FIRE_COOLDOWN + jitter
+                self._drone_cooldown[key] = cd
+
+    def _fire_drone_bolt(self, world: World, slot: PlayerSlot, origin: Vec2) -> None:
+        world.spawn(
+            Position(Vec2(origin.x + 20.0, origin.y)),
+            Velocity(Vec2(_BULLET_SPEED, 0.0)),
+            CircleHitbox(radius=6.0),
+            FactionTag(Faction.PLAYER_BULLET),
+            PlayerOwned(slot),
+            Damage(amount=1),
+            Sprite(path=_BULLET_SPRITE, layer=8, rotation_rad=math.pi / 2.0),
+            TimeToLive(ticks=180),
+        )
 
     # ───────── helpers: respawn / animations / cull / hud ─────────
 
@@ -815,12 +1235,22 @@ class HyperspaceScene(Scene):
         for eid, pos in list(world.query1(Position)):
             if world.has(eid, PlayerShip):
                 continue
+            # Reward drones ride beside the ship and are repositioned each
+            # tick (no drift off-screen) — never cull them on bounds.
+            if world.has(eid, HyperDrone):
+                continue
             x, y = pos.pos.x, pos.pos.y
             # Orb trains spawn up to ~PLAY_W+216 deep so the whole line
             # streams in — give them a deeper right-edge allowance than
             # everything else (which culls at +80 like the campaign).
             right_margin = 260.0 if world.has(eid, HyperOrb) else 80.0
             if x < -60.0 or x > PLAY_W + right_margin or y < -80.0 or y > PLAY_H + 80.0:
+                # An orb that scrolls off the LEFT edge was MISSED — the
+                # train is broken, so reset EVERY active player's streak
+                # (this is the ONLY miss-reset; a true collect despawns
+                # the orb in _handle_orb_collect, never reaching here).
+                if world.has(eid, HyperOrb) and x < -60.0:
+                    self._reset_all_streaks()
                 world.despawn(eid)
 
     def _build_hud_state(self) -> HudCoopState:
