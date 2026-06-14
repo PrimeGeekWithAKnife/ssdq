@@ -21,6 +21,7 @@ from ssdq.core.content.schema import (
     PickupEffect,
     ShipDef,
     SpawnDef,
+    StrayAsteroidConfig,
     WaveDef,
     WeaponDef,
 )
@@ -42,6 +43,7 @@ __all__ = [
     "PickupEffect",
     "ShipDef",
     "SpawnDef",
+    "StrayAsteroidConfig",
     "WaveDef",
     "WeaponDef",
     "load_bundle",

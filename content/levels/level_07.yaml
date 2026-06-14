@@ -32,6 +32,24 @@ boss_music: music/boss_07.ogg
 background: bg_starfield_01
 length_seconds: 280
 
+# Stray-asteroid dodge-fest (fun review 2026-06-12 — the boy wanted the
+# finale to ALSO be a dodge-fest). Fast rocks streak across the convoy's
+# run in random directions every 10-20s — faster than the player's ship
+# (320 * 1.5 = 480 px/s) but reaction-dodgeable by a skilled pilot, and
+# destructible for a 250-point bonus (modest HP — still primarily a
+# dodge). count_per_burst stays at 1: the L7 crescendo (shields + homing
+# missiles) already sits near the L5 perf ceiling (251 bullets / ~360
+# entities), so one rock at a time is the headroom-safe density. Bump
+# only if the playthrough harness shows slack.
+stray_asteroids:
+  enabled: true
+  interval_min_seconds: 10.0
+  interval_max_seconds: 20.0
+  speed_multiplier: 1.5
+  count_per_burst: 1
+  hp: 10
+  score: 250
+
 waves:
   # Stage 1 — convoy outriders. Light hulls only; the kid's kit was
   # reset-ish by the R2 faucet cap, so the opener is winnable at

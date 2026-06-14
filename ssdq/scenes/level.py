@@ -80,6 +80,7 @@ from ssdq.core.powerups import (
     apply_pickup,
     roll_drop,
 )
+from ssdq.core.rng import tick_angle, tick_int, tick_range
 from ssdq.core.scene import Replace, Scene, SceneTransition
 from ssdq.core.types import P1, P2, Entity, PlayerInput, PlayerSlot, TickIndex, Vec2
 from ssdq.core.waves import (
@@ -264,6 +265,28 @@ _BULLET_BLOCK_PAIR = frozenset({Faction.ENEMY_BULLET, Faction.ENEMY})
 _SP_ENEMY_DENSITY: float = 0.65   # 35% fewer common enemies per spawn
 _SP_BOSS_HP_SCALE: float = 0.65   # bosses take 35% less to kill solo
 
+# Stray-asteroid dodge-fest (Level 7; fun review 2026-06-12). Three
+# tumbling-rock sizes — (sprite, collision radius). The kid reads the
+# silhouette and judges the dodge; the radius is generous-but-fair so a
+# clean weave threads the gap. Sizes are picked deterministically per
+# burst from tick_int so replays stay bit-identical.
+_STRAY_SIZES: tuple[tuple[str, float], ...] = (
+    ("enemies/asteroid_hulk.png", 40.0),
+    ("enemies/asteroid_med.png", 24.0),
+    ("enemies/asteroid_small.png", 14.0),
+)
+# Base traverse speed = vanguard.max_speed; the config's speed_multiplier
+# scales it (1.5 ⇒ 480 px/s — faster than the player, still dodgeable).
+_STRAY_BASE_SPEED: float = 320.0
+# Fresh RNG channels (70001..70010) so the spawner never collides with
+# any other tick-derived stream. tick_range/tick_int/tick_angle.
+_CH_STRAY_INTERVAL = 70001
+_CH_STRAY_EDGE = 70002
+_CH_STRAY_SIZE = 70003
+_CH_STRAY_FROM = 70004
+_CH_STRAY_TO = 70005
+_CH_STRAY_SPIN = 70006
+
 
 def level_intro_text(level: int) -> str:
     """Return the per-level intro banner copy. Falls back to a generic
@@ -339,6 +362,16 @@ class BulletBlocker:
     hulks — "hide behind the rocks, they eat alien lasers"). Read by the
     ENEMY_BULLET × ENEMY branch of the collision IGNORE path; enemies
     without it keep the zero-cost ignore."""
+
+
+@dataclass(frozen=True, slots=True)
+class StrayAsteroid:
+    """Marker for a Level-7 stray asteroid (fun review 2026-06-12). These
+    are ENEMY-faction but spawned directly (no FormationFollower / EnemyDef),
+    so the kill path special-cases this marker: award ScoreValue, spawn an
+    explosion, and SKIP the FormationFollower/EnemyDef drop-roll machinery
+    in _on_enemy_killed (which would otherwise have nothing to roll). They
+    move via plain Velocity integration and self-cull on TTL / off-screen."""
 
 
 @dataclass
@@ -610,6 +643,9 @@ class LevelScene(Scene):
         if self.level_index not in bundle.levels:
             raise RuntimeError(f"level {self.level_index} not in content")
         level = bundle.levels[self.level_index]
+        # Hold the LevelDef so per-tick systems (e.g. the stray-asteroid
+        # hazard spawner) can read level-scoped config without re-fetching.
+        self._level_def = level
         # Single-player runs ship at reduced wave density (boy playtest
         # 2026-05-23). Multiplier flows into WaveScheduler at build-time
         # so spawn counts are pre-scaled; boss HP scaling happens later
@@ -719,6 +755,12 @@ class LevelScene(Scene):
         self._telegraphed = set()
         self._engaged = set()
         self._deaths_this_level = 0
+        # Stray-asteroid hazard (Level 7; fun review 2026-06-12). The
+        # first burst fires after the first scheduled interval rather than
+        # at t=0 so the level opens clean. -1.0 marks "not yet scheduled"
+        # so _maybe_spawn_stray_asteroids seeds the first deadline lazily
+        # off the live tick (consistent with the per-level reset pattern).
+        self._next_stray_time = -1.0
 
         # Spawn P1 immediately. P2 only spawns in 2-player mode (added
         # 2026-05-08); the title menu sets app.single_player. The
@@ -912,6 +954,9 @@ class LevelScene(Scene):
         # 4. Wave scheduler → spawn enemies; transition to boss if pending
         self._spawn_wave_enemies(world)
         self._maybe_spawn_boss(world)
+        # 4a. Stray-asteroid dodge-fest hazard (Level 7; fun review
+        # 2026-06-12). Off unless the level's YAML enables it.
+        self._maybe_spawn_stray_asteroids(world)
 
         # 5. Advance enemies along formations + emit fire beats
         self._advance_enemies(world)
@@ -1728,6 +1773,106 @@ class LevelScene(Scene):
             swept += 1
         if swept:
             self.app.audio.play_sfx("explosion", volume=0.5)
+
+    def _maybe_spawn_stray_asteroids(self, world: World) -> None:
+        """Level-7 stray-asteroid dodge-fest (fun review 2026-06-12).
+
+        Fast rocks streak across the play area in random directions on a
+        deterministic cadence — faster than the player's ship but
+        reaction-dodgeable, and destructible for bonus points. Off unless
+        the level's YAML carries an enabled ``stray_asteroids:`` block, so
+        every other level pays a single attribute check and returns.
+
+        Each rock spawns just outside a random edge with a velocity aimed
+        at a point on (roughly) the opposite side, so it actually
+        traverses the field rather than clipping a corner and culling
+        instantly. A TTL backstops the off-screen cull (which is
+        bottom-biased) so a cross-screen exit is always cleaned up.
+        """
+        cfg = self._level_def.stray_asteroids
+        if cfg is None or not cfg.enabled:
+            return
+        # Lazily seed the first deadline off the live tick so the level
+        # opens clean (no t=0 burst) and the cadence is deterministic.
+        if self._next_stray_time < 0.0:
+            self._next_stray_time = self._sim_time + tick_range(
+                self._internal_tick,
+                cfg.interval_min_seconds,
+                cfg.interval_max_seconds,
+                channel=_CH_STRAY_INTERVAL,
+            )
+            return
+        if self._sim_time < self._next_stray_time:
+            return
+        # Fire a burst, then schedule the next one.
+        for i in range(max(0, cfg.count_per_burst)):
+            self._spawn_stray_asteroid(world, cfg, member=i)
+        self._next_stray_time = self._sim_time + tick_range(
+            self._internal_tick,
+            cfg.interval_min_seconds,
+            cfg.interval_max_seconds,
+            channel=_CH_STRAY_INTERVAL,
+        )
+
+    def _spawn_stray_asteroid(self, world: World, cfg: Any, *, member: int = 0) -> Entity:
+        """Spawn one stray asteroid crossing the play area. Returns the eid.
+
+        Deterministic: every random draw is keyed on (internal_tick,
+        member, channel) so replays stay bit-identical. ``cfg`` is the
+        level's StrayAsteroidConfig.
+        """
+        t = self._internal_tick
+        # Distinct sub-channels per member so a multi-rock burst doesn't
+        # spawn N identical rocks on the same tick.
+        seed = t * 17 + member
+        # Pick a tumbling size (sprite + collision radius).
+        size_i = tick_int(seed, 0, len(_STRAY_SIZES), channel=_CH_STRAY_SIZE)
+        sprite_path, radius = _STRAY_SIZES[size_i]
+        speed = _STRAY_BASE_SPEED * cfg.speed_multiplier
+        # Choose an entry edge (0=top, 1=bottom, 2=left, 3=right) and an
+        # exit point on a perpendicular/opposite span so the rock truly
+        # traverses the field. Margin keeps the spawn just off-screen.
+        margin = radius + 20.0
+        edge = tick_int(seed, 0, 4, channel=_CH_STRAY_EDGE)
+        # Source point on the entry edge.
+        if edge == 0:  # top → heads downward
+            src = Vec2(tick_range(seed, 0.0, PLAY_W, channel=_CH_STRAY_FROM), -margin)
+            dst = Vec2(tick_range(seed, 0.0, PLAY_W, channel=_CH_STRAY_TO), PLAY_H + margin)
+        elif edge == 1:  # bottom → heads upward
+            src = Vec2(tick_range(seed, 0.0, PLAY_W, channel=_CH_STRAY_FROM), PLAY_H + margin)
+            dst = Vec2(tick_range(seed, 0.0, PLAY_W, channel=_CH_STRAY_TO), -margin)
+        elif edge == 2:  # left → heads rightward
+            src = Vec2(-margin, tick_range(seed, 0.0, PLAY_H, channel=_CH_STRAY_FROM))
+            dst = Vec2(PLAY_W + margin, tick_range(seed, 0.0, PLAY_H, channel=_CH_STRAY_TO))
+        else:  # edge == 3, right → heads leftward
+            src = Vec2(PLAY_W + margin, tick_range(seed, 0.0, PLAY_H, channel=_CH_STRAY_FROM))
+            dst = Vec2(-margin, tick_range(seed, 0.0, PLAY_H, channel=_CH_STRAY_TO))
+        dx, dy = dst.x - src.x, dst.y - src.y
+        dist = math.hypot(dx, dy) or 1.0
+        vel = Vec2(dx / dist * speed, dy / dist * speed)
+        # TTL: long enough for the full diagonal traverse, plus a buffer,
+        # so a cross-screen rock is always culled even though the level's
+        # off-screen cull is bottom-biased. diagonal/speed*60 ⇒ ticks.
+        diagonal = math.hypot(PLAY_W + 2 * margin, PLAY_H + 2 * margin)
+        ttl_ticks = math.ceil(diagonal / speed * 60.0) + 60
+        eid = world.spawn(
+            Position(src),
+            Velocity(vel),
+            CircleHitbox(radius=radius),
+            FactionTag(Faction.ENEMY),
+            Health(hp=cfg.hp),  # < 50, no MaxHealth ⇒ no health bar
+            ScoreValue(points=cfg.score),
+            # Tumbling — a fixed per-rock spin angle (cosmetic; the
+            # renderer honours Sprite.rotation_rad).
+            Sprite(
+                path=sprite_path,
+                layer=6,
+                rotation_rad=tick_angle(seed, channel=_CH_STRAY_SPIN),
+            ),
+            StrayAsteroid(),
+            TimeToLive(ticks=ttl_ticks),
+        )
+        return eid
 
     def _advance_enemies(self, world: World) -> None:
         from dataclasses import replace as _dc_replace
@@ -2573,7 +2718,50 @@ class LevelScene(Scene):
             world.replace(enemy_eid, HitFlash(ticks_remaining=4))
         else:
             pos = world.must_get(enemy_eid, Position).pos
-            self._on_enemy_killed(world, enemy_eid, pos, killer_slot=killer_slot)
+            # Stray asteroids (Level 7) are spawned directly — no
+            # FormationFollower / EnemyDef — so the generic kill path's
+            # drop-roll machinery has nothing to look up. Special-case
+            # the marker: award the bonus score + an explosion, then
+            # despawn it WITHOUT touching _on_enemy_killed's def-lookup.
+            if world.has(enemy_eid, StrayAsteroid):
+                self._kill_stray_asteroid(world, enemy_eid, pos, killer_slot=killer_slot)
+            else:
+                self._on_enemy_killed(world, enemy_eid, pos, killer_slot=killer_slot)
+
+    def _kill_stray_asteroid(
+        self,
+        world: World,
+        enemy_eid: Entity,
+        pos: Vec2,
+        *,
+        killer_slot: PlayerSlot | None = None,
+    ) -> None:
+        """Destroy a stray asteroid for bonus points (Level 7).
+
+        Mirrors how the generic path awards score + explosion, but
+        deliberately skips the FormationFollower/EnemyDef drop-roll +
+        guaranteed/level-scaled drop machinery a directly-spawned rock
+        has no data for. No drops — the reward IS the score (fun review
+        2026-06-12: "destructible for bonus points, still primarily a
+        dodge")."""
+        if not world.is_alive(enemy_eid):
+            return
+        nearest_slot = (
+            killer_slot if killer_slot is not None else self._nearest_alive_player_slot(pos)
+        )
+        score_val = world.get(enemy_eid, ScoreValue)
+        if score_val is not None and nearest_slot is not None:
+            mult = proximity_multiplier(
+                p1_pos=self._player_pos_if_alive(P1),
+                p2_pos=self._player_pos_if_alive(P2),
+                config=self.app.content.coop,
+                play_w=PLAY_W,
+                play_h=PLAY_H,
+            )
+            self._session.scores.award(nearest_slot, score_val.points, multiplier=mult)
+        self._spawn_explosion(world, pos, scale=1)
+        world.despawn(enemy_eid)
+        self.app.audio.play_sfx("explosion", volume=0.5)
 
     def _target_is_shielded(self, world: World, enemy_eid: Entity) -> bool:
         """True if the entity has an active shield (per-enemy or boss).

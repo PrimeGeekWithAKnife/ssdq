@@ -251,6 +251,40 @@ class WaveDef:
 
 
 @dataclass(frozen=True, slots=True)
+class StrayAsteroidConfig:
+    """Level 7 stray-asteroid dodge-fest (fun review 2026-06-12 — "make
+    the finale a dodge-fest too"). Fast rocks streak across the play
+    area in random directions every interval; faster than the player's
+    ship but reaction-dodgeable, destructible for bonus points.
+
+    Off by default everywhere (``LevelDef.stray_asteroids = None``) so
+    only the level whose YAML carries a ``stray_asteroids:`` block runs
+    the spawner — every other level is unaffected.
+
+    Fields:
+      * ``enabled`` — master gate; even with a config block present a
+        ``false`` here parks the spawner.
+      * ``interval_min_seconds`` / ``interval_max_seconds`` — the next
+        burst fires after a deterministic time drawn in this range.
+      * ``speed_multiplier`` — multiplied by the vanguard's max_speed
+        (320 px/s) for the rock's traverse speed (~1.5 ⇒ 480 px/s).
+      * ``count_per_burst`` — rocks spawned per burst (kept at 1 to
+        stay well under the L5 perf ceiling; bump only on harness
+        headroom).
+      * ``hp`` — kept < 50 so no boss-style health bar renders.
+      * ``score`` — bonus points awarded on a destroyed rock.
+    """
+
+    enabled: bool
+    interval_min_seconds: float
+    interval_max_seconds: float
+    speed_multiplier: float
+    count_per_burst: int
+    hp: int
+    score: int
+
+
+@dataclass(frozen=True, slots=True)
 class LevelDef:
     level: int
     title: str
@@ -260,6 +294,10 @@ class LevelDef:
     background: str
     length_seconds: float
     waves: tuple[WaveDef, ...]
+    # Level-7 stray-asteroid dodge-fest (fun review 2026-06-12). Absent
+    # ⇒ None ⇒ feature off; kept LAST / defaulted so every existing
+    # LevelDef construction site is unaffected.
+    stray_asteroids: StrayAsteroidConfig | None = None
 
 
 # ───────── coop ─────────

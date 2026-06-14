@@ -24,6 +24,7 @@ from ssdq.core.content.schema import (
     PickupEffect,
     ShipDef,
     SpawnDef,
+    StrayAsteroidConfig,
     WaveDef,
     WeaponDef,
 )
@@ -370,6 +371,26 @@ def _load_level(path: Path, formations: dict[str, FormationDef]) -> LevelDef:
             )
         )
 
+    # Optional stray-asteroid dodge-fest block (Level 7; fun review
+    # 2026-06-12). Absent ⇒ None ⇒ feature off — every other level is
+    # untouched. Safe defaults so a sparse block still parses.
+    stray_raw = raw.get("stray_asteroids")
+    stray: StrayAsteroidConfig | None = None
+    if stray_raw is not None:
+        if not isinstance(stray_raw, dict):
+            raise ContentError(
+                f"{where}: stray_asteroids must be a mapping, got {type(stray_raw).__name__}"
+            )
+        stray = StrayAsteroidConfig(
+            enabled=bool(stray_raw.get("enabled", False)),
+            interval_min_seconds=float(stray_raw.get("interval_min_seconds", 10.0)),
+            interval_max_seconds=float(stray_raw.get("interval_max_seconds", 20.0)),
+            speed_multiplier=float(stray_raw.get("speed_multiplier", 1.5)),
+            count_per_burst=int(stray_raw.get("count_per_burst", 1)),
+            hp=int(stray_raw.get("hp", 10)),
+            score=int(stray_raw.get("score", 250)),
+        )
+
     return LevelDef(
         level=int(_require(raw, "level", where)),
         title=str(_require(raw, "title", where)),
@@ -379,6 +400,7 @@ def _load_level(path: Path, formations: dict[str, FormationDef]) -> LevelDef:
         background=str(_require(raw, "background", where)),
         length_seconds=float(_require(raw, "length_seconds", where)),
         waves=tuple(sorted(waves, key=lambda w: w.at)),
+        stray_asteroids=stray,
     )
 
 
