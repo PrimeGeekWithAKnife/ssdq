@@ -62,19 +62,6 @@ rebindable in the in-game Settings screen.
 | `ssdq/scenes/` | Game scenes — title, levels, hyperspace, docking, victory, menus |
 | `ssdq/platform/` | pygame layer — rendering, audio, input, window |
 | `content/` | All game data: `levels/`, `enemies.yaml`, `formations.yaml`, `ships.yaml`, and generated assets under `assets/` |
-| `tools/` | Asset generators (`gen_music.py`, `gen_enemy_boss_sprites.py`, …) and the deploy/playthrough scripts |
-| `tests/` | Unit, integration and replay tests |
-
-## Development
-
-```bash
-SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy .venv/bin/python -m pytest tests/ -q
-```
-
-Music and sprite assets are procedural — regenerate them with the scripts in
-`tools/` (`python tools/gen_music.py --all`, `python tools/gen_enemy_boss_sprites.py`).
-These need `numpy` + `ffmpeg`, which are build-time only; the game itself just
-needs pygame-ce and PyYAML.
 
 ## Licence
 
