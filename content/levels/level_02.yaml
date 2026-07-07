@@ -2,8 +2,11 @@
 # Per the multi-level arc spec (2026-04-25-ssdq-design.md §multi-level):
 # the pilots have left the Moon and are now pushing through the alien
 # fleet between the Moon and Earth. Backdrop: standard parallax
-# starfield (bg_starfield_01). Music + boss music are reused from
-# level 1 for now — a dedicated "intense space" track is backlogged.
+# starfield (bg_starfield_01). Music is chosen at runtime by level
+# index (scenes/music_routing.py): level 2 plays its own level_02
+# pool (level_02 / _b / _c, rotating per entry) with boss_02 on boss
+# spawn. The music:/boss_music: fields below are validated by the
+# loader but never read for playback.
 #
 # Difficulty curve note: level 2 starts where level 1 ended (mid-tier
 # fighter combos, no easy drone-only ramp) and ends with
@@ -14,8 +17,8 @@
 level: 2
 title: "Deep Space"
 codename: deep_space
-music: music/level_01.ogg
-boss_music: music/boss_01.ogg
+music: music/level_02.ogg
+boss_music: music/boss_02.ogg
 background: bg_starfield_01
 length_seconds: 195
 

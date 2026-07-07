@@ -6,7 +6,7 @@
 # the late-wave anchor.
 #
 # Music: music/level_05.ogg (fast, layered, climbing — see
-# tools/generate_music.py LEVEL_05 spec). Boss music: music/boss_05.ogg.
+# tools/gen_music.py LEVEL_05 spec). Boss music: music/boss_05.ogg.
 # Background: bg_starfield_01 (deep-space backdrop reused).
 #
 # Length: 265 seconds — the longest level. Pacing keeps the kid on the

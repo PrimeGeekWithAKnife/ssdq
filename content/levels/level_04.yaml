@@ -3,12 +3,12 @@
 # the pilots have re-entered Earth's atmosphere; the alien fleet is
 # making its final push at the planet. Heroic, ascending energy. The
 # track (music/level_04.ogg) is mid-tempo major key — see
-# tools/generate_music.py LEVEL_04 spec.
+# tools/gen_music.py LEVEL_04 spec.
 #
 # Background: bg_starfield_01 reused. The dedicated Earth backdrop is
 # still backlogged (only two backdrops exist in tree); the music + boss
 # music carry the "we're home" mood instead. Boss music is its own
-# track (boss_04.ogg) for the first time outside level 1/2 reuse.
+# track (boss_04.ogg); at runtime every level plays its own boss_0N cue.
 #
 # Difficulty curve note: this level introduces the NEW `kamikaze` enemy
 # — a fast diving suicide-runner with no weapon, only a body-collision
