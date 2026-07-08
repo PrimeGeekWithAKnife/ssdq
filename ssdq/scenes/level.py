@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import logging
 import math
+import types
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -34,6 +35,7 @@ from ssdq.core.components import (
     AnimatedSprite,
     BossTag,
     CircleHitbox,
+    ContactDamage,
     Damage,
     Drone,
     EnemyShield,
@@ -572,6 +574,15 @@ class BossState:
     # final boss). Accumulates per tick post-intro; on crossing the
     # configured rate, fires `homing_missile_salvo` missiles.
     missile_clock: float = 0.0
+    # Drone-launch cadence (boss_07 — "launches escort drones"). Mirrors
+    # missile_clock: accumulates post-intro; on crossing the rate, spawns
+    # a fresh drone wing.
+    drone_clock: float = 0.0
+    # Telegraphed meteor swarm (boss_07). meteor_clock accumulates until
+    # the swarm ARMS; meteor_armed_at is the sim_time the curtain fires
+    # (>= 0 while a swarm is armed-and-telegraphed, -1.0 when idle).
+    meteor_clock: float = 0.0
+    meteor_armed_at: float = -1.0
 
 
 # ───────── Level scene ─────────
@@ -1586,6 +1597,12 @@ class LevelScene(Scene):
         # checks; enemies without it pay nothing.
         if enemy.blocks_enemy_bullets:
             world.add(eid, BulletBlocker())
+        # Asteroid-crush (item A): a hulk that carries contact damage
+        # ploughs through any enemy ship it overlaps. Marker read by the
+        # ENEMY × ENEMY branch of the collision IGNORE path; enemies
+        # without it pay nothing.
+        if enemy.contact_damage_to_enemies > 0:
+            world.add(eid, ContactDamage(enemy.contact_damage_to_enemies))
         # Spawn-shield (kid playtest 2026-05-02 #3). Attach an
         # EnemyShield + ShieldHalo so the kid clearly sees the
         # forcefield. The halo radius is generous so the visual reads
@@ -1814,12 +1831,19 @@ class LevelScene(Scene):
             channel=_CH_STRAY_INTERVAL,
         )
 
-    def _spawn_stray_asteroid(self, world: World, cfg: Any, *, member: int = 0) -> Entity:
+    def _spawn_stray_asteroid(
+        self, world: World, cfg: Any, *, member: int = 0, force_top: bool = False
+    ) -> Entity:
         """Spawn one stray asteroid crossing the play area. Returns the eid.
 
         Deterministic: every random draw is keyed on (internal_tick,
         member, channel) so replays stay bit-identical. ``cfg`` is the
-        level's StrayAsteroidConfig.
+        level's StrayAsteroidConfig (or a meteor-swarm SimpleNamespace).
+
+        ``force_top`` (boss_07 meteor swarm): force a downward descent from
+        the top edge with an evenly-spread x column and small/med sizes so
+        a burst reads as a dense CURTAIN rather than random-edge scatter.
+        The default-False path is byte-identical to the L6/L7 spawner.
         """
         t = self._internal_tick
         # Distinct sub-channels per member so a multi-rock burst doesn't
@@ -1827,6 +1851,10 @@ class LevelScene(Scene):
         seed = t * 17 + member
         # Pick a tumbling size (sprite + collision radius).
         size_i = tick_int(seed, 0, len(_STRAY_SIZES), channel=_CH_STRAY_SIZE)
+        if force_top:
+            # Meteor curtain: bias to the small/med rocks (indices 1, 2) —
+            # a wall of boulders would be un-dodgeable; hail threads.
+            size_i = 1 + (size_i % 2)
         sprite_path, radius = _STRAY_SIZES[size_i]
         speed = _STRAY_BASE_SPEED * cfg.speed_multiplier
         # Choose an entry edge (0=top, 1=bottom, 2=left, 3=right) and an
@@ -1835,7 +1863,19 @@ class LevelScene(Scene):
         margin = radius + 20.0
         edge = tick_int(seed, 0, 4, channel=_CH_STRAY_EDGE)
         # Source point on the entry edge.
-        if edge == 0:  # top → heads downward
+        if force_top:
+            # Meteor curtain (boss_07): descend from the top in evenly
+            # spaced columns (a small jitter breaks the grid), then drift
+            # a touch on the way down so the wall isn't perfectly vertical.
+            _CURTAIN_COLS = 8
+            col = member % _CURTAIN_COLS
+            jitter = tick_range(seed, -0.4, 0.4, channel=_CH_STRAY_FROM)
+            col_x = PLAY_W * (col + 0.5 + jitter) / _CURTAIN_COLS
+            col_x = min(max(col_x, margin), PLAY_W - margin)
+            src = Vec2(col_x, -margin)
+            drift = tick_range(seed, -80.0, 80.0, channel=_CH_STRAY_TO)
+            dst = Vec2(min(max(col_x + drift, 0.0), PLAY_W), PLAY_H + margin)
+        elif edge == 0:  # top → heads downward
             src = Vec2(tick_range(seed, 0.0, PLAY_W, channel=_CH_STRAY_FROM), -margin)
             dst = Vec2(tick_range(seed, 0.0, PLAY_W, channel=_CH_STRAY_TO), PLAY_H + margin)
         elif edge == 1:  # bottom → heads upward
@@ -1872,6 +1912,10 @@ class LevelScene(Scene):
             StrayAsteroid(),
             TimeToLive(ticks=ttl_ticks),
         )
+        # Asteroid-crush (item A): opt-in via the config so a rock also
+        # ploughs through enemy ships it clips. 0 ⇒ pure dodge hazard.
+        if getattr(cfg, "contact_damage", 0) > 0:
+            world.add(eid, ContactDamage(cfg.contact_damage))
         return eid
 
     def _advance_enemies(self, world: World) -> None:
@@ -2118,6 +2162,43 @@ class LevelScene(Scene):
                 boss_state.missile_clock = 0.0
                 self._fire_boss_missile_salvo(world, sample.pos, boss_def.homing_missile_salvo)
 
+        # Drone launches (boss_07 — "the mothership launches escort
+        # drones"). Mirrors the missile cadence: accumulate post-intro and
+        # on crossing the rate spawn a fresh drone wing via the normal
+        # pipeline (formation / health / score all reused).
+        if boss_def.drone_launch_rate_seconds > 0.0 and boss_def.drone_launch_count > 0:
+            boss_state.drone_clock += TICK_DT
+            if boss_state.drone_clock >= boss_def.drone_launch_rate_seconds:
+                boss_state.drone_clock = 0.0
+                self._spawn_boss_drones(world, boss_def)
+
+        # Telegraphed meteor swarm (boss_07). Two-stage so the curtain is
+        # ALWAYS warned before it fires: ARM paints a row of warning
+        # circles across the top edge and stamps the fire time; FIRE drops
+        # the crushing rocks once the warning window elapses.
+        if boss_def.meteor_swarm_rate_seconds > 0.0 and boss_def.meteor_swarm_count > 0:
+            boss_state.meteor_clock += TICK_DT
+            if (
+                boss_state.meteor_clock >= boss_def.meteor_swarm_rate_seconds
+                and boss_state.meteor_armed_at < 0.0
+            ):
+                boss_state.meteor_clock = 0.0
+                # Warning row: reuse the BossTelegraph + TimeToLive idiom.
+                warn_ticks = max(1, int(boss_def.meteor_swarm_warn_seconds * 60))
+                n_warn = max(1, boss_def.meteor_swarm_count)
+                for i in range(n_warn):
+                    wx = PLAY_W * (i + 0.5) / n_warn
+                    world.spawn(
+                        BossTelegraph(pos=Vec2(wx, 40.0), radius=26.0, colour=(255, 120, 40)),
+                        TimeToLive(ticks=warn_ticks),
+                    )
+                boss_state.meteor_armed_at = (
+                    self._sim_time + boss_def.meteor_swarm_warn_seconds
+                )
+        if boss_state.meteor_armed_at >= 0.0 and self._sim_time >= boss_state.meteor_armed_at:
+            self._spawn_boss_meteor_swarm(world, boss_def)
+            boss_state.meteor_armed_at = -1.0
+
         # Boss shield mechanics (kid playtest #15/#16). Run after the
         # fire-step so shield activation never delays the first volley.
         self._tick_boss_shield(world, boss_state)
@@ -2204,6 +2285,42 @@ class LevelScene(Scene):
                 ),
             )
         self.app.audio.play_sfx("missile", volume=0.42)
+
+    def _spawn_boss_drones(self, world: World, boss_def: BossDef) -> None:
+        """Launch a wing of escort drones from the boss (boss_07). Reuses
+        the normal spawn pipeline via synthetic SpawnEvents so the drones
+        inherit their EnemyDef health / score / formation wiring;
+        alternating members mirror so the wing fans out from both sides.
+        """
+        for i in range(boss_def.drone_launch_count):
+            ev = SpawnEvent(
+                enemy=boss_def.drone_enemy,
+                formation=boss_def.drone_launch_formation,
+                mirrored=(i % 2 == 1),
+                path_t0=self._sim_time,
+                wave_index=-1,
+                spawn_index=0,
+                member_index=i,
+            )
+            self._spawn_enemy(world, ev)
+
+    def _spawn_boss_meteor_swarm(self, world: World, boss_def: BossDef) -> None:
+        """Drop the telegraphed meteor curtain (boss_07). Builds a light
+        StrayAsteroidConfig-shaped view from the boss's ``meteor_*`` fields
+        and reuses the stray-asteroid spawner with ``force_top`` so the
+        rocks descend as a dense curtain. ``contact_damage`` is set to 20
+        so meteors also crush escorts they clip; ``hp`` comes from
+        ``meteor_swarm_hp`` (kept ≤ bomb damage so one bomb clears the
+        whole curtain).
+        """
+        cfg = types.SimpleNamespace(
+            speed_multiplier=boss_def.meteor_swarm_speed_multiplier,
+            hp=boss_def.meteor_swarm_hp,
+            score=boss_def.meteor_swarm_score,
+            contact_damage=20,
+        )
+        for member in range(boss_def.meteor_swarm_count):
+            self._spawn_stray_asteroid(world, cfg, member=member, force_top=True)
 
     def _tick_boss_shield(self, world: World, boss_state: BossState) -> None:
         """Advance the boss shield timers + cycle. Adds/removes a
@@ -2520,6 +2637,12 @@ class LevelScene(Scene):
                         r_b = world.must_get(b, CircleHitbox).radius
                         if circles_overlap(pos_a, r_a, pos_b, r_b):
                             self._absorb_bullet_on_blocker(world, bullet_eid)
+                # Asteroid-crush (item A): ENEMY × ENEMY is normally a
+                # free ignore, but a rock carrying ContactDamage crushes
+                # the enemy ship it overlaps. Cheap gate — only this pair
+                # type pays, and only when one side is a crusher.
+                elif ftag_a.faction == Faction.ENEMY and ftag_b.faction == Faction.ENEMY:
+                    self._maybe_asteroid_crush(world, a, b)
                 continue
             pos_a = world.must_get(a, Position).pos
             pos_b = world.must_get(b, Position).pos
@@ -2562,6 +2685,67 @@ class LevelScene(Scene):
                 ),
             )
         world.despawn(bullet_eid)
+
+    def _maybe_asteroid_crush(self, world: World, a: Entity, b: Entity) -> None:
+        """Asteroid-vs-enemy contact damage (item A). An ENEMY × ENEMY
+        pair is normally a free IGNORE; when exactly one side carries
+        ``ContactDamage`` (a crusher rock / hulk) it deals that damage to
+        the other (the victim). Asteroid-vs-asteroid (both carry it) and
+        plain-enemy pairs (neither) stay inert. Deterministic — no RNG;
+        the change stays local to the level scene so ``should_apply_damage``
+        remains a pure ENEMY × ENEMY IGNORE.
+        """
+        if not world.is_alive(a) or not world.is_alive(b):
+            return
+        cd_a = world.get(a, ContactDamage)
+        cd_b = world.get(b, ContactDamage)
+        # Exactly one crusher: both-or-neither ⇒ inert.
+        if (cd_a is None) == (cd_b is None):
+            return
+        if cd_a is not None:
+            crusher, victim, crusher_cd = a, b, cd_a
+        else:
+            crusher, victim, crusher_cd = b, a, cd_b
+        # Boss immunity (safety constraint): asteroids/meteors must NEVER
+        # damage the boss — not even the non-lethal branch below. The boss
+        # is ENEMY-faction and its own meteor swarm / drifting L6 hulks
+        # can overlap it, so guard explicitly rather than relying on the
+        # _on_enemy_killed boss early-return (which only covers the kill).
+        if self._boss is not None and victim == self._boss.entity:
+            return
+        # Narrow-phase: the broad-phase only guarantees a shared grid cell.
+        pos_c = world.get(crusher, Position)
+        pos_v = world.get(victim, Position)
+        hit_c = world.get(crusher, CircleHitbox)
+        hit_v = world.get(victim, CircleHitbox)
+        if pos_c is None or pos_v is None or hit_c is None or hit_v is None:
+            return
+        if not circles_overlap(pos_c.pos, hit_c.radius, pos_v.pos, hit_v.radius):
+            return
+        # Shield parity: a shielded victim (per-enemy or boss) is unharmed.
+        if self._target_is_shielded(world, victim):
+            return
+        health = world.get(victim, Health)
+        if health is None:
+            return
+        new_hp = health.hp - crusher_cd.amount
+        if new_hp <= 0:
+            pos = world.must_get(victim, Position).pos
+            # Route the death through the same paths a player-bullet kill
+            # uses (killer_slot=None ⇒ nearest player takes the credit).
+            if world.has(victim, StrayAsteroid):
+                self._kill_stray_asteroid(world, victim, pos, killer_slot=None)
+            else:
+                self._on_enemy_killed(world, victim, pos, killer_slot=None)
+        else:
+            world.replace(victim, Health(hp=new_hp))
+            world.replace(victim, HitFlash(ticks_remaining=4))
+        # Crusher consumption: a fast stray / meteor rock shatters on its
+        # first enemy hit; a slow hulk (BulletBlocker, no StrayAsteroid)
+        # is terrain and ploughs on through the wreckage.
+        if world.has(crusher, StrayAsteroid):
+            self._spawn_explosion(world, pos_c.pos, scale=1)
+            world.despawn(crusher)
 
     def _handle_player_hit(
         self,

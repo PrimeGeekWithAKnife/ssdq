@@ -31,6 +31,25 @@ boss_music: music/boss_06.ogg
 background: bg_starfield_01
 length_seconds: 252
 
+# Stray-asteroid dodge hazard (item B). A NEW, separate system from the
+# slow asteroid_hulk cover waves below: those hulks are terrain the kid
+# hides behind (blocks_enemy_bullets), whereas these are FAST rocks that
+# streak in from a random edge (320 * 1.35 = 432 px/s) and must be
+# dodged. Gentler than L7's finale — one rock every 10-18s — so the
+# graveyard's signature stays COVER, with the fast rock as an occasional
+# "the debris field is live" beat. contact_damage lets a rock also
+# plough through any escort it clips. Leave the asteroid_hulk waves
+# untouched — this block is independent of them.
+stray_asteroids:
+  enabled: true
+  interval_min_seconds: 10.0
+  interval_max_seconds: 18.0
+  speed_multiplier: 1.35
+  count_per_burst: 1
+  hp: 8
+  score: 200
+  contact_damage: 16
+
 waves:
   # Stage 1 — teach the cover mechanic. Rocks arrive FIRST, then the
   # fighters open fire, so the kid's very first read is "lasers hit

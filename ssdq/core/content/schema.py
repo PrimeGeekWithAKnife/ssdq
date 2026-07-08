@@ -110,6 +110,12 @@ class EnemyDef:
     # ENEMY pair of the collision IGNORE path (bullets are already in
     # the spatial grid) so the flag costs nothing when unused.
     blocks_enemy_bullets: bool = False
+    # Asteroid-crush: HP dealt to any OTHER enemy this one physically
+    # overlaps. Mirrors ``blocks_enemy_bullets`` — a data-driven marker
+    # read only on the ENEMY × ENEMY pair of the collision IGNORE path
+    # (asteroid_hulk sets it so drifting rocks plough through escorts).
+    # 0 ⇒ inert (default), so every other enemy is unaffected.
+    contact_damage_to_enemies: int = 0
     # Pickups always dropped on death, in addition to the random
     # `roll_drop` result. Used by the resupply ship (kid playtest
     # 2026-05-03 #1 + #4) to guarantee a missile drop on top of the
@@ -205,6 +211,28 @@ class BossDef:
     # existing Missile component + _tick_missiles homing system.
     homing_missile_rate_seconds: float = 0.0
     homing_missile_salvo: int = 0
+    # Drone launches (boss_07 — "the mothership launches escort drones").
+    # Every ``drone_launch_rate_seconds`` post-intro the boss spawns
+    # ``drone_launch_count`` copies of ``drone_enemy`` on
+    # ``drone_launch_formation`` via the normal spawn pipeline (health /
+    # score / formation all reused). All default off ⇒ existing bosses
+    # unaffected.
+    drone_launch_rate_seconds: float = 0.0
+    drone_launch_count: int = 0
+    drone_enemy: str = "drone"
+    drone_launch_formation: str = "slow_descent_centre"
+    # Telegraphed meteor swarm (boss_07 — a warned curtain of crushing
+    # rocks). Every ``meteor_swarm_rate_seconds`` the boss ARMS a row of
+    # warning circles, then ``meteor_swarm_warn_seconds`` later drops
+    # ``meteor_swarm_count`` stray-asteroid meteors from the top edge.
+    # ``meteor_swarm_hp`` is kept ≤ bomb damage (8) so one bomb clears the
+    # curtain. All default off ⇒ existing bosses unaffected.
+    meteor_swarm_rate_seconds: float = 0.0
+    meteor_swarm_count: int = 0
+    meteor_swarm_speed_multiplier: float = 1.5
+    meteor_swarm_hp: int = 6
+    meteor_swarm_score: int = 150
+    meteor_swarm_warn_seconds: float = 1.2
 
 
 # ───────── formations ─────────
@@ -282,6 +310,10 @@ class StrayAsteroidConfig:
     count_per_burst: int
     hp: int
     score: int
+    # Asteroid-crush (item A): HP dealt to any enemy ship a rock overlaps.
+    # 0 ⇒ inert (default) so a stray-block that omits it stays a pure
+    # dodge hazard; L6/L7 opt in so the rocks also plough through escorts.
+    contact_damage: int = 0
 
 
 @dataclass(frozen=True, slots=True)

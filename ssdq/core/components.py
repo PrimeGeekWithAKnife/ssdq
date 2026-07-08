@@ -304,6 +304,21 @@ class Damage:
 
 
 @dataclass(frozen=True, slots=True)
+class ContactDamage:
+    """HP dealt to an ENEMY-faction entity on physical contact.
+
+    Carried by 'crusher' entities — drifting asteroid hulks
+    (EnemyDef.contact_damage_to_enemies) and fast stray / meteor rocks
+    (StrayAsteroidConfig.contact_damage). Read by the LevelScene's
+    ENEMY × ENEMY collision branch: exactly one side carrying this makes
+    it the crusher and the other the victim. Absent ⇒ the pair stays the
+    zero-cost IGNORE it has always been (mirrors the BulletBlocker idiom).
+    """
+
+    amount: int
+
+
+@dataclass(frozen=True, slots=True)
 class ScoreValue:
     """Score awarded when this entity is destroyed by a player."""
 

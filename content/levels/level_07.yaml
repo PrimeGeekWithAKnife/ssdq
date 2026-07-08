@@ -34,21 +34,24 @@ length_seconds: 280
 
 # Stray-asteroid dodge-fest (fun review 2026-06-12 — the boy wanted the
 # finale to ALSO be a dodge-fest). Fast rocks streak across the convoy's
-# run in random directions every 10-20s — faster than the player's ship
+# run in random directions — faster than the player's ship
 # (320 * 1.5 = 480 px/s) but reaction-dodgeable by a skilled pilot, and
 # destructible for a 250-point bonus (modest HP — still primarily a
-# dodge). count_per_burst stays at 1: the L7 crescendo (shields + homing
-# missiles) already sits near the L5 perf ceiling (251 bullets / ~360
-# entities), so one rock at a time is the headroom-safe density. Bump
-# only if the playthrough harness shows slack.
+# dodge). Density raised: the playthrough harness showed ample slack
+# (L7 peaks ~135 entities vs the ~360 Pi-5 ceiling), so bursts go to 2
+# rocks every 8-14s — ~2.7x the old 1-per-10-20s cadence. interval_min
+# stays > 5s (above the wave idle-cue) so the max-concurrent rock count
+# stays bounded at count_per_burst. contact_damage lets the rocks also
+# plough through escort ships they clip (item A).
 stray_asteroids:
   enabled: true
-  interval_min_seconds: 10.0
-  interval_max_seconds: 20.0
+  interval_min_seconds: 8.0
+  interval_max_seconds: 14.0
   speed_multiplier: 1.5
-  count_per_burst: 1
+  count_per_burst: 2
   hp: 10
   score: 250
+  contact_damage: 20
 
 waves:
   # Stage 1 — convoy outriders. Light hulls only; the kid's kit was

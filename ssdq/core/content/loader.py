@@ -216,6 +216,7 @@ def _load_enemies(
             passes_unlimited=bool(e.get("passes_unlimited", False)),
             shield_on_first_hit_seconds=float(e.get("shield_on_first_hit_seconds", 0.0)),
             blocks_enemy_bullets=bool(e.get("blocks_enemy_bullets", False)),
+            contact_damage_to_enemies=int(e.get("contact_damage_to_enemies", 0)),
             guaranteed_drops=tuple(e.get("guaranteed_drops") or []),
             level_scaled_drops=tuple(e.get("level_scaled_drops") or []),
             free_roam=_parse_free_roam(e.get("free_roam"), where, name),
@@ -293,6 +294,16 @@ def _load_enemies(
             shield_initial_seconds=float(b.get("shield_initial_seconds", 0.0)),
             homing_missile_rate_seconds=float(b.get("homing_missile_rate_seconds", 0.0)),
             homing_missile_salvo=int(b.get("homing_missile_salvo", 0)),
+            drone_launch_rate_seconds=float(b.get("drone_launch_rate_seconds", 0.0)),
+            drone_launch_count=int(b.get("drone_launch_count", 0)),
+            drone_enemy=str(b.get("drone_enemy", "drone")),
+            drone_launch_formation=str(b.get("drone_launch_formation", "slow_descent_centre")),
+            meteor_swarm_rate_seconds=float(b.get("meteor_swarm_rate_seconds", 0.0)),
+            meteor_swarm_count=int(b.get("meteor_swarm_count", 0)),
+            meteor_swarm_speed_multiplier=float(b.get("meteor_swarm_speed_multiplier", 1.5)),
+            meteor_swarm_hp=int(b.get("meteor_swarm_hp", 6)),
+            meteor_swarm_score=int(b.get("meteor_swarm_score", 150)),
+            meteor_swarm_warn_seconds=float(b.get("meteor_swarm_warn_seconds", 1.2)),
         )
 
     return enemies, bosses, enemy_weapons, pickups
@@ -389,6 +400,7 @@ def _load_level(path: Path, formations: dict[str, FormationDef]) -> LevelDef:
             count_per_burst=int(stray_raw.get("count_per_burst", 1)),
             hp=int(stray_raw.get("hp", 10)),
             score=int(stray_raw.get("score", 250)),
+            contact_damage=int(stray_raw.get("contact_damage", 0)),
         )
 
     return LevelDef(

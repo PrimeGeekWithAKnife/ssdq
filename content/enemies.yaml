@@ -334,6 +334,7 @@ enemies:
     score: 150                # token — the lane is the reward, not points
     drop_chance: 0.0          # rocks don't carry cargo
     blocks_enemy_bullets: true
+    contact_damage_to_enemies: 20  # terrain ploughs through enemy ships it drifts into
 
 # Boss definition. Phase inside the Level scene, not a separate scene
 # (per spec §4.4). Two phases per spec §2 DOD #4.
@@ -765,6 +766,23 @@ bosses:
     shield_cycle_seconds: [8.0, 6.0]
     homing_missile_rate_seconds: 5.0
     homing_missile_salvo: 2
+    # The mothership launches escort drones — a fresh 2-drone wing every
+    # 14s (mirrored so they fan out), spawned through the normal pipeline
+    # so they inherit drone HP / score / formation.
+    drone_launch_rate_seconds: 14.0
+    drone_launch_count: 2
+    drone_enemy: drone
+    drone_launch_formation: slow_descent_centre
+    # Telegraphed meteor swarm — every 22s the saucer warns (1.3s) then
+    # drops a 16-rock curtain from the top edge. hp 6 (≤ bomb damage 8)
+    # so a single bomb clears the whole curtain; the rocks also crush any
+    # escort they clip on the way down.
+    meteor_swarm_rate_seconds: 22.0
+    meteor_swarm_count: 16
+    meteor_swarm_speed_multiplier: 1.5
+    meteor_swarm_hp: 6
+    meteor_swarm_score: 150
+    meteor_swarm_warn_seconds: 1.3
     phases:
       # Phase 1 — aimed_triple on a steady 0.9s grid across the 9s
       # lemniscate. The familiar 3-bullet aimed fan, but fired from a
