@@ -166,6 +166,11 @@ _SUPER_SHIELD_HALO_RADIUS = 30.0
 # Reward banner flash hold (a short "POWER UP!" / "DRONE!" / "SUPER
 # SHIELD!" toast). ~2s, readable for a 9-year-old without gating play.
 _REWARD_BANNER_SECONDS = 2.0
+# Reward-toast font size. Each toast is centred in a HALF-width player
+# column (~640px), so it must be far smaller than the full-width 84px
+# "HYPERSPACE!" title or long strings overflow the screen. 44px bold
+# matches the game's canonical big-banner register (level intro = 40px).
+_REWARD_BANNER_FONT_SIZE = 44
 
 # Deterministic-noise channels — distinct per decision so the streams
 # don't correlate (same convention as the backdrop generators, which
@@ -296,6 +301,7 @@ class HyperspaceScene(Scene):
         self._last_lane_time: float = -999.0
         self._title_font: pygame.font.Font | None = None
         self._hint_font: pygame.font.Font | None = None
+        self._reward_font: pygame.font.Font | None = None
 
     # Render-branch protocol (read by main.py): this scene's entities
     # are drawn by the world Renderer, against the named backdrop, with
@@ -320,6 +326,7 @@ class HyperspaceScene(Scene):
             pygame.font.init()
         self._title_font = pygame.font.SysFont(None, 84, bold=True)
         self._hint_font = pygame.font.SysFont(None, 32)
+        self._reward_font = pygame.font.SysFont(None, _REWARD_BANNER_FONT_SIZE, bold=True)
 
         bundle = self.app.content
         # Session seeding mirrors LevelScene.enter exactly: scores from
@@ -504,7 +511,12 @@ class HyperspaceScene(Scene):
     def _render_streak_overlay(self, surface: pygame.Surface, w: int, h: int) -> None:
         """Big, few-words streak + super-shield readout per active player,
         plus the ~2s reward banners. Kept readable for a 9-year-old."""
-        if self._session is None or self._hint_font is None or self._title_font is None:
+        if (
+            self._session is None
+            or self._hint_font is None
+            or self._title_font is None
+            or self._reward_font is None
+        ):
             return
         slots = (P1,) if self.app.single_player else (P1, P2)
         for slot in slots:
@@ -541,7 +553,7 @@ class HyperspaceScene(Scene):
             banner = self._reward_banner.get(slot)
             if banner is not None:
                 text, _rem = banner
-                surf = self._title_font.render(text, True, (255, 255, 255))
+                surf = self._reward_font.render(text, True, (255, 255, 255))
                 cx = w // 4 if left else (w * 3) // 4
                 surface.blit(surf, surf.get_rect(center=(cx, h // 2)))
 
@@ -901,7 +913,7 @@ class HyperspaceScene(Scene):
         invulnerability window. Banked count + active timer are scene-
         local — the super shield never carries to L6."""
         self._super_shield_banked[slot] = self._super_shield_banked.get(slot, 0) + 1
-        self._flash_reward(slot, "SUPER SHIELD! press shield")
+        self._flash_reward(slot, "SUPER SHIELD!")
         self.app.audio.play_sfx("pickup")
 
     def _flash_reward(self, slot: PlayerSlot, text: str) -> None:
