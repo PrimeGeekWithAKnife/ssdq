@@ -19,6 +19,7 @@ background name and asks the registry for a matching class.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from typing import Protocol
 
@@ -375,6 +376,371 @@ class EarthHorizonBackground:
             )
 
 
+# ───────── Earth orbit (level 4, prerendered) ─────────
+
+# Level-4 dedicated backdrop, replacing the per-frame-primitives
+# EarthHorizonBackground stopgap. The whole planet — ocean, continents,
+# day/night terminator, atmosphere rim glow — is painted ONCE at init
+# into an opaque base Surface covering the lower part of the frame;
+# clouds go into a handful of small per-pixel-alpha band surfaces that
+# sway a few px/s relative to the planet surface so it reads as alive.
+# Per-frame cost is one opaque blit, ~7 small cloud blits, ~50 star ops
+# and a handful of tiny "distant fighter battle" primitives. Like
+# ParallaxStarfield, the sky above the planet relies on the Renderer's
+# frame clear rather than a redundant fill.
+#
+# Determinism: every random choice comes from tick_unit(0, channel=…)
+# at init or is tick-derived in draw(). This backdrop draws from
+# channels 60_0xx (fighters) and 64_0xx/65_0xx (stars) — chosen to stay
+# clear of the gameplay channel blocks (hyperspace owns 61_0xx, strays
+# own 70_00x); check for collisions before adding new allocations.
+
+# Matches renderer._CLEAR_COLOUR exactly — the base layer's baked-in
+# sky (the sliver between its top row and the limb curve) must be
+# indistinguishable from the renderer's clear above it, or a seam line
+# appears across the frame.
+_ORBIT_SPACE = (5, 5, 12)
+_ORBIT_OCEAN = (24, 68, 148)
+_ORBIT_OCEAN_DEEP = (14, 46, 112)
+_ORBIT_LAND = (70, 132, 74)
+_ORBIT_LAND_DARK = (46, 100, 54)
+_ORBIT_LAND_SAND = (172, 150, 96)
+_ORBIT_ICE = (222, 232, 238)
+_ORBIT_CLOUD = (245, 250, 255)
+_ORBIT_GLOW = (120, 210, 255)
+_ORBIT_LIMB_BRIGHT = (190, 235, 255)
+# Limb top sits at this fraction of screen height at centre-x, so the
+# planet fills roughly the lower 42% of the frame.
+_ORBIT_LIMB_TOP_FRAC = 0.58
+_ORBIT_RADIUS_FRAC = 2.2  # × screen height — huge, so the limb is a gentle curve
+_ORBIT_GLOW_MARGIN = 22  # px of sky above the limb baked into the base layer
+# Cloud layer sways sinusoidally ±this many px; peak relative speed vs
+# the surface layer ≈ sway·2π/period ≈ 4 px/s. Sway (rather than an
+# endless one-way creep) keeps the init-time limb mask valid forever.
+_ORBIT_CLOUD_SWAY_PX = 20.0
+_ORBIT_CLOUD_SWAY_PERIOD_S = 34.0
+# Quieter star density than ParallaxStarfield — the planet owns the frame.
+_ORBIT_STAR_LAYERS: tuple[tuple[int, float, tuple[int, int, int]], ...] = (
+    (26, 22.0, (90, 90, 110)),
+    (16, 44.0, (160, 160, 190)),
+    (8, 88.0, (230, 230, 255)),
+)
+# Distant fighter battle: small, muted, strictly behind gameplay. Two
+# "factions" tinted apart; laser + explosion colours kept clearly below
+# gameplay sprite brightness so nothing reads as a real threat/pickup —
+# but bright enough to actually catch the eye on a TV (playtest
+# 2026-07-09: the first pass was invisible in gameplay).
+_ORBIT_FIGHTER_COUNT = 8
+_ORBIT_FIGHTER_A = (150, 162, 196)
+_ORBIT_FIGHTER_B = (196, 148, 122)
+_ORBIT_LASER_A = (190, 80, 80)
+_ORBIT_LASER_B = (80, 180, 130)
+_ORBIT_BLIP_PERIOD = 300  # ticks between explosion blips (~5s)
+_ORBIT_BLIP_TICKS = 14  # blip visible for this many ticks
+_ORBIT_BLIP_COLOURS = ((255, 190, 120), (200, 130, 75), (120, 70, 50))
+
+
+def _lerp_colour(
+    a: tuple[int, int, int], b: tuple[int, int, int], t: float
+) -> tuple[int, int, int]:
+    """Integer colour lerp for prerendered gradient rings/strips."""
+    return (
+        int(a[0] + (b[0] - a[0]) * t),
+        int(a[1] + (b[1] - a[1]) * t),
+        int(a[2] + (b[2] - a[2]) * t),
+    )
+
+
+class EarthOrbit:
+    """Prerendered Earth limb + drifting clouds + distant fighter battle.
+
+    All heavy painting happens once in ``__init__``: an opaque planet
+    base layer (ocean, blob-walk continents, terminator shading, rim
+    glow) plus a handful of small bounding-box cloud-band surfaces
+    masked inside the limb. ``draw`` is one opaque blit, ~7 small alpha
+    blits (cost scales with actual cloud pixels, not screen area), the
+    star loop and ≤10 tiny battle primitives — nothing is allocated per
+    frame.
+    """
+
+    __slots__ = (
+        "_base",
+        "_cloud_bands",
+        "_fighters",
+        "_height",
+        "_stars",
+        "_width",
+        "_y0",
+    )
+
+    def __init__(self, width: int, height: int) -> None:
+        self._width = width
+        self._height = height
+        w = width
+        h = height
+
+        # ── geometry ──
+        limb_top = int(h * _ORBIT_LIMB_TOP_FRAC)
+        radius = int(h * _ORBIT_RADIUS_FRAC)
+        cx = w // 2
+        cy = limb_top + radius  # planet centre, far below the screen
+        y0 = max(0, limb_top - _ORBIT_GLOW_MARGIN)  # top row of the planet base layer
+        self._y0 = y0
+
+        # Limb height per column, extended past the screen edges so the
+        # cloud-safety check below covers the sway range. Index offset
+        # by `ext`; on-screen columns are limb_ext[x + ext].
+        ext = int(_ORBIT_CLOUD_SWAY_PX) + 12
+        rr = float(radius * radius)
+        limb_ext: list[int] = []
+        for x in range(-ext, w + ext):
+            dx = float(x - cx)
+            limb_ext.append(int(cy - math.sqrt(max(0.0, rr - dx * dx))))
+
+        # Init-time art channels: 63_000+ consumed sequentially.
+        chan = 63_000
+
+        def unit() -> float:
+            nonlocal chan
+            chan += 1
+            return tick_unit(0, channel=chan)
+
+        # ── base layer: ocean + continents + terminator + limb + glow ──
+        # Opaque band from just above the limb down to the screen bottom
+        # (local coords are screen coords shifted up by y0). The sliver
+        # of sky baked into the band is _ORBIT_SPACE == renderer clear.
+        base_h = h - y0
+        base = pygame.Surface((w, base_h))
+        base.fill(_ORBIT_SPACE)
+        cy_local = cy - y0
+        pygame.draw.circle(base, _ORBIT_OCEAN, (cx, cy_local), radius)
+        # Deep-ocean patches — large dim blobs for water depth variation.
+        for _ in range(4):
+            ox = int(unit() * w)
+            oy = int(limb_ext[ox + ext] + 120 + unit() * (h - limb_ext[ox + ext]))
+            orr = 90 + int(unit() * 130)
+            pygame.draw.circle(base, _ORBIT_OCEAN_DEEP, (ox, oy - y0), orr)
+        # Continents — blob-walk landmasses: overlapping circles wander
+        # from a seed point so each landmass reads as an organic shape.
+        # Blobs that poke above the limb get shaved by the per-column
+        # sky repaint below, i.e. land meeting the horizon is fine.
+        for _ in range(6):
+            bx = unit() * w
+            local_limb = limb_ext[int(bx) % w + ext]
+            by = local_limb + 26.0 + unit() * (h - local_limb) * 0.8
+            sandy = unit() < 0.33  # desert-heavy landmass
+            for _blob in range(9 + int(unit() * 8)):
+                br = 14 + int(unit() * 30)
+                roll = unit()
+                if sandy and roll < 0.45:
+                    colour = _ORBIT_LAND_SAND
+                elif roll < 0.2:
+                    colour = _ORBIT_LAND_DARK
+                else:
+                    colour = _ORBIT_LAND
+                pygame.draw.circle(base, colour, (int(bx), int(by) - y0), br)
+                bx += (unit() - 0.5) * 66.0
+                by += (unit() - 0.5) * 50.0
+        # Polar ice hugging the limb — shaved to the horizon curve below.
+        ix = w * (0.35 + unit() * 0.3)
+        for _ in range(4):
+            iy = limb_ext[int(ix) % w + ext] + 4 + unit() * 14
+            ir = 10 + int(unit() * 12)
+            pygame.draw.circle(base, _ORBIT_ICE, (int(ix), int(iy) - y0), ir)
+            ix += (unit() - 0.5) * 60.0
+        # Day/night terminator — night falls off to the right. Painted
+        # as 8px vertical alpha strips (smooth enough; init-only cost).
+        shade = pygame.Surface((w, base_h), pygame.SRCALPHA)
+        for sx in range(0, w, 8):
+            t = max(0.0, min(1.0, (sx / w - 0.42) / 0.58))
+            alpha = int(150 * t * t)
+            if alpha > 0:
+                shade.fill((0, 0, 0, alpha), (sx, 0, 8, base_h))
+        base.blit(shade, (0, 0))
+        # Per-column sky repaint above the limb curve — restores space
+        # colour over any blob/terminator spill and hard-clips the disc.
+        for x in range(w):
+            ly = limb_ext[x + ext]
+            if ly > y0:
+                base.fill(_ORBIT_SPACE, (x, 0, 1, ly - y0))
+        # Atmosphere rim: bright cyan limb line fading inward, plus an
+        # outer glow pre-blended against the space colour (drawing them
+        # opaque keeps the base layer a fast colourless blit).
+        for k in range(9):
+            ring = _lerp_colour(_ORBIT_GLOW, _ORBIT_SPACE, k / 8.0)
+            pygame.draw.circle(base, ring, (cx, cy_local), radius + 2 + k * 2, width=3)
+        for k in range(3):
+            ring = _lerp_colour(_ORBIT_LIMB_BRIGHT, _ORBIT_OCEAN, k / 3.0)
+            pygame.draw.circle(base, ring, (cx, cy_local), radius - 1 - k * 2, width=3)
+
+        # ── cloud bands: soft white streaks, masked inside the limb ──
+        # Each band of puffs is baked into its own bounding-box SRCALPHA
+        # surface (wide dim haze ellipse under a brighter core per puff)
+        # so the per-frame alpha-blit cost tracks actual cloud pixels
+        # rather than the whole planet area. Night-side puffs are
+        # pre-dimmed toward space blue. Every puff is placed so its top
+        # edge stays below the limb for any sway offset (checked against
+        # the extended limb table), so the swaying bands never spill
+        # into space.
+        margin = int(_ORBIT_CLOUD_SWAY_PX) + 6
+        bands: list[tuple[pygame.Surface, int, int]] = []
+        for _band in range(7):
+            bx = unit() * w
+            band_limb = limb_ext[max(0, min(w - 1, int(bx))) + ext]
+            by = band_limb + 18.0 + unit() * max(24.0, h - band_limb - 24.0)
+            puffs: list[tuple[pygame.Rect, tuple[int, int, int]]] = []
+            for _puff in range(3 + int(unit() * 4)):
+                ew = 44 + int(unit() * 70)
+                eh = 8 + int(unit() * 10)
+                lo = max(0, int(bx - ew / 2) - margin - 10 + ext)
+                hi = min(len(limb_ext) - 1, int(bx + ew / 2) + margin + 10 + ext)
+                limb_floor = max(limb_ext[lo : hi + 1], default=limb_top)
+                py = max(by, limb_floor + 10.0 + eh / 2.0)
+                night = max(0.0, min(1.0, (bx / w - 0.42) / 0.58))
+                tone = _lerp_colour(_ORBIT_CLOUD, _ORBIT_SPACE, 0.55 * night)
+                puffs.append(
+                    (pygame.Rect(int(bx - ew / 2), int(py - eh / 2), ew, eh), tone)
+                )
+                bx += ew * (0.45 + unit() * 0.25)
+                by = py + (unit() - 0.5) * 18.0
+            # Band bounding box, inflated to fit the haze halos.
+            bbox = puffs[0][0].inflate(20, 10)
+            for rect, _tone in puffs[1:]:
+                bbox.union_ip(rect.inflate(20, 10))
+            band_surf = pygame.Surface(bbox.size, pygame.SRCALPHA)
+            for rect, tone in puffs:
+                local = rect.move(-bbox.x, -bbox.y)
+                pygame.draw.ellipse(band_surf, (*tone, 44), local.inflate(18, 8))
+            for rect, tone in puffs:
+                local = rect.move(-bbox.x, -bbox.y)
+                pygame.draw.ellipse(band_surf, (*tone, 88), local)
+            bands.append((band_surf, bbox.x, bbox.y))
+
+        # convert() for fast blits; skipped when no display mode is set
+        # (pure-logic tests can still construct the backdrop).
+        if pygame.display.get_surface() is not None:
+            base = base.convert()
+            bands = [(s.convert_alpha(), bx_, by_) for s, bx_, by_ in bands]
+        self._base = base
+        self._cloud_bands: tuple[tuple[pygame.Surface, int, int], ...] = tuple(bands)
+
+        # ── stars (channels 64_000/65_000 — 61_0xx belongs to hyperspace) ──
+        # Same idiom as ParallaxStarfield, but each star wraps at its own
+        # column's limb height so it slides behind the planet edge. Wrap is
+        # clamped to the surface height: at extreme aspect ratios the limb
+        # curve exceeds h at the frame edges and set_at would raise.
+        stars: list[tuple[int, float, float, int, tuple[int, int, int]]] = []
+        star_id = 0
+        for count, speed, colour in _ORBIT_STAR_LAYERS:
+            for _ in range(count):
+                sx = int(tick_unit(0, channel=64_000 + star_id) * w) % w
+                sy = tick_unit(0, channel=65_000 + star_id) * limb_top
+                wrap = max(1, min(h, limb_ext[sx + ext]))
+                stars.append((sx, sy, speed, wrap, colour))
+                star_id += 1
+        self._stars: tuple[tuple[int, float, float, int, tuple[int, int, int]], ...] = (
+            tuple(stars)
+        )
+
+        # ── distant fighter battle (channels 60_000–60_099) ──
+        # Smooth deterministic Lissajous weaving in the sky band, well
+        # clear of the limb: (cx, cy, ax, ay, wx, wy, px, py, size, colour).
+        fighters: list[
+            tuple[float, float, float, float, float, float, float, float, int, tuple[int, int, int]]
+        ] = []
+        for i in range(_ORBIT_FIGHTER_COUNT):
+            fighters.append(
+                (
+                    w * (0.10 + 0.80 * tick_unit(0, channel=60_000 + i)),
+                    66.0 + tick_unit(0, channel=60_010 + i) * max(20.0, limb_top - 190.0),
+                    46.0 + tick_unit(0, channel=60_020 + i) * 90.0,
+                    18.0 + tick_unit(0, channel=60_030 + i) * 42.0,
+                    math.tau / (9.0 + tick_unit(0, channel=60_040 + i) * 8.0),
+                    math.tau / (5.0 + tick_unit(0, channel=60_050 + i) * 5.0),
+                    tick_unit(0, channel=60_060 + i) * math.tau,
+                    tick_unit(0, channel=60_070 + i) * math.tau,
+                    5 + int(tick_unit(0, channel=60_080 + i) * 4),
+                    _ORBIT_FIGHTER_A if i % 2 == 0 else _ORBIT_FIGHTER_B,
+                )
+            )
+        self._fighters: tuple[
+            tuple[float, float, float, float, float, float, float, float, int, tuple[int, int, int]],
+            ...,
+        ] = tuple(fighters)
+
+    @property
+    def width(self) -> int:
+        return self._width
+
+    @property
+    def height(self) -> int:
+        return self._height
+
+    def _fighter_xy(self, index: int, elapsed: float) -> tuple[float, float]:
+        fx, fy, ax, ay, wx, wy, px, py, _size, _colour = self._fighters[index]
+        return (
+            fx + ax * math.sin(wx * elapsed + px),
+            fy + ay * math.sin(wy * elapsed + py),
+        )
+
+    def draw(self, surface: pygame.Surface, tick: int) -> None:
+        """Blit the prerendered planet + animate stars, clouds, battle."""
+        elapsed = tick / _TICKS_PER_SEC
+
+        # Planet band in one opaque blit. The sky above relies on the
+        # Renderer's frame clear (same deal as ParallaxStarfield).
+        surface.blit(self._base, (0, self._y0))
+
+        # Stars wrap at their own column's limb — they set behind Earth.
+        for sx, y_base, speed, wrap, colour in self._stars:
+            y = (y_base + speed * elapsed) % wrap
+            if speed >= 80.0:
+                pygame.draw.rect(surface, colour, (sx, int(y), 2, 2))
+            else:
+                surface.set_at((sx, int(y)), colour)
+
+        # Cloud bands sway a few px/s relative to the planet surface.
+        sway = int(
+            _ORBIT_CLOUD_SWAY_PX
+            * math.sin(math.tau * elapsed / _ORBIT_CLOUD_SWAY_PERIOD_S)
+        )
+        for band_surf, band_x, band_y in self._cloud_bands:
+            surface.blit(band_surf, (band_x + sway, band_y))
+
+        # Distant fighter battle — tiny dim slivers weaving in the sky.
+        n = len(self._fighters)
+        for i in range(n):
+            x, y = self._fighter_xy(i, elapsed)
+            size = self._fighters[i][8]
+            colour = self._fighters[i][9]
+            pygame.draw.rect(
+                surface, colour, (int(x), int(y), size, 3 if size < 7 else 4)
+            )
+        # Brief 1px laser exchanges (4-tick flashes, staggered periods —
+        # tuned so some exchange is visible roughly a tenth of the time).
+        # Shooters 0/3/4/7 → both factions fire (odd and even indices).
+        for s_idx, shooter in enumerate((0, 3, 4, 7)):
+            period = 128 + 34 * s_idx
+            if (tick + 53 * s_idx) % period < 4:
+                x1, y1 = self._fighter_xy(shooter, elapsed)
+                x2, y2 = self._fighter_xy((shooter + 3) % n, elapsed)
+                laser = _ORBIT_LASER_A if shooter % 2 == 0 else _ORBIT_LASER_B
+                pygame.draw.line(
+                    surface, laser, (int(x1), int(y1)), (int(x2), int(y2))
+                )
+        # Rare tiny explosion blip: fixed at the victim's position at the
+        # window-start tick so the flash doesn't slide around.
+        blip_phase = (tick + 137) % _ORBIT_BLIP_PERIOD
+        if blip_phase < _ORBIT_BLIP_TICKS:
+            start_tick = tick - blip_phase
+            victim = (start_tick // _ORBIT_BLIP_PERIOD) % n
+            bx, by = self._fighter_xy(victim, start_tick / _TICKS_PER_SEC)
+            colour = _ORBIT_BLIP_COLOURS[min(2, blip_phase // 5)]
+            pygame.draw.circle(
+                surface, colour, (int(bx), int(by)), 1 + blip_phase // 4
+            )
+
+
 # ───────── Space station (level 3) ─────────
 
 # Level-3 view: above an alien space station. A dense backdrop of
@@ -584,6 +950,7 @@ BACKGROUND_REGISTRY: dict[str, BackgroundFactory] = {
     "bg_moon_surface": MoonSurfaceBackground,
     "bg_space_station": SpaceStationBackground,
     "bg_earth": EarthHorizonBackground,
+    "bg_earth_orbit": EarthOrbit,
     "bg_hyperspace": HyperspaceBackground,
 }
 

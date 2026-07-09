@@ -5,10 +5,13 @@
 # track (music/level_04.ogg) is mid-tempo major key — see
 # tools/gen_music.py LEVEL_04 spec.
 #
-# Background: bg_starfield_01 reused. The dedicated Earth backdrop is
-# still backlogged (only two backdrops exist in tree); the music + boss
-# music carry the "we're home" mood instead. Boss music is its own
-# track (boss_04.ogg); at runtime every level plays its own boss_0N cue.
+# Background: bg_earth_orbit — the dedicated Earth backdrop. A big
+# prerendered blue-marble limb (oceans, blob continents, terminator,
+# cyan atmosphere rim) fills the lower ~40% of the frame, clouds drift
+# a few px/s over the surface, and a tiny dim fighter battle weaves in
+# the sky layer far behind gameplay. Replaces the earlier bg_earth
+# per-frame-primitives stopgap. Boss music is its own track
+# (boss_04.ogg); at runtime every level plays its own boss_0N cue.
 #
 # Difficulty curve note: this level introduces the NEW `kamikaze` enemy
 # — a fast diving suicide-runner with no weapon, only a body-collision
@@ -31,7 +34,7 @@ title: "Over Earth"
 codename: over_earth
 music: music/level_04.ogg
 boss_music: music/boss_04.ogg
-background: bg_earth
+background: bg_earth_orbit
 length_seconds: 215
 
 waves:
