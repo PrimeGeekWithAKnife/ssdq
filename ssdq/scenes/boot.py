@@ -82,8 +82,8 @@ class BootScene(Scene):
             "missile",
         ):
             bus.load_sfx(name, str(sfx_dir / f"{name}.ogg"))
-        # Music: a POOL per level (base + _b/_c variants, levels 1..7 —
-        # fun review 2026-06-12: one track per level was wearing thin),
+        # Music: a POOL per level (base + _b/_c/_d variants, levels 1..7
+        # — fun review 2026-06-12: one track per level was wearing thin),
         # one boss track per level, the ``hyperspace`` cue for the
         # post-L5 bonus ride, plus the calmer ``resupply`` track played
         # by DockingScene between levels. Missing files are silently

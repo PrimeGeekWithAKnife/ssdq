@@ -3406,7 +3406,7 @@ class LevelScene(Scene):
     def _level_music_name(self) -> str:
         """BootScene-registered track name for this level ENTRY.
 
-        Each level owns a pool of up to three tracks (base + _b/_c
+        Each level owns a pool of up to four tracks (base + _b/_c/_d
         variants — fun review 2026-06-12: one track per level was
         wearing thin). The pool is filtered through AudioBus.has_music
         because ``crossfade_to`` silently keeps the OLD track for

@@ -4,12 +4,13 @@ Pure helpers shared by BootScene (registration) and LevelScene
 (selection) so the two can never drift apart on naming. Track names
 follow the established convention: bus name == file stem == TRACKS
 recipe key (``level_NN`` / ``level_NN_b`` / ``level_NN_c`` /
-``boss_NN`` / ``hyperspace``).
+``level_NN_d`` / ``boss_NN`` / ``hyperspace``).
 
 Fun review 2026-06-12: one track per level was wearing thin after ~20
-playthroughs, so each level owns a pool of three tracks (base + a
-darker ``_b`` and a brighter ``_c`` variant) and LevelScene rotates
-through the pool per entry via ``AppState.music_rotation``.
+playthroughs, so each level owns a pool of four tracks (base + a
+darker ``_b``, a brighter ``_c`` and a fresh-piece ``_d`` variant)
+and LevelScene rotates through the pool per entry via
+``AppState.music_rotation``.
 """
 
 from __future__ import annotations
@@ -20,8 +21,9 @@ from __future__ import annotations
 MAX_MUSIC_LEVEL = 7
 
 # Pool suffixes in rotation order: base first so a level's debut entry
-# always plays its signature track, then the darker/brighter variants.
-LEVEL_VARIANT_SUFFIXES = ("", "_b", "_c")
+# always plays its signature track, then the darker/brighter/fresh
+# variants.
+LEVEL_VARIANT_SUFFIXES = ("", "_b", "_c", "_d")
 
 
 def clamp_level(level_index: int) -> int:
@@ -36,7 +38,7 @@ def clamp_level(level_index: int) -> int:
 
 def level_music_pool(level_index: int) -> list[str]:
     """Ordered track-name pool for a level, e.g. level 3 →
-    ``["level_03", "level_03_b", "level_03_c"]``."""
+    ``["level_03", "level_03_b", "level_03_c", "level_03_d"]``."""
     idx = clamp_level(level_index)
     return [f"level_{idx:02d}{suffix}" for suffix in LEVEL_VARIANT_SUFFIXES]
 
