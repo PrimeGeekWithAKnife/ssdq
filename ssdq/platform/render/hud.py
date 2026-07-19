@@ -40,6 +40,25 @@ _HINT_COLOUR = (180, 180, 200)
 # from the lives/bombs row so the kid can tell at a glance which is
 # auto-spent vs equippable.
 _INVENTORY_COLOUR = (200, 220, 255)
+_SUPER_SHIELD_COLOUR = (185, 95, 255)
+
+
+def _super_shield_label(secs: float, pending: int) -> str | None:
+    """Purple super-shield HUD line (hyperspace 15-streak reward).
+
+    * An active window shows the countdown; a spare bank still in hand is
+      appended as ``(+n)`` so a running window never hides a deployable
+      spare.
+    * With no active window, a banked count shows on its own.
+    * Nothing to show → ``None``.
+    """
+    if secs > 0.0:
+        if pending > 0:
+            return f"[SS] Super {int(secs)}s (+{pending})"
+        return f"[SS] Super {int(secs)}s"
+    if pending:
+        return f"[SS] Super x{pending}"
+    return None
 
 
 class Hud:
@@ -134,6 +153,13 @@ class Hud:
             lines.append((f"Missile Lv {stats.missile_level}", (255, 180, 100)))
         if stats.drones:
             lines.append((f"Drones: {stats.drones}", _INVENTORY_COLOUR))
+        # Super shield (hyperspace 15-streak reward). Purple, matching the
+        # in-game ring: active window shows the countdown (plus any spare
+        # bank as "(+n)"), else the banked count the kid can deploy with
+        # the shield button.
+        ss_line = _super_shield_label(stats.super_shield_secs, stats.super_shield_pending)
+        if ss_line is not None:
+            lines.append((ss_line, _SUPER_SHIELD_COLOUR))
         # Score is always last so its position relative to the bottom
         # of the panel is consistent regardless of inventory rows.
         score_idx = len(lines)
@@ -165,6 +191,8 @@ class _PlayerStats:
         "missile_level",
         "score",
         "shield_charges",
+        "super_shield_pending",
+        "super_shield_secs",
         "weapon_level",
     )
 
@@ -178,6 +206,8 @@ class _PlayerStats:
         shield_charges: int = 0,
         missile_level: int = 0,
         drones: int = 0,
+        super_shield_secs: float = 0.0,
+        super_shield_pending: int = 0,
     ) -> None:
         self.lives = lives
         self.bombs = bombs
@@ -186,6 +216,8 @@ class _PlayerStats:
         self.shield_charges = shield_charges
         self.missile_level = missile_level
         self.drones = drones
+        self.super_shield_secs = super_shield_secs
+        self.super_shield_pending = super_shield_pending
 
 
 def _try_coop_state(world: World) -> Any | None:
@@ -209,6 +241,14 @@ def _attr_int(obj: Any, name: str) -> int:
         return 0
 
 
+def _attr_float(obj: Any, name: str) -> float:
+    val = getattr(obj, name, 0.0)
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _player_stats(state: Any, slot_attr: str) -> _PlayerStats:
     p = getattr(state, slot_attr, None)
     if p is None:
@@ -221,4 +261,6 @@ def _player_stats(state: Any, slot_attr: str) -> _PlayerStats:
         shield_charges=_attr_int(p, "shield_charges"),
         missile_level=_attr_int(p, "missile_level"),
         drones=_attr_int(p, "drones"),
+        super_shield_secs=_attr_float(p, "super_shield_secs"),
+        super_shield_pending=_attr_int(p, "super_shield_pending"),
     )

@@ -31,6 +31,13 @@ class HudPlayerStats:
     # Active drone count (0..2) — task #10. Surfaced so the HUD can
     # render a small "Drones: N" line per player.
     drones: int = 0
+    # Super shield (hyperspace 15-streak reward, carried into levels).
+    # ``super_shield_secs`` > 0 ⇒ an active FULL-invuln window (HUD shows
+    # the countdown); else ``super_shield_pending`` banked shields ready
+    # to deploy (HUD shows the count). Defaults keep existing constructors
+    # valid.
+    super_shield_secs: float = 0.0
+    super_shield_pending: int = 0
 
 
 @dataclass(frozen=True, slots=True)

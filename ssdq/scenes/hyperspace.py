@@ -60,6 +60,9 @@ from ssdq.core.coop import (
 from ssdq.core.coop.scoring import ScoreLedger
 from ssdq.core.ecs import World
 from ssdq.core.powerups.state import (
+    SUPER_SHIELD_COLOUR,
+    SUPER_SHIELD_DURATION,
+    SUPER_SHIELD_HALO_RADIUS,
     PlayerPowerupState,
     WeaponState,
     apply_pickup,
@@ -158,11 +161,15 @@ _HYPER_DRONE_OFFSET_Y = 38.0  # |dy| from the ship; slot 0 above, 1 below
 _HYPER_DRONE_OFFSET_X = 4.0  # slightly ahead of the ship's nose column
 _HYPER_DRONE_SCALE = 0.66 * 0.7  # same "noticeably smaller" feel as L6
 # Super shield (15-streak reward): banked, press the shield button to
-# spend one; grants a 90s purple-halo invulnerability window. Ride-only
-# (banked count + active timer are scene-local — never carry to L6).
-_SUPER_SHIELD_SECONDS = 90.0
-_SUPER_SHIELD_COLOUR = (185, 95, 255)
-_SUPER_SHIELD_HALO_RADIUS = 30.0
+# spend one; grants a 90s purple-halo invulnerability window. The active
+# window + banked count are scene-local, but UNSPENT banks now carry
+# forward into normal levels via AppState.super_shield_pending (written
+# in _finish). Duration/colour/radius live on the powerups state module
+# so the level scene shares the exact same purple ring without importing
+# from hyperspace (which would form an import cycle).
+_SUPER_SHIELD_SECONDS = SUPER_SHIELD_DURATION
+_SUPER_SHIELD_COLOUR = SUPER_SHIELD_COLOUR
+_SUPER_SHIELD_HALO_RADIUS = SUPER_SHIELD_HALO_RADIUS
 # Reward banner flash hold (a short "POWER UP!" / "DRONE!" / "SUPER
 # SHIELD!" toast). ~2s, readable for a 9-year-old without gating play.
 _REWARD_BANNER_SECONDS = 2.0
@@ -377,6 +384,12 @@ class HyperspaceScene(Scene):
                 ship_speed_bonus=speed_bonus,
                 missile_level=max(0, missile_level),
             )
+            # Seed the ride's super-shield bank from any UNSPENT carry so a
+            # second ride (re-entered via Level Select) that earns no new
+            # 15-streak doesn't overwrite the carried bank to zero on
+            # _finish. Mirrors the _powerup_states carry-forward seeding
+            # above; _finish's `=` then correctly writes carried+earned-spent.
+            self._super_shield_banked[slot] = self.app.super_shield_pending.get(slot, 0)
 
         # Trimmed HUD snapshot — scores + lives only; bombs/missiles/
         # drones/shields don't exist on the ride so their counters stay
@@ -1028,7 +1041,11 @@ class HyperspaceScene(Scene):
                 self._super_shield_banked[slot] -= 1
                 self._super_shield_secs[slot] = _SUPER_SHIELD_SECONDS
                 active = True
-                self.app.audio.play_sfx("shield")
+                # Match the level-deploy cue. "shield" was never a loaded
+                # sfx (boot.py registers laser/hit/explosion/pickup/pause/
+                # powerup/bomb/missile — no shield.ogg), so this call was
+                # silent; "powerup" is the real deploy cue the level uses.
+                self.app.audio.play_sfx("powerup")
             # Decay the active window.
             if active:
                 remaining = self._super_shield_secs.get(slot, 0.0) - dt
@@ -1311,6 +1328,13 @@ class HyperspaceScene(Scene):
             P1.index: self._session.lifecycle(P1).lives,
             P2.index: self._session.lifecycle(P2).lives,
         }
+        # Carry any UNSPENT super-shield banks forward into the campaign so
+        # the kid can deploy them mid-level by pressing the shield button.
+        # The active in-ride window does NOT carry — only the discrete
+        # remaining bank count. A bank spent on the ride was already
+        # decremented off _super_shield_banked, so it is not carried.
+        for slot in (P1, P2):
+            self.app.super_shield_pending[slot] = self._super_shield_banked.get(slot, 0)
         if self.exit_to == "docking":
             from ssdq.scenes.docking import DockingScene
 

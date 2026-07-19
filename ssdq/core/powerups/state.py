@@ -95,6 +95,18 @@ _NO_SHIELD = Shield(seconds_remaining=0.0)
 # moments", not a permanent god mode.
 SHIELD_CONSUME_DURATION: float = 3.0
 
+# Super shield (hyperspace 15-streak reward, carried into normal levels).
+# A banked, player-triggered 90s FULL-invulnerability purple-halo window.
+# Lifted here — beside the equippable-shield constant — so BOTH the
+# hyperspace ride and the level scene reference one source of truth
+# without importing across the level ⇄ hyperspace cycle (hyperspace
+# imports level, so level must never import from hyperspace). The purple
+# colour + halo radius are lifted too so the kid sees the identical ring
+# he earned on the ride.
+SUPER_SHIELD_DURATION: float = 90.0
+SUPER_SHIELD_COLOUR: tuple[int, int, int] = (185, 95, 255)
+SUPER_SHIELD_HALO_RADIUS: float = 30.0
+
 # Cap for missile_level. Each MISSILE pickup advances the tier by one;
 # the auto-fire pattern table in the level scene defines how many missiles
 # spawn per 2s tick at each tier (0 = silent, 5 = full barrage).

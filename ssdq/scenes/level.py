@@ -76,6 +76,9 @@ from ssdq.core.ecs import World
 from ssdq.core.powerups import (
     MISSILE_LEVEL_CAP,
     SHIELD_CONSUME_DURATION,
+    SUPER_SHIELD_COLOUR,
+    SUPER_SHIELD_DURATION,
+    SUPER_SHIELD_HALO_RADIUS,
     PlayerPowerupState,
     Shield,
     WeaponState,
@@ -625,10 +628,25 @@ class LevelScene(Scene):
     # 2026-06-12 R2): struggling players get extra powerups instead of
     # the old always-on level-index drop flood.
     _deaths_this_level: int = field(default=0, init=False)
+    # Active super-shield window per slot (seconds remaining). Carried
+    # from the hyperspace 15-streak reward and deployed by the player.
+    # Scene-local & PER-LEVEL — an active window does NOT carry between
+    # levels; only the discrete bank on AppState.super_shield_pending
+    # does. Seeded in __init__ (0.0) and NEVER re-seeded from options in
+    # enter() (that would be the recurring state-reset bug class).
+    _super_shield_secs: dict[PlayerSlot, float] = field(init=False)
+    # Rising-edge tracking for the shield button so a HELD press spends
+    # exactly one banked super shield (mirrors the hyperspace ride).
+    _prev_shield: dict[PlayerSlot, bool] = field(init=False)
 
     def __init__(self, app: AppState, level_index: int = 1) -> None:
         self.app = app
         self.level_index = level_index
+        # Per-level super-shield window + shield-button edge tracking.
+        # Set here (NOT in enter) so a fresh LevelScene instance starts
+        # clean and enter() never touches the persisted bank on AppState.
+        self._super_shield_secs = {P1: 0.0, P2: 0.0}
+        self._prev_shield = {P1: False, P2: False}
 
     # Render-branch protocol (read by main.py): scenes whose entities
     # are drawn by the world Renderer set `world_rendered = True` and
@@ -953,6 +971,21 @@ class LevelScene(Scene):
             ps = ps.tick_shield_decay(dt)
             ps = ps.tick_fire_rate_boost(dt)
             self._powerup_states[slot] = ps
+            # Super-shield window decay (carried from the hyperspace reward).
+            prev_ss = self._super_shield_secs.get(slot, 0.0)
+            if prev_ss > 0.0:
+                new_ss = max(0.0, prev_ss - dt)
+                self._super_shield_secs[slot] = new_ss
+                if new_ss == 0.0:
+                    # Window just closed (prev>0 → new==0): a soft chirp so
+                    # the kid registers the end of full invulnerability.
+                    # "hit" at low volume is the quiet-chirp idiom already
+                    # used elsewhere in this scene.
+                    self.app.audio.play_sfx("hit", volume=0.3)
+        # Purple super halo takes PRECEDENCE over the cyan equippable halo:
+        # sync it FIRST, and _sync_shield_halos skips any slot with an
+        # active super window so it can't strip the purple ring.
+        self._sync_super_shield_halos(world)
         self._sync_shield_halos(world)
 
         # 3. Player input → movement, fire, bomb
@@ -1147,12 +1180,33 @@ class LevelScene(Scene):
             self._powerup_states[slot] = pstate.with_bombs(pstate.bombs - 1)
             self.app.audio.play_sfx("bomb")
 
-        # Shield (equippable). Consumes a charge from the AppState
-        # inventory and grants a brief invulnerability window via the
-        # existing forcefield/halo mechanism. Empty-press is a deliberate
-        # no-op + soft chirp so the kid hears the button is "alive".
-        if inp.shield and lifecycle.state == LifecycleState.ALIVE:
-            if self.app.consume_shield_charge(slot):
+        # Shield button. ``inp.shield`` is edge-triggered by the input
+        # layer, but we ALSO track a scene-local rising edge so a held
+        # boolean (a test, or a future raw-input path) can't drain
+        # multiple banked super shields in one hold — mirrors the ride.
+        shield_pressed = bool(inp.shield)
+        shield_rising = shield_pressed and not self._prev_shield.get(slot, False)
+        self._prev_shield[slot] = shield_pressed
+        if shield_rising and lifecycle.state == LifecycleState.ALIVE:
+            if self._super_shield_secs.get(slot, 0.0) > 0.0:
+                # (i) A super-shield window is already running: swallow the
+                # press so it neither re-banks nor wastes an equippable
+                # charge during full invulnerability.
+                pass
+            elif self.app.super_shield_pending.get(slot, 0) > 0:
+                # (ii) Deploy a banked super shield (hyperspace 15-streak
+                # reward carried forward): a 90s FULL-invuln purple window.
+                # Takes precedence over the 3s equippable shield — a single
+                # press NEVER fires both.
+                self.app.super_shield_pending[slot] -= 1
+                self._super_shield_secs[slot] = SUPER_SHIELD_DURATION
+                # Snap the purple halo on this tick so it engulfs the ship
+                # the moment the button fires.
+                self._sync_super_shield_halos(world)
+                self.app.audio.play_sfx("powerup")
+            elif self.app.consume_shield_charge(slot):
+                # (iii) Existing 3s equippable shield — UNCHANGED. Consumes
+                # a charge and grants a brief forcefield window.
                 refreshed = self._powerup_states[slot].with_shield(
                     Shield(seconds_remaining=SHIELD_CONSUME_DURATION)
                 )
@@ -2775,6 +2829,23 @@ class LevelScene(Scene):
         if world.has(player_eid, Drone):
             self._handle_drone_hit(world, player_eid, other, ftag_a, ftag_b)
             return
+        # Super-shield absorb (hyperspace 15-streak reward, carried in and
+        # deployed by the player). While the 90s window is active it is
+        # PURELY DEFENSIVE: soak the hit — no life lost, the ship survives,
+        # lifecycle untouched. Runs BEFORE the can_be_hit gate.
+        #   * ENEMY_BULLET: consume the incoming bolt so it can't camp on
+        #     the ship, then bail (no life lost).
+        #   * ENEMY (contact): the player takes no damage but the enemy
+        #     SURVIVES — it must be killed by weapons as normal. We must
+        #     NOT despawn it here: a raw despawn would delete the boss
+        #     out-of-band (no _kill_boss score/fanfare, and _advance_boss
+        #     would flip _level_completed), wipe indestructible terrain
+        #     cover, and ignore enemy shields.
+        if self._super_shield_secs.get(slot, 0.0) > 0.0:
+            other_ftag = ftag_b if player_eid == a else ftag_a
+            if other_ftag.faction == Faction.ENEMY_BULLET and world.is_alive(other):
+                world.despawn(other)
+            return
         if not self._session.lifecycle(slot).can_be_hit:
             return
         # Shield power-up: if active, absorb the hit. The forcefield
@@ -3218,6 +3289,36 @@ class LevelScene(Scene):
 
     # ───────── helpers: respawn / culling / hud ─────────
 
+    def _sync_super_shield_halos(self, world: World) -> None:
+        """Attach the purple super-shield ring while the 90s window is
+        active on a live ship. Runs BEFORE ``_sync_shield_halos`` and owns
+        the halo whenever a super window is active, so the cyan sync SKIPS
+        those slots (see below) rather than stripping the purple ring.
+        Removal is left to ``_sync_shield_halos``: once the super window is
+        inactive that slot is no longer skipped there, and its cyan branch
+        (shield inactive ⇒ remove) reclaims the leftover ring the same
+        tick. Mirrors HyperspaceScene._sync_super_shield_halo.
+        """
+        for slot in (P1, P2):
+            eid = self._player_entities.get(slot)
+            if eid is None or not world.is_alive(eid):
+                continue
+            want = self._super_shield_secs.get(slot, 0.0) > 0.0
+            if not want:
+                continue
+            # While a super window is active the purple ring is AUTHORITATIVE:
+            # attach it when the ship has no halo, and REPLACE a leftover cyan
+            # (equippable) ring with the purple one so the visual can't lie
+            # about which shield the kid is actually under.
+            purple = ShieldHalo(
+                base_radius=SUPER_SHIELD_HALO_RADIUS, colour=SUPER_SHIELD_COLOUR
+            )
+            existing = world.get(eid, ShieldHalo)
+            if existing is None:
+                world.add(eid, purple)
+            elif existing.colour != SUPER_SHIELD_COLOUR:
+                world.replace(eid, purple)
+
     def _sync_shield_halos(self, world: World) -> None:
         """Add or remove a ShieldHalo on each player ship to match its
         powerup state. Called every tick (cheap — at most 2 entities) so
@@ -3227,6 +3328,11 @@ class LevelScene(Scene):
         for slot in (P1, P2):
             eid = self._player_entities.get(slot)
             if eid is None or not world.is_alive(eid):
+                continue
+            # Purple super-shield PRECEDENCE: while a super window is active
+            # its ring owns this ship — do not touch the halo, or the cyan
+            # branch below would strip the purple ring it doesn't own.
+            if self._super_shield_secs.get(slot, 0.0) > 0.0:
                 continue
             ship_name = "vanguard" if slot == P1 else "vanguard_red"
             ship = bundle.ships[ship_name]
@@ -3388,6 +3494,8 @@ class LevelScene(Scene):
                 shield_charges=self.app.get_shield_charges(P1),
                 missile_level=p1.missile_level,
                 drones=drones_p1,
+                super_shield_secs=self._super_shield_secs.get(P1, 0.0),
+                super_shield_pending=self.app.super_shield_pending.get(P1, 0),
             ),
             p2=HudPlayerStats(
                 lives=lc2.lives,
@@ -3397,6 +3505,8 @@ class LevelScene(Scene):
                 shield_charges=self.app.get_shield_charges(P2),
                 missile_level=p2.missile_level,
                 drones=drones_p2,
+                super_shield_secs=self._super_shield_secs.get(P2, 0.0),
+                super_shield_pending=self.app.super_shield_pending.get(P2, 0),
             ),
             single_player=self.app.single_player,
         )

@@ -69,6 +69,17 @@ class AppState:
     drones_pending: dict[PlayerSlot, int] = field(default_factory=_zero_per_slot)
     shield_charges: dict[PlayerSlot, int] = field(default_factory=_zero_per_slot)
 
+    # Banked super shields carried out of a hyperspace ride (15-streak
+    # reward) into normal levels. Each is a single-use 90s FULL-invuln
+    # window the kid deploys by pressing the shield button in-level.
+    # Modelled exactly on ``drones_pending`` (same per-slot factory).
+    # ⚠️ This PERSISTS across levels and MUST NEVER be re-seeded from
+    # ``options.*`` in LevelScene.enter() — that is the recurring
+    # per-slot state-reset bug class. enter() must not touch it; the
+    # bank is spent on the button press, not on entry. Written by
+    # HyperspaceScene._finish; drained by the in-level shield press.
+    super_shield_pending: dict[PlayerSlot, int] = field(default_factory=_zero_per_slot)
+
     # One-shot shield charge bonus granted by DockingScene. Drained into
     # `shield_charges` on next LevelScene.enter (same pattern as
     # bomb_bonus_pending). Distinct from `shield_charges` because it
@@ -187,6 +198,7 @@ class AppState:
         # campaign, not whatever stockpile a prior wipeout left behind.
         self.shield_charges = _zero_per_slot()
         self.drones_pending = _zero_per_slot()
+        self.super_shield_pending = _zero_per_slot()
         self.drone_config = _zero_per_slot()
         # music_rotation (and its music_rng seed) deliberately NOT reset —
         # like single_player it's a session ambience artefact, not a
