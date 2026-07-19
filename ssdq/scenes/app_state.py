@@ -7,6 +7,7 @@ audio bus. Stored as an ECS resource on `World`.
 
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass, field
 
 from ssdq.core.content.loader import ContentBundle
@@ -125,14 +126,27 @@ class AppState:
     # formation isn't lost between levels. Cycled via PlayerInput.drone_cycle.
     drone_config: dict[PlayerSlot, int] = field(default_factory=_zero_per_slot)
 
-    # Per-level music rotation counters (level index → entry count). Each
+    # Per-level music rotation counters (level index → entry count). On a
+    # level's FIRST entry in a session its counter is seeded with a RANDOM
+    # offset in [0, len(pool)) (see music_rng below); thereafter each
     # LevelScene.enter() picks pool[count % len(pool)] then bumps the count
-    # once, so re-entering a level cycles base → _b → _c → base (fun review
-    # 2026-06-12: one track per level was wearing thin). NOT cleared by
+    # once, so re-entering a level cycles through the four-track pool
+    # (base → _b → _c → _d → base) wrapping from that random start (fun
+    # review 2026-06-12: one track per level was wearing thin). The random
+    # start surfaces every variant — incl. the L4 Earth Defence Anthem — in
+    # linear play, which counter-0 starts never did. NOT cleared by
     # clear_progression — like single_player it's a session ambience
     # artefact, not a campaign-progression artefact; restarting a campaign
     # should still rotate the soundtrack rather than replay last run's.
     music_rotation: dict[int, int] = field(default_factory=dict)
+
+    # Presentation-layer RNG for the per-session RANDOM music start ONLY —
+    # it seeds each level's music_rotation counter on first entry (above).
+    # It must NEVER feed the tick simulation: the whole codebase preserves
+    # replay bit-identity, and ssdq/ deliberately has zero stdlib `random`
+    # usage. random.Random() is OS-seeded → a different music start each
+    # launch; tests make it deterministic via .seed(...).
+    music_rng: random.Random = field(default_factory=random.Random)
 
     # ───────── equippable helpers ─────────
 
@@ -174,7 +188,7 @@ class AppState:
         self.shield_charges = _zero_per_slot()
         self.drones_pending = _zero_per_slot()
         self.drone_config = _zero_per_slot()
-        # music_rotation deliberately NOT reset — like single_player it's
-        # a session ambience artefact, not a progression artefact. A
-        # fresh campaign should hear the NEXT track in each level's
-        # pool, not restart the rotation.
+        # music_rotation (and its music_rng seed) deliberately NOT reset —
+        # like single_player it's a session ambience artefact, not a
+        # progression artefact. A fresh campaign should hear the NEXT track
+        # in each level's pool, not restart the rotation.

@@ -805,7 +805,11 @@ class LevelScene(Scene):
         # name from the level index here. The rotation counter is bumped
         # exactly once per entry, AFTER picking this entry's track, so
         # the next entry of the same level hears the following pool slot
-        # (fun review 2026-06-12: consecutive entries should differ).
+        # (fun review 2026-06-12: consecutive entries should differ). On
+        # this level's FIRST entry in the session, seed its rotation
+        # counter with a random pool offset so linear play surfaces every
+        # variant (base/_b/_c/_d) instead of always replaying the base.
+        self._seed_music_rotation_once()
         self._switch_music(self._level_music_name())
         self._advance_music_rotation()
 
@@ -3436,6 +3440,25 @@ class LevelScene(Scene):
         """
         idx = clamp_level(self.level_index)
         self.app.music_rotation[idx] = self.app.music_rotation.get(idx, 0) + 1
+
+    def _seed_music_rotation_once(self) -> None:
+        """Seed this level's rotation counter on its FIRST entry per session.
+
+        ``music_rotation`` is an in-memory dict that resets every launch and
+        only advances on same-level re-entry, so linear play would always
+        read counter 0 and replay the base track — no ``_b``/``_c``/``_d``
+        variant (incl. the L4 Earth Defence Anthem) is ever heard. On the
+        first entry we seed a RANDOM offset in ``[0, len(pool))`` using the
+        FULL pool length (selection wraps via ``% len(filtered_pool)`` so any
+        offset stays in range even if a variant is missing); cycling on
+        re-entry then proceeds exactly as before. Uses the presentation-only
+        :attr:`AppState.music_rng` — never the sim RNG (replay bit-identity).
+        """
+        idx = clamp_level(self.level_index)
+        if idx not in self.app.music_rotation:
+            self.app.music_rotation[idx] = self.app.music_rng.randrange(
+                len(level_music_pool(idx))
+            )
 
     def _boss_music_name(self) -> str:
         """BootScene-registered boss track name for the current level."""
