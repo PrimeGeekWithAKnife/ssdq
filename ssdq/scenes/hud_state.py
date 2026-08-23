@@ -38,6 +38,13 @@ class HudPlayerStats:
     # valid.
     super_shield_secs: float = 0.0
     super_shield_pending: int = 0
+    # Weapon tier-up ceremony (fun review 2026-06-12 R7). Non-zero for the
+    # ~0.9s after a weapon upgrade; the HUD renders "Weapon Lv N" in gold and
+    # blinks it while this counts down. An int (ticks) rather than a bool so
+    # the BLINK PHASE is derivable from the value itself — Hud.draw() takes no
+    # ``tick`` and holds no per-element state. Zero ⇒ the line renders exactly
+    # as it always has.
+    weapon_flash_ticks: int = 0
 
 
 @dataclass(frozen=True, slots=True)

@@ -80,6 +80,12 @@ class BootScene(Scene):
             "powerup",
             "bomb",
             "missile",
+            # Weapon tier-up ceremony (fun review 2026-06-12 R7). A dedicated
+            # name rather than reusing "powerup", which already carries shield
+            # pickups, super-shield deploy, the equippable shield and the
+            # hyperspace rewards — a fifth overload would leave the kid's
+            # favourite moment sonically indistinguishable from all of them.
+            "tier_up",
         ):
             bus.load_sfx(name, str(sfx_dir / f"{name}.ogg"))
         # Music: a POOL per level (base + _b/_c/_d variants, levels 1..7

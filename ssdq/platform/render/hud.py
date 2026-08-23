@@ -41,6 +41,26 @@ _HINT_COLOUR = (180, 180, 200)
 # auto-spent vs equippable.
 _INVENTORY_COLOUR = (200, 220, 255)
 _SUPER_SHIELD_COLOUR = (185, 95, 255)
+# Weapon tier-up flash (fun review 2026-06-12 R7). Same gold as the in-world
+# "WEAPON Lv N!" label and the ceremony ring, so all three read as one event
+# rather than three coincidences.
+_WEAPON_FLASH_COLOUR = (255, 220, 80)
+# Blink half-period in ticks. 5 ⇒ ~6Hz: fast enough to catch the eye at TV
+# distance, slow enough not to strobe.
+_WEAPON_FLASH_BLINK_TICKS = 5
+
+
+def _weapon_line_colour(flash_ticks: int) -> tuple[int, int, int]:
+    """Gold-and-blinking for the ~0.9s after a weapon tier-up, else normal.
+
+    The blink phase is derived from the countdown itself so the HUD stays a
+    pure function of its snapshot — ``Hud.draw`` receives no ``tick`` and holds
+    no per-element state, and threading one through purely to animate a single
+    line would put every other HUD element's lifetime in question.
+    """
+    if flash_ticks > 0 and (flash_ticks // _WEAPON_FLASH_BLINK_TICKS) % 2 == 0:
+        return _WEAPON_FLASH_COLOUR
+    return _TEXT_COLOUR
 
 
 def _super_shield_label(secs: float, pending: int) -> str | None:
@@ -143,7 +163,7 @@ class Hud:
             (label, colour),
             (f"Lives: {stats.lives}", _TEXT_COLOUR),
             (f"Bombs: {stats.bombs}", _TEXT_COLOUR),
-            (f"Weapon Lv {stats.weapon_level}", _TEXT_COLOUR),
+            (f"Weapon Lv {stats.weapon_level}", _weapon_line_colour(stats.weapon_flash_ticks)),
         ]
         # Equippable / drone inventory rows — only render when non-zero so a
         # clean session doesn't clutter the panel with zeroed-out counters.
@@ -193,6 +213,7 @@ class _PlayerStats:
         "shield_charges",
         "super_shield_pending",
         "super_shield_secs",
+        "weapon_flash_ticks",
         "weapon_level",
     )
 
@@ -208,6 +229,7 @@ class _PlayerStats:
         drones: int = 0,
         super_shield_secs: float = 0.0,
         super_shield_pending: int = 0,
+        weapon_flash_ticks: int = 0,
     ) -> None:
         self.lives = lives
         self.bombs = bombs
@@ -218,6 +240,7 @@ class _PlayerStats:
         self.drones = drones
         self.super_shield_secs = super_shield_secs
         self.super_shield_pending = super_shield_pending
+        self.weapon_flash_ticks = weapon_flash_ticks
 
 
 def _try_coop_state(world: World) -> Any | None:
@@ -263,4 +286,5 @@ def _player_stats(state: Any, slot_attr: str) -> _PlayerStats:
         drones=_attr_int(p, "drones"),
         super_shield_secs=_attr_float(p, "super_shield_secs"),
         super_shield_pending=_attr_int(p, "super_shield_pending"),
+        weapon_flash_ticks=_attr_int(p, "weapon_flash_ticks"),
     )

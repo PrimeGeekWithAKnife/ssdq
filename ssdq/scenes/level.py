@@ -57,6 +57,7 @@ from ssdq.core.components import (
     ShieldOnHitConfig,
     ShieldOnHitConsumed,
     Sprite,
+    TierUpRing,
     TimeToLive,
     Velocity,
 )
@@ -308,6 +309,14 @@ _SCORE_POPUP_RISE: float = -22.0
 # kid can learn without being told.
 _SCORE_POPUP_COLOUR: tuple[int, int, int] = (255, 255, 255)
 _SCORE_POPUP_BONUS_COLOUR: tuple[int, int, int] = (255, 220, 80)
+
+# Tier-up ceremony ring lifetime. 36 ticks = 0.6s at 60Hz — long enough to
+# read at TV-viewing distance, short enough that it isn't still on screen when
+# the next formation arrives.
+TIER_UP_RING_TICKS: int = 36
+# HUD "Weapon Lv" gold-blink lifetime. 54 ticks = 0.9s — long enough for the
+# kid to glance up at the HUD after the ring catches their eye.
+WEAPON_FLASH_TICKS: int = 54
 
 
 def level_intro_text(level: int) -> str:
@@ -645,6 +654,11 @@ class LevelScene(Scene):
     # 2026-06-12 R2): struggling players get extra powerups instead of
     # the old always-on level-index drop flood.
     _deaths_this_level: int = field(default=0, init=False)
+    # Ticks remaining on each slot's HUD "Weapon Lv" gold blink. Set by
+    # _begin_tier_up_ceremony, decremented once per tick, read by
+    # _build_hud_state. Per-level cosmetic scratch — reset in enter(), never
+    # carried across the level seam.
+    _weapon_flash_ticks: dict[PlayerSlot, int] = field(default_factory=dict, init=False)
     # Active super-shield window per slot (seconds remaining). Carried
     # from the hyperspace 15-streak reward and deployed by the player.
     # Scene-local & PER-LEVEL — an active window does NOT carry between
@@ -801,6 +815,7 @@ class LevelScene(Scene):
         self._telegraphed = set()
         self._engaged = set()
         self._deaths_this_level = 0
+        self._weapon_flash_ticks = {P1: 0, P2: 0}
         # Stray-asteroid hazard (Level 7; fun review 2026-06-12). The
         # first burst fires after the first scheduled interval rather than
         # at t=0 so the level opens clean. -1.0 marks "not yet scheduled"
@@ -996,6 +1011,10 @@ class LevelScene(Scene):
             ps = ps.tick_shield_decay(dt)
             ps = ps.tick_fire_rate_boost(dt)
             self._powerup_states[slot] = ps
+            # HUD weapon-tier flash countdown (cosmetic; see
+            # HudPlayerStats.weapon_flash_ticks).
+            if self._weapon_flash_ticks.get(slot, 0) > 0:
+                self._weapon_flash_ticks[slot] -= 1
             # Super-shield window decay (carried from the hyperspace reward).
             prev_ss = self._super_shield_secs.get(slot, 0.0)
             if prev_ss > 0.0:
@@ -3349,9 +3368,57 @@ class LevelScene(Scene):
             self.app.add_shield_charge(slot)
             self.app.audio.play_sfx("powerup")
         elif result.upgraded_weapon:
-            self.app.audio.play_sfx("powerup")
+            self._begin_tier_up_ceremony(world, slot, pickup_pos)
         else:
             self.app.audio.play_sfx("pickup")
+
+    def _begin_tier_up_ceremony(self, world: World, slot: PlayerSlot, fallback: Vec2) -> None:
+        """Fire the four beats of the weapon tier-up ceremony.
+
+        Fun review 2026-06-12 R7: this is the kid's favourite moment in the
+        game and it sounded exactly like picking up a bomb.
+
+        Called from exactly ONE place — the ``result.upgraded_weapon`` branch
+        of :meth:`_handle_pickup_pair`. ``upgraded_weapon`` is already False at
+        max tier, so a capped pickup silently takes the plain-pickup path and
+        no ceremony fires.
+
+        Neither ``_seeded_tier`` (level enter) nor ``reset_on_death`` routes
+        through here, and that is deliberate: a tier the kid was GIVEN is not a
+        tier the kid EARNED, and a death reset must never look like a reward.
+
+        Beats: gold ring blooming off the ship, HUD "Weapon Lv" gold blink, the
+        dedicated jingle, and a short buzz on that player's pad.
+        """
+        self._spawn_tier_up_ring(world, slot, fallback)
+        self._weapon_flash_ticks[slot] = WEAPON_FLASH_TICKS
+        self.app.audio.play_sfx("tier_up")
+        self.app.rumble.pulse(slot, RumbleEvent.TIER_UP)
+
+    def _spawn_tier_up_ring(self, world: World, slot: PlayerSlot, fallback: Vec2) -> None:
+        """Bloom the ceremony ring at ``slot``'s ship.
+
+        Centres on the SHIP, not the pickup: the pickup entity is despawned on
+        this same tick, and a fast diagonal intercept can leave its position
+        40+ px off the hull — which reads as "something happened over there"
+        rather than "I got stronger".
+
+        Static (no Velocity): a 0.6s bloom that chases a moving ship looks
+        broken, whereas a fixed one reads as a moment-marker. Falls back to the
+        pickup position when the ship isn't alive — a drone can collect a
+        pickup, and the ship can die on the same tick.
+        """
+        eid = self._player_entities.get(slot)
+        centre = fallback
+        if eid is not None and world.is_alive(eid):
+            ship_pos = world.get(eid, Position)
+            if ship_pos is not None:
+                centre = ship_pos.pos
+        world.spawn(
+            Position(centre),
+            TierUpRing(total_ticks=TIER_UP_RING_TICKS),
+            TimeToLive(ticks=TIER_UP_RING_TICKS),
+        )
 
     @staticmethod
     def _floating_text_for_result(result: object) -> tuple[str, tuple[int, int, int]]:
@@ -3600,6 +3667,7 @@ class LevelScene(Scene):
                 drones=drones_p1,
                 super_shield_secs=self._super_shield_secs.get(P1, 0.0),
                 super_shield_pending=self.app.super_shield_pending.get(P1, 0),
+                weapon_flash_ticks=self._weapon_flash_ticks.get(P1, 0),
             ),
             p2=HudPlayerStats(
                 lives=lc2.lives,
@@ -3611,6 +3679,7 @@ class LevelScene(Scene):
                 drones=drones_p2,
                 super_shield_secs=self._super_shield_secs.get(P2, 0.0),
                 super_shield_pending=self.app.super_shield_pending.get(P2, 0),
+                weapon_flash_ticks=self._weapon_flash_ticks.get(P2, 0),
             ),
             single_player=self.app.single_player,
         )

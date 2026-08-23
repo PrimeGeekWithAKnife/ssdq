@@ -140,6 +140,32 @@ class ShieldHalo:
 
 
 @dataclass(frozen=True, slots=True)
+class TierUpRing:
+    """One-shot expanding gold ring — the weapon tier-up ceremony.
+
+    Cosmetic only: no damage, no collision, no sim state. Spawned on its OWN
+    entity alongside a ``TimeToLive``; the renderer derives the expansion phase
+    from the remaining TTL against ``total_ticks``, the same way the intro
+    banners derive their fade. ``_cull_entities`` therefore both animates and
+    despawns it, and the simulation needs no new per-tick loop.
+
+    Deliberately NOT a ``ShieldHalo``: ``LevelScene._sync_shield_halos``
+    *removes* that component from any ship whose shield is inactive, so a
+    ceremony halo attached to the ship would be stripped before its second
+    frame. And deliberately not modelled on ``BombActive.visual_progress`` —
+    the bomb sim-advances a float because its visual radius IS its damage
+    radius; here there is nothing to damage.
+
+    Gold (255, 220, 80) matches the "WEAPON Lv N!" floating text and the HUD
+    flash, so all three read as one event rather than three coincidences.
+    """
+
+    total_ticks: int
+    max_radius: float = 110.0
+    colour: tuple[int, int, int] = (255, 220, 80)
+
+
+@dataclass(frozen=True, slots=True)
 class EnemyShield:
     """Per-enemy shield state. Counts down to 0; while active, player
     bullets bounce / are absorbed against the target. Bombs still

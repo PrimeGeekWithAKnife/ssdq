@@ -21,6 +21,7 @@ that pass.
 from __future__ import annotations
 
 import importlib
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -40,6 +41,7 @@ from ssdq.core.components import (
     Position,
     ShieldHalo,
     Sprite,
+    TierUpRing,
     TimeToLive,
 )
 from ssdq.core.ecs import World
@@ -197,6 +199,9 @@ class Renderer:
 
         # 4.4 shield halos (over the player sprite — forcefield "engulfs" the ship)
         self._draw_shield_halos(world, surface, tick)
+
+        # 4.45 tier-up ceremony rings (over the ship, under the label)
+        self._draw_tier_up_rings(world, surface)
 
         # 4.5 hit-flash overlay (multi-HP enemies that just took damage)
         self._draw_hit_flashes(world, surface)
@@ -362,6 +367,46 @@ class Renderer:
                 field_surf, (*halo.colour, ring_alpha), (radius, radius), radius, width=2
             )
             surface.blit(field_surf, (int(pos.pos.x) - radius, int(pos.pos.y) - radius))
+
+    def _draw_tier_up_rings(self, world: World, surface: pygame.Surface) -> None:
+        """Expanding gold ring — the weapon tier-up ceremony (fun review R7).
+
+        Phase comes from the entity's ``TimeToLive`` against the ring's
+        ``total_ticks``, so the simulation advances nothing. The radius eases
+        OUT (sqrt) so the ring leaps off the hull then decelerates — the same
+        curve as the bomb shockwave, which is the "something big just happened"
+        language the kid already reads.
+        """
+        for eid, ring in world.query1(TierUpRing):
+            pos = world.get(eid, Position)
+            if pos is None:
+                continue
+            total = max(1, ring.total_ticks)
+            ttl = world.get(eid, TimeToLive)
+            remaining = ttl.ticks if ttl is not None else total
+            progress = max(0.0, min(1.0, 1.0 - remaining / total))
+            radius = int(ring.max_radius * math.sqrt(progress))
+            if radius <= 1:
+                continue
+            width = max(2, int(7 * (1.0 - progress)) + 1)
+            alpha = int(235 * (1.0 - progress) ** 1.5)
+            if alpha <= 0:
+                continue
+            ring_surf = pygame.Surface((radius * 2 + 4, radius * 2 + 4), pygame.SRCALPHA)
+            centre = (radius + 2, radius + 2)
+            pygame.draw.circle(ring_surf, (*ring.colour, alpha), centre, radius, width=width)
+            # Inner echo so it reads as a shockwave rather than a flat outline,
+            # mirroring the bomb's trailing ring.
+            echo_r = int(radius * 0.6)
+            if echo_r > 3:
+                pygame.draw.circle(
+                    ring_surf,
+                    (255, 255, 220, alpha // 2),
+                    centre,
+                    echo_r,
+                    width=max(1, width // 2),
+                )
+            surface.blit(ring_surf, (int(pos.pos.x) - radius - 2, int(pos.pos.y) - radius - 2))
 
     def _draw_floating_text(self, world: World, surface: pygame.Surface) -> None:
         """Drift-up + fade short-lived text labels (pickup + kill feedback).
