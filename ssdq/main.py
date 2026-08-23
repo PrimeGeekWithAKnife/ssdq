@@ -193,6 +193,17 @@ def main(argv: list[str] | None = None) -> int:
             app.last_active_pad_name = name
 
         provider = select_provider(bindings=app.bindings, on_pad_bound=_on_pad_bound)
+        # Haptics: hand the rumble bus a slot → pad resolver so scenes can fire
+        # app.rumble.pulse(...) without knowing a provider exists. Duck-typed
+        # because KeyboardProvider has no pads. Wiring this ONLY here is what
+        # keeps --replay and --smoke silent: both take an earlier branch, so
+        # there is no resolver and every pulse returns on its first line. That
+        # matters for wall-clock, not determinism — those modes run the sim
+        # flat out, so a recorded bomb would fire an ioctl at ~1000x real-time
+        # density and can wedge a cheap pad's firmware.
+        pad_for_slot = getattr(provider, "pad_for_slot", None)
+        if callable(pad_for_slot):
+            app.rumble.set_pad_resolver(pad_for_slot)
 
     with Window(
         width=args.width,
@@ -314,6 +325,7 @@ def main(argv: list[str] | None = None) -> int:
                 if args.quit_on_game_over and (app.completed_level or _is_game_over(world)):
                     stack.request_quit()
         finally:
+            app.rumble.stop_all()
             if app.recorder is not None and record_path is not None:
                 app.recorder.write(record_path)
 

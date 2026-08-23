@@ -95,6 +95,7 @@ from ssdq.core.waves import (
     WaveScheduler,
     evaluate_path,
 )
+from ssdq.platform.input.rumble import RumbleEvent
 from ssdq.scenes.app_state import AppState
 from ssdq.scenes.hud_state import HudCoopState, HudPlayerStats
 from ssdq.scenes.music_routing import boss_music_name, clamp_level, level_music_pool
@@ -1211,6 +1212,7 @@ class LevelScene(Scene):
             self._powerup_states[slot] = pstate.with_bombs(pstate.bombs - 1)
             self.app.audio.play_sfx("bomb")
             self._shake(world, shake.SHAKE_BOMB)
+            self.app.rumble.pulse(slot, RumbleEvent.BOMB)
 
         # Shield button. ``inp.shield`` is edge-triggered by the input
         # layer, but we ALSO track a scene-local rising edge so a held
@@ -2530,6 +2532,9 @@ class LevelScene(Scene):
         self._level_completed = True
         self.app.audio.play_sfx("explosion")
         self._shake(world, shake.SHAKE_BOSS_KILL)
+        # Both pads: the boss dying is a team event, and P2 may be across the
+        # screen with no idea it just happened.
+        self.app.rumble.pulse_both(RumbleEvent.BOSS_KILL)
 
     def _transition_boss_phase(self, world: World, boss_state: BossState) -> None:
         # Warp visual: explosions at both the old AND new positions so
@@ -2912,6 +2917,8 @@ class LevelScene(Scene):
         # above, so only true ship deaths feed the resupply catch-up.
         self._deaths_this_level += 1
         self._shake(world, shake.SHAKE_PLAYER_DEATH)
+        # Only the dying player's pad — a death is personal, not a team event.
+        self.app.rumble.pulse(slot, RumbleEvent.PLAYER_HIT)
         self.app.audio.play_sfx("hit")
         # Drop weapon level, refresh bombs (but lives is owned by lifecycle).
         ship = self.app.content.ships["vanguard" if slot == P1 else "vanguard_red"]

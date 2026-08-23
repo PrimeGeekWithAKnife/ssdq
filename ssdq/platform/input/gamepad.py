@@ -178,6 +178,22 @@ class GamepadProvider:
         once it has shown the reconnect overlay)."""
         self._disconnected = None
 
+    def pad_for_slot(self, slot_index: int) -> pygame.joystick.JoystickType | None:
+        """Return the pad handle bound to P1 (0) / P2 (1), else ``None``.
+
+        The haptics layer (:class:`ssdq.platform.input.rumble.RumbleBus`) needs
+        the slot → pad mapping and this class is the only thing that owns it.
+        Takes a plain int rather than a ``PlayerSlot`` so the resolver signature
+        stays free of the core type — same rationale as
+        ``AppState.last_weapon_tiers`` being keyed by slot index.
+        """
+        if slot_index not in (0, 1):
+            return None
+        instance_id = self._slot_pads[slot_index]
+        if instance_id is None:
+            return None
+        return self._pads.get(instance_id)
+
     # -- internals ------------------------------------------------------
 
     def _scan_initial_pads(self) -> None:

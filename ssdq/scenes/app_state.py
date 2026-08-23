@@ -16,6 +16,7 @@ from ssdq.core.replay import ReplayRecorder
 from ssdq.core.types import P1, P2, PlayerSlot
 from ssdq.platform.audio import AudioBus
 from ssdq.platform.input.bindings import BindingsStore
+from ssdq.platform.input.rumble import RumbleBus
 
 
 def _zero_per_slot() -> dict[PlayerSlot, int]:
@@ -30,6 +31,13 @@ class AppState:
     content: ContentBundle
     audio: AudioBus
     options: CoopOptions
+    # Gamepad haptics — a null-object exactly like ``audio``, so scenes call
+    # ``self.app.rumble.pulse(...)`` with no branching. Default-constructed it
+    # has no pad resolver and is therefore a total no-op, which is what every
+    # existing AppState construction in the tests and the replay harness gets
+    # for free; main.py hands it a resolver only on the real-gamepad path.
+    # Must stay AFTER the three non-defaulted fields.
+    rumble: RumbleBus = field(default_factory=RumbleBus)
     current_level: int = 1
     recorder: ReplayRecorder | None = None
     last_team_score: int = 0
