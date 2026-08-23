@@ -292,6 +292,21 @@ _CH_STRAY_FROM = 70004
 _CH_STRAY_TO = 70005
 _CH_STRAY_SPIN = 70006
 
+# Score-popup lifetime. 36 ticks = 0.6s at 60Hz — long enough to read
+# mid-fight at TV distance, short enough that a dense L5 wave doesn't
+# turn the playfield into a wall of numbers (fun review 2026-06-12 R6).
+_SCORE_POPUP_TICKS: int = 36
+# Popup drift. Slower than the pickup labels' -30 px/s: a kill popup is
+# ambient feedback, not an announcement, and a fast riser drags the eye
+# off the ship.
+_SCORE_POPUP_RISE: float = -22.0
+# Plain white for an ordinary kill; the established bonus gold (same value
+# as the pickup labels and the boss time bonus) when the co-op proximity
+# multiplier actually fired, so "gold == we were close" is one rule the
+# kid can learn without being told.
+_SCORE_POPUP_COLOUR: tuple[int, int, int] = (255, 255, 255)
+_SCORE_POPUP_BONUS_COLOUR: tuple[int, int, int] = (255, 220, 80)
+
 
 def level_intro_text(level: int) -> str:
     """Return the per-level intro banner copy. Falls back to a generic
@@ -1840,9 +1855,9 @@ class LevelScene(Scene):
                 if score_val is not None:
                     slot = self._nearest_alive_player_slot(pos_comp.pos)
                     if slot is not None:
-                        self._session.scores.award(
-                            slot, score_val.points // 2, multiplier=1.0
-                        )
+                        half = score_val.points // 2
+                        awarded = self._session.scores.award(slot, half, multiplier=1.0)
+                        self._spawn_score_popup(world, pos_comp.pos, half, awarded)
                 self._spawn_explosion(world, pos_comp.pos, scale=1)
             world.despawn(eid)
             swept += 1
@@ -2485,7 +2500,15 @@ class LevelScene(Scene):
                     TimeToLive(ticks=120),
                 )
         world.despawn(boss_state.entity)
-        self._session.scores.award(P1, boss_state.boss.score, multiplier=1.0)
+        # Fairness fix (fun review 2026-06-12 R6): the boss's base score used
+        # to be hardcoded to P1, so P2 could land the killing blow and watch
+        # the other player's total jump. Route it the same way the time bonus
+        # immediately above already does — nearest player, P1 only if both are
+        # dead. `boss_pos` may be None if the corpse lost its Position.
+        boss_slot = (
+            self._nearest_alive_player_slot(boss_pos.pos) if boss_pos is not None else None
+        ) or P1
+        self._session.scores.award(boss_slot, boss_state.boss.score, multiplier=1.0)
         self._boss = None
         self._level_completed = True
         self.app.audio.play_sfx("explosion")
@@ -3017,7 +3040,10 @@ class LevelScene(Scene):
                 play_w=PLAY_W,
                 play_h=PLAY_H,
             )
-            self._session.scores.award(nearest_slot, score_val.points, multiplier=mult)
+            awarded = self._session.scores.award(
+                nearest_slot, score_val.points, multiplier=mult
+            )
+            self._spawn_score_popup(world, pos, score_val.points, awarded)
         self._spawn_explosion(world, pos, scale=1)
         world.despawn(enemy_eid)
         self.app.audio.play_sfx("explosion", volume=0.5)
@@ -3048,6 +3074,36 @@ class LevelScene(Scene):
             else:
                 world.replace(eid, EnemyShield(seconds_remaining=new_remaining))
 
+    def _spawn_score_popup(
+        self, world: World, pos: Vec2, base_points: int, awarded: int
+    ) -> None:
+        """Float a ``+N`` at a kill site so score is visible where it was earned.
+
+        Fun review 2026-06-12 R6: the kid got no cause-and-effect from a kill and
+        never learned which enemies were worth more — but the real cost was that
+        the signature co-op mechanic (stay close, score more) was undiscoverable,
+        because nothing ever told him it had fired.
+
+        The multiplier badge is DERIVED from ``awarded / base_points``, never from
+        the multiplier we passed to ``award``: :meth:`ScoreLedger.award` silently
+        caps the effective multiplier at 1.25 once ``base_points >= 5000``, so a
+        hardcoded "x1.5" would be a lie on exactly the biggest kills.
+        """
+        if awarded <= 0:
+            return
+        text = f"+{awarded}"
+        colour = _SCORE_POPUP_COLOUR
+        if base_points > 0 and awarded > base_points:
+            shown = f"{awarded / base_points:.2f}".rstrip("0").rstrip(".")
+            text = f"+{awarded} x{shown}"
+            colour = _SCORE_POPUP_BONUS_COLOUR
+        world.spawn(
+            Position(pos),
+            Velocity(Vec2(0.0, _SCORE_POPUP_RISE)),
+            FloatingText(text=text, colour=colour, ticks_remaining=_SCORE_POPUP_TICKS),
+            TimeToLive(ticks=_SCORE_POPUP_TICKS),
+        )
+
     def _on_enemy_killed(
         self,
         world: World,
@@ -3077,7 +3133,10 @@ class LevelScene(Scene):
                 play_w=PLAY_W,
                 play_h=PLAY_H,
             )
-            self._session.scores.award(nearest_slot, score_val.points, multiplier=mult)
+            awarded = self._session.scores.award(
+                nearest_slot, score_val.points, multiplier=mult
+            )
+            self._spawn_score_popup(world, pos, score_val.points, awarded)
         # Roll drop using the enemy's data
         if follower is not None and follower.drop_pool:
             bundle = self.app.content

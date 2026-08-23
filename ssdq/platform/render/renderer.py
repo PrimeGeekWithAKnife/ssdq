@@ -53,6 +53,26 @@ from ssdq.platform.render.pause_overlay import PauseOverlay
 
 _CLEAR_COLOUR = (5, 5, 12)
 
+# Floating-text (pickup labels + kill score popups) rasterisation.
+_TEXT_FONT_SIZE = 24
+# Labels hold full opacity until this fraction of their life remains, then
+# fade linearly to nothing.
+_TEXT_FADE_FRACTION = 0.4
+# Distinct (text, colour) glyph surfaces kept before the cache is dropped.
+# Score popups mint a new string per distinct value, so this is a ceiling on
+# a slow leak, not a working-set estimate — see _draw_floating_text.
+_TEXT_CACHE_LIMIT = 192
+
+
+def _make_text_font() -> pygame.font.Font:
+    """Bold 24px default font, mirroring :meth:`Hud._make_font`'s fallback."""
+    if not pygame.font.get_init():
+        pygame.font.init()
+    try:
+        return pygame.font.SysFont(None, _TEXT_FONT_SIZE, bold=True)
+    except pygame.error:  # pragma: no cover — extreme fallback
+        return pygame.font.Font(None, _TEXT_FONT_SIZE)
+
 
 @dataclass(frozen=True, slots=True)
 class _DrawItem:
@@ -72,6 +92,8 @@ class Renderer:
         "_hud",
         "_pause_overlay",
         "_size",
+        "_text_cache",
+        "_text_font",
         "_tick_counter",
     )
 
@@ -87,6 +109,11 @@ class Renderer:
         self._hud = Hud()
         self._pause_overlay = PauseOverlay()
         self._tick_counter = 0
+        # Built lazily on first use rather than here: the Renderer is
+        # constructed before some callers init the font module, and Hud already
+        # pays that cost eagerly for the three HUD fonts.
+        self._text_font: pygame.font.Font | None = None
+        self._text_cache: dict[tuple[str, tuple[int, int, int]], pygame.Surface] = {}
 
     @property
     def atlas(self) -> SpriteAtlas:
@@ -293,16 +320,50 @@ class Renderer:
             surface.blit(field_surf, (int(pos.pos.x) - radius, int(pos.pos.y) - radius))
 
     def _draw_floating_text(self, world: World, surface: pygame.Surface) -> None:
-        """Drift-up + fade short-lived text labels (pickup feedback)."""
+        """Drift-up + fade short-lived text labels (pickup + kill feedback).
+
+        Two fixes here, both from fun review 2026-06-12 R6 (score popups made
+        this path go from "a few labels a level" to "one per kill"):
+
+        * The font was rebuilt with ``SysFont`` and every label re-rasterised
+          on EVERY frame. Both are now cached — the font for the Renderer's
+          life, the glyph surfaces in a bounded dict keyed by (text, colour).
+        * The fade never worked. ``FloatingText.ticks_remaining`` is set at
+          spawn and decremented by nobody, so the old ``ticks_remaining * 6``
+          alpha was a constant and labels popped out of existence instead of
+          fading. The live countdown is the entity's ``TimeToLive`` (culled in
+          ``LevelScene._cull_entities``), so we fade off that and reinterpret
+          the frozen ``ticks_remaining`` as what it actually is: the spawn-time
+          total, i.e. the denominator.
+        """
         if not pygame.font.get_init():
             pygame.font.init()
-        font = pygame.font.SysFont(None, 24, bold=True)
-        for _eid, pos, txt in world.query2(Position, FloatingText):
-            if txt.ticks_remaining <= 0:
+        if self._text_font is None:
+            self._text_font = _make_text_font()
+        font = self._text_font
+        for eid, pos, txt in world.query2(Position, FloatingText):
+            total = txt.ticks_remaining
+            if total <= 0:
                 continue
-            # Fade based on remaining ticks (assume max 60).
-            alpha = max(0, min(255, int(txt.ticks_remaining * 6)))
-            rendered = font.render(txt.text, True, txt.colour)
+            ttl = world.get(eid, TimeToLive)
+            remaining = ttl.ticks if ttl is not None else total
+            # Hold at full opacity, then fade over the last 40% of the life.
+            frac = max(0.0, min(1.0, remaining / total))
+            alpha = max(0, min(255, int(255 * min(1.0, frac / _TEXT_FADE_FRACTION))))
+            if alpha <= 0:
+                continue
+            key = (txt.text, txt.colour)
+            rendered = self._text_cache.get(key)
+            if rendered is None:
+                # Bounded so a long session's worth of distinct "+N" strings
+                # can't grow without limit. Wholesale clear rather than LRU
+                # eviction: the working set turns over completely every few
+                # seconds anyway, so tracking recency would cost more than the
+                # occasional re-rasterise it saves.
+                if len(self._text_cache) >= _TEXT_CACHE_LIMIT:
+                    self._text_cache.clear()
+                rendered = font.render(txt.text, True, txt.colour)
+                self._text_cache[key] = rendered
             rendered.set_alpha(alpha)
             rect = rendered.get_rect(center=(int(pos.pos.x), int(pos.pos.y)))
             surface.blit(rendered, rect)
