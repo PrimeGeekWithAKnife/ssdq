@@ -28,6 +28,7 @@ import types
 from dataclasses import dataclass, field
 from typing import Any
 
+from ssdq.core import shake
 from ssdq.core.ai import FreeRoamConfig, free_roam_step
 from ssdq.core.clock import TICK_DT
 from ssdq.core.collision import SpatialGrid, circles_overlap
@@ -818,6 +819,9 @@ class LevelScene(Scene):
         # HUD snapshot resource (renderer reads via duck-typed shape).
         world.insert_resource(self._build_hud_state(world))
 
+        # Screen-shake envelope, fresh per level entry (fun review R7).
+        world.insert_resource(shake.ScreenShake())
+
         # Per-level narrative banner — overlays mid-screen for a few
         # seconds while the kid reads the story beat. Input is NOT
         # blocked (players can shoot through it); the wave scheduler
@@ -848,6 +852,11 @@ class LevelScene(Scene):
 
     def exit(self, world: World) -> None:
         self.app.audio.stop_music()
+        # Drop the shake envelope. Not hygiene — main.py builds ONE World for
+        # the whole session and HyperspaceScene is also world-rendered, so a
+        # left-behind resource with ticks_remaining > 0 would jitter the
+        # hyperspace ride forever (nothing there calls decay()).
+        world.remove_resource(shake.ScreenShake)
         self.app.last_team_score = self._session.scores.snapshot().team
         self.app.last_p1_score = self._session.scores.snapshot().p1
         self.app.last_p2_score = self._session.scores.snapshot().p2
@@ -1053,6 +1062,13 @@ class LevelScene(Scene):
         # 10. Advance animations + decay flash/blink timers
         self._advance_animations(world)
 
+        # 10b. Decay the screen-shake envelope. Cosmetic: the Renderer reads
+        # it, the simulation never reads it back — which is what keeps
+        # replays bit-identical whichever way the toggle is set.
+        shake_state = world.try_resource(shake.ScreenShake)
+        if shake_state is not None:
+            shake_state.decay()
+
         # 11. Cull off-screen / TTL-expired entities
         self._cull_entities(world)
 
@@ -1194,6 +1210,7 @@ class LevelScene(Scene):
             self._fire_bomb(world, slot, new_pos)
             self._powerup_states[slot] = pstate.with_bombs(pstate.bombs - 1)
             self.app.audio.play_sfx("bomb")
+            self._shake(world, shake.SHAKE_BOMB)
 
         # Shield button. ``inp.shield`` is edge-triggered by the input
         # layer, but we ALSO track a scene-local rising edge so a held
@@ -2512,6 +2529,7 @@ class LevelScene(Scene):
         self._boss = None
         self._level_completed = True
         self.app.audio.play_sfx("explosion")
+        self._shake(world, shake.SHAKE_BOSS_KILL)
 
     def _transition_boss_phase(self, world: World, boss_state: BossState) -> None:
         # Warp visual: explosions at both the old AND new positions so
@@ -2542,6 +2560,7 @@ class LevelScene(Scene):
             if is_late_boss:
                 world.add(boss_state.entity, InvulnerabilityBlink(ticks_remaining=30))
             self.app.audio.play_sfx("explosion", volume=0.6)
+        self._shake(world, shake.SHAKE_BOSS_PHASE)
         boss_state.phase_index += 1
         boss_state.shooter = EnemyShooter(beats=new_phase.fire_beats)
         boss_state.path_t0 = self._sim_time
@@ -2892,6 +2911,7 @@ class LevelScene(Scene):
         # Past the drone branch, can_be_hit gate and shield-absorb branch
         # above, so only true ship deaths feed the resupply catch-up.
         self._deaths_this_level += 1
+        self._shake(world, shake.SHAKE_PLAYER_DEATH)
         self.app.audio.play_sfx("hit")
         # Drop weapon level, refresh bombs (but lives is owned by lifecycle).
         ship = self.app.content.ships["vanguard" if slot == P1 else "vanguard_red"]
@@ -3074,6 +3094,19 @@ class LevelScene(Scene):
             else:
                 world.replace(eid, EnemyShield(seconds_remaining=new_remaining))
 
+    def _shake(self, world: World, spec: tuple[float, int]) -> None:
+        """Raise a screen shake unless the accessibility toggle is off.
+
+        Single gate for all five call sites — see ``screen_shake`` in
+        content/coop.yaml. Gating here rather than in the Renderer keeps one
+        source of truth and means the resource simply never accumulates a
+        magnitude when the toggle is off, so it costs nothing rather than
+        merely showing nothing.
+        """
+        if not self.app.content.coop.screen_shake:
+            return
+        shake.trigger(world, spec)
+
     def _spawn_score_popup(
         self, world: World, pos: Vec2, base_points: int, awarded: int
     ) -> None:
@@ -3203,8 +3236,13 @@ class LevelScene(Scene):
                         world, "pickup_powerup", Vec2(pos.x + dx, pos.y + dy)
                     )
                     spawn_index += 1
-        # Visual feedback: explosion at the enemy's position.
-        scale = 2 if follower is not None and follower.score >= 600 else 1
+        # Visual feedback: explosion at the enemy's position. Reuse the same
+        # `score >= 600` line as the "big kill" definition for the shake, so
+        # chunky explosion and screen kick always agree.
+        big_kill = follower is not None and follower.score >= 600
+        scale = 2 if big_kill else 1
+        if big_kill:
+            self._shake(world, shake.SHAKE_BIG_KILL)
         self._spawn_explosion(world, pos, scale=scale)
         world.despawn(enemy_eid)
         self.app.audio.play_sfx("explosion", volume=0.5)

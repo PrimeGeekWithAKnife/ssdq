@@ -348,3 +348,6 @@ class CoopConfig:
     proximity_bonus_multiplier: float
     proximity_bonus_edge_zone: float
     pause_dim_alpha: int
+    # Accessibility toggle (fun review 2026-06-12 R7). Defaulted and LAST so
+    # every existing CoopConfig construction site keeps working untouched.
+    screen_shake: bool = True

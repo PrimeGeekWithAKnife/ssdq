@@ -26,6 +26,7 @@ from typing import Any
 
 import pygame
 
+from ssdq.core import shake
 from ssdq.core.components import (
     AnimatedSprite,
     BossTag,
@@ -62,6 +63,23 @@ _TEXT_FADE_FRACTION = 0.4
 # Score popups mint a new string per distinct value, so this is a ceiling on
 # a slow leak, not a working-set estimate — see _draw_floating_text.
 _TEXT_CACHE_LIMIT = 192
+
+
+def _vacated_bands(w: int, h: int, dx: int, dy: int) -> tuple[pygame.Rect, ...]:
+    """Rects that ``Surface.scroll(dx, dy)`` leaves holding stale pixels.
+
+    Pure, so it can be unit-tested without a display surface.
+    """
+    bands: list[pygame.Rect] = []
+    if dx > 0:
+        bands.append(pygame.Rect(0, 0, dx, h))
+    elif dx < 0:
+        bands.append(pygame.Rect(w + dx, 0, -dx, h))
+    if dy > 0:
+        bands.append(pygame.Rect(0, 0, w, dy))
+    elif dy < 0:
+        bands.append(pygame.Rect(0, h + dy, w, -dy))
+    return tuple(bands)
 
 
 def _make_text_font() -> pygame.font.Font:
@@ -189,24 +207,50 @@ class Renderer:
         # 4.6 enemy health bars (multi-HP enemies that have taken damage)
         self._draw_enemy_health_bars(world, surface)
 
-        # 4.7 boss health bar (across the top of the playfield)
-        self._draw_boss_health_bar(world, surface)
-
         # 5. boss telegraphs (optional)
         self._draw_boss_telegraphs(world, surface)
 
-        # 5.1 boss intro banner — large centred text above the playfield
+        # extra: bomb shockwaves (optional)
+        self._draw_bomb_actives(world, surface)
+
+        # 5.5 screen shake (fun review 2026-06-12 R7).
+        #
+        # Everything above is world-space, so we displace the lot with one
+        # in-place row memmove instead of threading an offset through nine
+        # helpers and a six-implementation Backdrop protocol. Surface.scroll
+        # costs ~0.08ms at 1280x720 — less than the surface.fill above — and
+        # is skipped entirely when idle, so a non-shaking frame renders
+        # byte-identically to the pre-shake renderer.
+        #
+        # Suppressed while paused: SceneStack.tick returns early when paused
+        # so ticks_remaining never decays, while main.py keeps feeding a
+        # rising clock tick. An unguarded shake would jitter forever on the
+        # pause screen.
+        if not paused:
+            dx, dy = shake.world_offset(world, tick)
+            if dx or dy:
+                surface.scroll(dx, dy)
+                self._redraw_shake_edges(world, surface, tick, dx, dy)
+
+        # ───────── screen-anchored chrome: deliberately does NOT shake ─────────
+        # These three used to sit above the bomb pass. They are screen-fixed
+        # readability instruments, and the moments that shake hardest (boss
+        # phase, boss kill) are exactly the moments the kid is reading them.
+        # Consequence: they now draw OVER the bomb flash rather than under it,
+        # which is the better ordering anyway.
+
+        # 5.6 boss health bar (across the top of the playfield)
+        self._draw_boss_health_bar(world, surface)
+
+        # 5.7 boss intro banner — large centred text above the playfield
         # during the boss telegraph window. Reads narrative copy off any
         # entity with a BossIntroBanner component.
         self._draw_boss_intro_banner(world, surface)
 
-        # 5.2 level intro banner — large centred narrative text shown for
+        # 5.8 level intro banner — large centred narrative text shown for
         # the first few seconds of every level. Word-wrapped to ~80% of
         # the playfield width. Players can shoot through it.
         self._draw_level_intro_banner(world, surface)
-
-        # extra: bomb shockwaves (optional)
-        self._draw_bomb_actives(world, surface)
 
         # 6. HUD
         self._hud.draw(world, surface)
@@ -536,6 +580,63 @@ class Renderer:
                 surface.blit(label, label.get_rect(center=(cx, y)))
             return  # one banner is enough
 
+    def _redraw_shake_edges(
+        self, world: World, surface: pygame.Surface, tick: int, dx: int, dy: int
+    ) -> None:
+        """Repaint the band ``scroll`` vacated, so the edge doesn't shimmer.
+
+        Re-running the backdrop under a clip rect costs a fraction of a full
+        backdrop pass and only while shaking. Leaving the smear instead would
+        be worse than a static seam: dx/dy resample every tick, so the
+        duplicated sliver crawls.
+
+        Sprites are deliberately NOT redrawn — at <= 12px the missing sliver of
+        a sprite straddling the edge is imperceptible, and redrawing them would
+        mean re-running the whole gather/sort pass.
+        """
+        w, h = surface.get_size()
+        for band in _vacated_bands(w, h, dx, dy):
+            surface.set_clip(band)
+            # Starfields don't paint an opaque base, so clear first.
+            surface.fill(_CLEAR_COLOUR)
+            self._background.draw(surface, tick)
+            self._draw_bomb_flash(world, surface, area=band)
+        surface.set_clip(None)
+
+    def _draw_bomb_flash(
+        self, world: World, surface: pygame.Surface, area: pygame.Rect | None = None
+    ) -> None:
+        """Brief white-hot screen flash over the first ~12% of a bomb's life.
+
+        Split out of :meth:`_draw_bomb_actives` so the screen-shake edge redraw
+        can replay it into the vacated band — otherwise a bomb, which is the
+        most frequent shake trigger there is, would paint a dark frame around
+        its own white-out.
+
+        ``area`` restricts the flash to a rect AND sizes the temporary surface
+        to it. That matters: the full-screen SRCALPHA allocation is the single
+        most expensive blit in the renderer, and the band call must not pay it
+        a second time.
+        """
+        comp_t = _optional_component_type("BombActive")
+        if comp_t is None:
+            return
+        rect = area if area is not None else surface.get_rect()
+        for _eid, bomb in world.query1(comp_t):
+            radius = _attr_float(bomb, ("radius",), default=0.0)
+            if _attr_float(bomb, ("aoe_radius",), default=radius) <= 0.0:
+                continue
+            progress = _attr_float(bomb, ("visual_progress",), default=0.0)
+            progress = max(0.0, min(1.0, progress))
+            if progress >= 0.12:
+                continue
+            flash_alpha = int(220 * (1.0 - progress / 0.12))
+            if flash_alpha <= 0:
+                continue
+            flash = pygame.Surface(rect.size, pygame.SRCALPHA)
+            flash.fill((255, 255, 240, flash_alpha))
+            surface.blit(flash, rect.topleft)
+
     def _draw_bomb_actives(self, world: World, surface: pygame.Surface) -> None:
         """Expanding shockwave + screen flash + radial sparks.
 
@@ -552,6 +653,11 @@ class Renderer:
         comp_t = _optional_component_type("BombActive")
         if comp_t is None:
             return
+        # Flash first, across all bombs, then every bomb's rings. With two
+        # simultaneous bombs this interleaves differently from the old
+        # per-bomb flash-then-rings order; the flash is a full-screen wash, so
+        # the composite is the same.
+        self._draw_bomb_flash(world, surface)
         for _eid, bomb in world.query1(comp_t):
             pos = _attr_vec2(bomb, ("pos", "centre", "center"))
             if pos is None:
@@ -564,16 +670,6 @@ class Renderer:
                 continue
 
             cx, cy = int(pos[0]), int(pos[1])
-            sw, sh = surface.get_size()
-
-            # 1. brief white-hot screen flash (first ~12% of life).
-            if progress < 0.12:
-                flash_t = progress / 0.12
-                flash_alpha = int(220 * (1.0 - flash_t))
-                if flash_alpha > 0:
-                    flash = pygame.Surface((sw, sh), pygame.SRCALPHA)
-                    flash.fill((255, 255, 240, flash_alpha))
-                    surface.blit(flash, (0, 0))
 
             # 2. expanding outer ring + trailing inner ring.
             outer_r = max(2, int(radius))

@@ -435,6 +435,7 @@ def _load_coop(path: Path) -> CoopConfig:
         proximity_bonus_multiplier=float(c.get("proximity_bonus_multiplier", 1.5)),
         proximity_bonus_edge_zone=float(c.get("proximity_bonus_edge_zone", 60.0)),
         pause_dim_alpha=int(c.get("pause_dim_alpha", 128)),
+        screen_shake=bool(c.get("screen_shake", True)),
     )
 
 

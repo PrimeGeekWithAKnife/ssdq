@@ -27,6 +27,11 @@ coop:
   pause_either_player: true      # either pad's START toggles pause
   pause_dim_alpha: 128           # 0..255 darkening when paused
 
+  # Accessibility
+  screen_shake: true             # decaying camera shake on bombs, deaths and
+                                 # boss beats. Set false for motion sensitivity,
+                                 # or if the shake ever reads as a glitch.
+
 # Options menu — exposes these toggles per spec §2 DOD #7.
 options:
   unlimited_lives:
